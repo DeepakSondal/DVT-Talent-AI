@@ -14,7 +14,7 @@ from prometheus_client import make_asgi_app
 
 from config import settings
 from db.models import Base, engine, get_db
-from api.routes import auth, users, companies, leads, candidates, jobs, campaigns, analytics, agents, websocket
+from api.routes import auth, auth_social, users, companies, leads, candidates, jobs, campaigns, analytics, agents, websocket
 
 log = structlog.get_logger()
 
@@ -79,6 +79,7 @@ async def log_requests(request: Request, call_next):
 PREFIX = "/api/v1"
 
 app.include_router(auth.router,       prefix=f"{PREFIX}/auth",       tags=["Authentication"])
+app.include_router(auth_social.router, prefix=f"{PREFIX}/auth",       tags=["Social Authentication"])
 app.include_router(users.router,      prefix=f"{PREFIX}/users",      tags=["Users"])
 app.include_router(companies.router,  prefix=f"{PREFIX}/companies",  tags=["Companies"])
 app.include_router(leads.router,      prefix=f"{PREFIX}/leads",      tags=["Leads"])

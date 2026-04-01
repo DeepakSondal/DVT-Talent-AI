@@ -101,7 +101,42 @@ export default function LoginPage() {
           </motion.button>
         </form>
 
-        <p className="text-center text-xs text-zinc-600 mt-6">
+        {/* Divider */}
+        <div className="flex items-center gap-4 my-8">
+          <div className="h-[1px] flex-1 bg-white/[0.06]" />
+          <p className="text-[10px] font-semibold text-zinc-600 uppercase tracking-widest">or continue with</p>
+          <div className="h-[1px] flex-1 bg-white/[0.06]" />
+        </div>
+
+        {/* Social Buttons */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { id: "google", label: "Google", color: "hover:bg-red-500/10 hover:border-red-500/30" },
+            { id: "github", label: "GitHub", color: "hover:bg-zinc-500/10 hover:border-zinc-500/30" },
+            { id: "linkedin", label: "LinkedIn", color: "hover:bg-blue-500/10 hover:border-blue-500/30" },
+          ].map((provider) => (
+            <motion.button
+              key={provider.id}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={() => {
+                const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+                window.location.href = `${apiBase}/auth/login/${provider.id}`;
+              }}
+              className={`flex flex-col items-center justify-center p-3 rounded-xl bg-white/[0.03] border border-white/[0.08] transition-all text-xs font-medium text-zinc-400 hover:text-zinc-200 ${provider.color}`}
+            >
+              <span className="mb-1.5 opacity-60">
+                {provider.id === "google" && "G"}
+                {provider.id === "github" && "GH"}
+                {provider.id === "linkedin" && "IN"}
+              </span>
+              {provider.label}
+            </motion.button>
+          ))}
+        </div>
+
+        <p className="text-center text-xs text-zinc-600 mt-8">
           Don't have an account?{" "}
           <a href="/auth/register" className="text-indigo-400 hover:text-indigo-300 transition-colors">
             Create one

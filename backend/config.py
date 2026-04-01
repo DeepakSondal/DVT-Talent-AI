@@ -65,8 +65,13 @@ class Settings(BaseSettings):
     gmail_refresh_token: str = ""
     gmail_sender_email: str = ""
 
-    # GitHub
-    github_token: str = ""
+    # Social Auth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    linkedin_client_id: str = ""
+    linkedin_client_secret: str = ""
 
     # App base URL for tracking pixels, webhooks, etc.
     app_base_url: str = "http://localhost:8000"
