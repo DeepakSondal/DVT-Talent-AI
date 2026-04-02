@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, Target, Building2, Briefcase,
   Mail, Settings, HelpCircle, ChevronLeft, LogOut,
   Bell, Search, Menu, Brain, Zap, Sparkles, MessageSquare,
-  ShieldCheck, Command, Bot, FileSearch
+  ShieldCheck, Command, Bot, FileSearch, DollarSign
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Zap, Play, History, Settings2, 
   Brain, Bot, Cpu, Network,
   CheckCircle2, Clock, AlertCircle, 
   ChevronRight, ArrowRight, Activity,
   Info, Sparkles, Loader2, RefreshCw,
-  Search, Filter
+  Search, Filter, Mail
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { agentsApi, AgentTask } from "@/lib/api";

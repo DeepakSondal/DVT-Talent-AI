@@ -1,3 +1,5 @@
+"use client";
+
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Zap, Activity, Users, Target, 
@@ -46,7 +48,7 @@ export default function SalesAgentPage() {
       setIsRunning(true);
       setError(null);
       // Run the full autonomous pipeline
-      const task = await agentsApi.runFullPipeline({ 
+      const task = await agentsApi.runPipeline({ 
         industry: "technology", 
         location: "United States", 
         send_emails: false 
