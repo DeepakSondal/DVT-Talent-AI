@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://dvt_user:dvt_password@localhost:5432/dvt_talent"
     database_sync_url: str = "postgresql://dvt_user:dvt_password@localhost:5432/dvt_talent"
 
-    # Redis
-    redis_url: str = "redis://localhost:6379/0"
-    celery_broker_url: str = "redis://localhost:6379/1"
-    celery_result_backend: str = "redis://localhost:6379/2"
+    # Redis (Docker Internal Networking)
+    redis_url: str = "redis://redis:6379/0"
+    celery_broker_url: str = "redis://redis:6379/1"
+    celery_result_backend: str = "redis://redis:6379/2"
 
     # ChromaDB
     chroma_host: str = "localhost"
