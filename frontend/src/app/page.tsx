@@ -1,10 +1,18 @@
+import LandingPage from "@/components/layout/LandingPage";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 /**
- * Root page — redirect to dashboard if logged in, else to login.
- * Token check happens server-side via middleware.ts (which handles
- * the actual auth guard). This page just ensures "/" always redirects.
+ * Root page — serves the premium landing page.
+ * If a valid dvt_token cookie is present, redirect to dashboard.
  */
 export default function RootPage() {
-  redirect("/dashboard");
+  const cookieStore = cookies();
+  const token = cookieStore.get("dvt_token");
+
+  if (token) {
+    redirect("/dashboard");
+  }
+
+  return <LandingPage />;
 }

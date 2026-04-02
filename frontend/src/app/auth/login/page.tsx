@@ -57,6 +57,7 @@ export default function LoginPage() {
             <label className="block text-xs font-medium text-zinc-400 mb-1.5">Email</label>
             <input
               type="email"
+              name="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
@@ -70,6 +71,7 @@ export default function LoginPage() {
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
+                name="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -146,7 +148,7 @@ export default function LoginPage() {
         {/* Demo hint */}
         <div className="mt-8 p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
           <p className="text-xs text-zinc-600 text-center">
-            Demo: <span className="text-zinc-400">admin@dvt.ai</span> / <span className="text-zinc-400">password123</span>
+            Demo: <span className="text-zinc-400">admin@dvt.com</span> / <span className="text-zinc-400">admin123</span>
           </p>
         </div>
       </motion.div>

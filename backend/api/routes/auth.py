@@ -1,12 +1,13 @@
 """
 DVT Talent AI — Authentication API
-JWT-based auth with refresh tokens
+JWT-based auth with secure HttpOnly cookies
 """
 from datetime import datetime, timedelta
 from typing import Optional
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 import bcrypt
@@ -84,7 +85,7 @@ def create_refresh_token(data: dict) -> str:
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> User:
     credentials_exception = HTTPException(
@@ -92,15 +93,30 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    # Check Authorization header first, then fallback to secure cookie
+    token = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    else:
+        # Fallback to the secure cookie set on login
+        cookie_token = request.cookies.get("dvt_token")
+        if cookie_token and cookie_token.startswith("Bearer "):
+            token = cookie_token.split(" ")[1]
+
+    if not token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id: str = payload.get("sub")
-        if user_id is None or payload.get("type") != "access":
+        user_obj_id: str = payload.get("sub")
+        if user_obj_id is None or payload.get("type") != "access":
             raise credentials_exception
     except JWTError:
         raise credentials_exception
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == user_obj_id))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise credentials_exception
@@ -114,7 +130,7 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────
-@router.post("/register", response_model=Token, status_code=201)
+@router.post("/register", status_code=201)
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     # Check if email exists
     result = await db.execute(select(User).where(User.email == user_data.email))
@@ -132,17 +148,30 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.refresh(user)
 
     token_data = {"sub": str(user.id)}
-    return Token(
-        access_token=create_access_token(token_data),
-        refresh_token=create_refresh_token(token_data),
-        user_id=str(user.id),
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role.value,
+    access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token(token_data)
+    
+    content = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user_id": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role.value,
+    }
+    response = JSONResponse(content=content, status_code=201)
+    response.set_cookie(
+        key="dvt_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        max_age=settings.access_token_expire_minutes * 60,
+        samesite="lax",
+        secure=settings.is_production,
     )
+    return response
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
@@ -159,40 +188,66 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     await db.commit()
 
     token_data = {"sub": str(user.id)}
-    return Token(
-        access_token=create_access_token(token_data),
-        refresh_token=create_refresh_token(token_data),
-        user_id=str(user.id),
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role.value,
+    access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token(token_data)
+    
+    content = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user_id": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role.value,
+    }
+    response = JSONResponse(content=content)
+    response.set_cookie(
+        key="dvt_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        max_age=settings.access_token_expire_minutes * 60,
+        samesite="lax",
+        secure=settings.is_production,
     )
+    return response
 
 
-@router.post("/refresh", response_model=Token)
-async def refresh_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
+@router.post("/refresh")
+async def refresh_token_route(refresh_token: str, db: AsyncSession = Depends(get_db)):
     try:
         payload = jwt.decode(refresh_token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id: str = payload.get("sub")
-        if not user_id or payload.get("type") != "refresh":
+        user_id_val: str = payload.get("sub")
+        if not user_id_val or payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid refresh token")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == user_id_val))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
     token_data = {"sub": str(user.id)}
-    return Token(
-        access_token=create_access_token(token_data),
-        refresh_token=create_refresh_token(token_data),
-        user_id=str(user.id),
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role.value,
+    access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token(token_data)
+    
+    content = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user_id": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role.value,
+    }
+    response = JSONResponse(content=content)
+    response.set_cookie(
+        key="dvt_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        max_age=settings.access_token_expire_minutes * 60,
+        samesite="lax",
+        secure=settings.is_production,
     )
+    return response
 
 
 @router.get("/me", response_model=UserOut)

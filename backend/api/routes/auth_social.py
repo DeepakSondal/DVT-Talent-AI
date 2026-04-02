@@ -126,8 +126,24 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
     # Generate JWT
     access_token = create_access_token(data={"sub": user.email})
     
-    # Redirect to frontend dashboard with token
-    # (In a real app, you might use a more secure way to pass the token, e.g. cookie or state)
-    frontend_url = f"{settings.allowed_origins}/auth/callback?token={access_token}"
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url=frontend_url)
+    # ── Security Hardening [H-08]: Use HttpOnly Cookies ─────────────────────
+    # Instead of passing the token in the URL, we set it as a secure cookie.
+    # This prevents token leakage and protects against XSS.
+    
+    # Get the primary frontend origin for redirect
+    frontend_origin = settings.cors_origins[0]
+    response = RedirectResponse(url=f"{frontend_origin}/dashboard")
+    
+    # Set the session cookie
+    response.set_cookie(
+        key="dvt_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        max_age=settings.access_token_expire_minutes * 60,
+        expires=settings.access_token_expire_minutes * 60,
+        samesite="lax",
+        secure=settings.is_production, # Only use 'secure' over HTTPS
+    )
+    
+    log.info("social_login_success", email=email, provider=provider)
+    return response

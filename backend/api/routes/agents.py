@@ -18,6 +18,12 @@ class AgentTrigger(BaseModel):
     params: Optional[dict] = {}
 
 
+class PipelineTrigger(BaseModel):
+    industry: str = "technology"
+    location: str = "United States"
+    send_emails: bool = False
+
+
 VALID_AGENTS = [
     "market_intelligence",
     "lead_discovery",
@@ -66,12 +72,17 @@ async def trigger_agent(
 
 @router.post("/run-full-pipeline")
 async def run_full_pipeline(
+    config: PipelineTrigger,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Trigger the full autonomous pipeline"""
+    """Trigger the full autonomous pipeline with custom settings"""
     from workers.tasks import run_full_autonomous_pipeline
-    task = run_full_autonomous_pipeline.delay()
+    task = run_full_autonomous_pipeline.delay(
+        industry=config.industry,
+        location=config.location,
+        send_emails=config.send_emails
+    )
     return {"message": "Full pipeline started", "celery_task_id": task.id}
 
 

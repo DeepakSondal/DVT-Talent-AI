@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   Building2, Users, Mail, TrendingUp, Zap, Brain, Target, Activity, RefreshCw, Briefcase
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { analyticsApi, agentsApi, type DashboardKPIs, type AgentTask } from "@/lib/api";
 import { toast } from "sonner";
@@ -37,6 +38,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [runningAgent, setRunningAgent] = useState<string | null>(null);
   const [pipelineRunning, setPipelineRunning] = useState(false);
+  const [autoOutreach, setAutoOutreach] = useState(false);
   const [days] = useState(30);
 
   const loadData = async () => {
@@ -77,8 +79,16 @@ export default function DashboardPage() {
   const handleRunPipeline = async () => {
     setPipelineRunning(true);
     try {
-      await agentsApi.runFullPipeline();
-      toast.success("🚀 Full autonomous pipeline started!");
+      await agentsApi.runFullPipeline({
+        send_emails: autoOutreach,
+        industry: "technology",
+        location: "United States"
+      });
+      toast.success(
+        autoOutreach 
+          ? "🚀 Full autonomous pipeline started (Auto-Outreach ON)!" 
+          : "🚀 Full autonomous pipeline started (Draft Mode)!"
+      );
       setTimeout(loadData, 3000);
     } catch {
       toast.error("Failed to start pipeline");
@@ -127,19 +137,37 @@ export default function DashboardPage() {
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
           
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="flex items-center gap-3 px-4 py-2 bg-white/[0.03] border border-white/[0.06] rounded-xl">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Auto-Outreach</span>
+            <button 
+              onClick={() => setAutoOutreach(!autoOutreach)}
+              className={cn(
+                "w-10 h-5 rounded-full p-1 transition-colors relative",
+                autoOutreach ? "bg-indigo-500" : "bg-zinc-800"
+              )}
+            >
+              <div className={cn(
+                "w-3 h-3 bg-white rounded-full transition-transform",
+                autoOutreach ? "translate-x-5" : "translate-x-0"
+              )} />
+            </button>
+          </div>
+
+          <button 
             onClick={handleRunPipeline}
             disabled={pipelineRunning}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-600/20"
-          >
-            {pipelineRunning ? (
-              <><div className="w-3.5 h-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" /> Running...</>
-            ) : (
-              <><Zap className="w-3.5 h-3.5" /> Full AI Pipeline</>
+            className={cn(
+              "flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm transition-all shadow-xl",
+              pipelineRunning 
+                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
+                : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30"
             )}
-          </motion.button>
+          >
+            <Zap className={cn("w-4 h-4", pipelineRunning && "animate-pulse")} />
+            {pipelineRunning ? "PIPELINE RUNNING..." : "START FULL AI PIPELINE"}
+          </button>
+        </div>
         </div>
       </div>
 

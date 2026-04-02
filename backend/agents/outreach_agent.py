@@ -83,12 +83,62 @@ class OutreachAgent(BaseAgent):
                 result["sent"] = send_result.get("success", False)
                 result["gmail_message_id"] = send_result.get("message_id")
 
+            # Save to Database
+            self._save_to_db(outreach_type, recipient, result, context)
+
             self.log_complete(f"Email drafted for {recipient.get('email')}, sent={result['sent']}")
             return result
 
         except Exception as e:
             self.log_error(e)
             return {"error": str(e), "sent": False}
+
+    def _save_to_db(self, outreach_type: str, recipient: Dict[str, Any], result: Dict[str, Any], context: Dict[str, Any]):
+        """Save the outreach attempt to the database for tracking & review"""
+        try:
+            from sqlalchemy import create_engine, text
+            from config import settings
+            engine = create_engine(settings.database_sync_url)
+            
+            with engine.connect() as conn:
+                # 1. Ensure a default campaign exists if not provided
+                campaign_id = context.get("campaign_id")
+                if not campaign_id:
+                    # Find or create a 'General' campaign
+                    campaign_name = f"General {outreach_type.capitalize()} Outreach"
+                    row = conn.execute(
+                        text("SELECT id FROM email_campaigns WHERE name = :name LIMIT 1"),
+                        {"name": campaign_name}
+                    ).fetchone()
+                    if row:
+                        campaign_id = str(row[0])
+                    else:
+                        campaign_id = str(uuid.uuid4())
+                        conn.execute(
+                            text("INSERT INTO email_campaigns (id, name, campaign_type, is_active) VALUES (:id, :name, :type, TRUE)"),
+                            {"id": campaign_id, "name": campaign_name, "type": f"{outreach_type}_outreach"}
+                        )
+
+                # 2. Insert EmailSent record
+                conn.execute(
+                    text("""
+                        INSERT INTO email_sent 
+                        (id, campaign_id, to_email, subject, body, status, sent_at)
+                        VALUES (:id, :cid, :email, :sub, :body, :status, :sent_at)
+                    """),
+                    {
+                        "id": result["tracking_id"],
+                        "cid": campaign_id,
+                        "email": result["to_email"],
+                        "sub": result["subject"],
+                        "body": result["body"],
+                        "status": "sent" if result["sent"] else "draft",
+                        "sent_at": datetime.utcnow() if result["sent"] else None
+                    }
+                )
+                conn.commit()
+        except Exception as e:
+            self.log.error("db_save_failed", error=str(e))
 
     def _write_candidate_email(self, candidate: Dict[str, Any], context: Dict[str, Any]) -> dict:
         """Write personalized email to a candidate about an opportunity"""

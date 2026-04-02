@@ -164,8 +164,8 @@ class AgentOrchestrator:
                 "candidates_found": len(all_candidates),
             }
 
-            # ── Stage 5: Outreach to Clients ─────────────────────────────
-            if send_emails and all_contacts:
+            # ── Stage 5: Outreach ─────────────────────────────────────────
+            if all_contacts:
                 log.info("pipeline_stage", stage=5, name="client_outreach")
                 outreach_results = []
                 for contact in all_contacts[:10]:

@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4-turbo-preview"
 
+    # AI — Groq (High Speed)
+    groq_api_key: str = ""
+    groq_api_base: str = "https://api.groq.com/openai/v1"
+    groq_model: str = "llama3-70b-8192"
+
     # Search
     serper_api_key: str = ""
 
@@ -63,7 +68,7 @@ class Settings(BaseSettings):
     gmail_client_id: str = ""
     gmail_client_secret: str = ""
     gmail_refresh_token: str = ""
-    gmail_sender_email: str = ""
+    gmail_sender_email: str = "Deepak@dvttalent.com"
 
     # Social Auth
     google_client_id: str = ""
@@ -96,7 +101,9 @@ class Settings(BaseSettings):
 
     @property
     def primary_llm_api_key(self) -> str:
-        """Return first available LLM API key"""
+        """Return first available LLM API key. Priority: Groq > Kimi > DeepSeek > OpenAI"""
+        if self.groq_api_key:
+            return self.groq_api_key
         if self.kimi_api_key:
             return self.kimi_api_key
         if self.deepseek_api_key:
@@ -105,6 +112,8 @@ class Settings(BaseSettings):
 
     @property
     def primary_llm_base_url(self) -> str:
+        if self.groq_api_key:
+            return self.groq_api_base
         if self.kimi_api_key:
             return self.kimi_api_base
         if self.deepseek_api_key:
@@ -113,6 +122,8 @@ class Settings(BaseSettings):
 
     @property
     def primary_llm_model(self) -> str:
+        if self.groq_api_key:
+            return self.groq_model
         if self.kimi_api_key:
             return self.kimi_model
         if self.deepseek_api_key:
@@ -126,7 +137,7 @@ class Settings(BaseSettings):
         """
         warnings = []
         if not self.primary_llm_api_key:
-            warnings.append("No LLM key set — agents will fail. Set KIMI_API_KEY, DEEPSEEK_API_KEY, or OPENAI_API_KEY")
+            warnings.append("No LLM key set — agents will fail. Set GROQ_API_KEY, KIMI_API_KEY, DEEPSEEK_API_KEY, or OPENAI_API_KEY")
         if not self.serper_api_key:
             warnings.append("SERPER_API_KEY not set — web search disabled")
         if not self.secret_key or self.secret_key == "change-me-in-production":

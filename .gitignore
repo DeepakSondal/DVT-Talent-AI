@@ -73,3 +73,10 @@ docker/nginx/ssl/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Secrets & Local Tools
+credentials.json
+credentials.json.json
+generate_token.py
+backend/test_agent_diagnostic.py
+.env.production

@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: dvt_caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - dvt_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dvt_frontend
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=https://dvttalent.com/api/v1
+    networks:
+      - dvt_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dvt_backend
+    restart: always
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - APP_BASE_URL=https://dvttalent.com
+      - ALLOWED_ORIGINS=https://dvttalent.com
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GMAIL_SENDER_EMAIL=Deepak@dvttalent.com
+      - SECRET_KEY=${SECRET_KEY}
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
+      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
+      - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
+      - KIMI_API_KEY=${KIMI_API_KEY}
+    networks:
+      - dvt_network
+    depends_on:
+      - redis
+      - db
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dvt_worker
+    command: celery -A workers.tasks worker --loglevel=info
+    restart: always
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GMAIL_SENDER_EMAIL=Deepak@dvttalent.com
+      - SECRET_KEY=${SECRET_KEY}
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
+      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
+      - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
+      - KIMI_API_KEY=${KIMI_API_KEY}
+    networks:
+      - dvt_network
+    depends_on:
+      - redis
+      - db
+
+  redis:
+    image: redis:7-alpine
+    container_name: dvt_redis
+    networks:
+      - dvt_network
+
+  db:
+    image: postgres:16-alpine
+    container_name: dvt_db
+    environment:
+      - POSTGRES_USER=dvt_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=dvt_talent
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dvt_network
+
+networks:
+  dvt_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

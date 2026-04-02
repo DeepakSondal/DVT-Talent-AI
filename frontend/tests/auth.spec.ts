@@ -10,7 +10,7 @@ test.describe('Authentication Flow', () => {
     await page.goto('/auth/login');
     
     // Fill in credentials (using the default admin ones we set up)
-    await page.fill('input[name="email"]', 'admin@dvttalent.com');
+    await page.fill('input[name="email"]', 'admin@dvt.com');
     await page.fill('input[name="password"]', 'admin123');
     
     // Submit the login form
