@@ -4,16 +4,16 @@ import { useEffect, useState } from "react";
 import {
   Building2, Users, Mail, TrendingUp, Zap, Brain, Target, Activity, RefreshCw, Briefcase
 } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { analyticsApi, agentsApi, type DashboardKPIs, type AgentTask } from "../../lib/api";
+import { analyticsApi, agentsApi, type DashboardKPIs, type AgentTask } from "@/lib/api";
 import { toast } from "sonner";
 
 // Components
-import { KpiCard, AnimatedNumber } from "../../components/dashboard/kpi-card";
-import { AgentCard, type Agent } from "../../components/dashboard/agent-card";
-import { TaskFeedItem } from "../../components/dashboard/task-item";
-import { PerformanceCharts } from "../../components/dashboard/charts";
+import { KpiCard, AnimatedNumber } from "@/components/dashboard/kpi-card";
+import { AgentCard, type Agent } from "@/components/dashboard/agent-card";
+import { TaskFeedItem } from "@/components/dashboard/task-item";
+import { PerformanceCharts } from "@/components/dashboard/charts";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface FunnelData { stage: string; count: number; }

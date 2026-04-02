@@ -7,9 +7,9 @@ import {
   MapPin, TrendingUp, Cpu, Users, BarChart3, 
   ArrowUpRight, Info, ExternalLink, Activity
 } from "lucide-react";
-import { companiesApi, type Company } from "../../../lib/api";
-import { Skeleton } from "../../../components/shared/skeleton";
-import { cn } from "../../../lib/utils";
+import { companiesApi, type Company } from "@/lib/api";
+import { Skeleton } from "@/components/shared/skeleton";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function CompaniesPage() {

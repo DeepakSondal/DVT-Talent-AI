@@ -7,9 +7,9 @@ import {
   MapPin, Briefcase, Star, Download, MoreVertical,
   Cpu, Zap, Award, Sparkles
 } from "lucide-react";
-import { candidatesApi, type Candidate } from "../../../lib/api";
-import { SkeletonRow } from "../../../components/shared/skeleton";
-import { cn } from "../../../lib/utils";
+import { candidatesApi, type Candidate } from "@/lib/api";
+import { SkeletonRow } from "@/components/shared/skeleton";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const STATUS_THEMES: Record<string, string> = {

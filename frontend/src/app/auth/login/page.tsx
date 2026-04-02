@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Brain, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
-import { authApi } from "../../../lib/api";
+import { authApi } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function LoginPage() {
