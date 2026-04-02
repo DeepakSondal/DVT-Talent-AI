@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export default function AuthCallbackPage() {
+function AuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -16,7 +16,7 @@ export default function AuthCallbackPage() {
       // Store token
       localStorage.setItem("dvt_access_token", token);
       
-      // Also set the cookie for middleware/SSR (assuming we use the logic from lib/api.ts)
+      // Also set the cookie for middleware/SSR
       document.cookie = `dvt_access_token=${token}; path=/; max-age=86400; SameSite=Lax`;
       
       toast.success("Successfully signed in!");
@@ -32,5 +32,17 @@ export default function AuthCallbackPage() {
       <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
       <p className="text-zinc-400 text-sm animate-pulse">Completing authentication...</p>
     </div>
+  );
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#080a0e] flex flex-col items-center justify-center font-['Geist',_sans-serif]">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
+      </div>
+    }>
+      <AuthContent />
+    </Suspense>
   );
 }
