@@ -10,6 +10,8 @@ export const metadata: Metadata = {
   description: "AI-powered recruiting & sales automation platform",
 };
 
+import { WebSocketProvider } from "@/providers/websocket-provider";
+
 export default function RootLayout({
   children,
 }: {
@@ -20,7 +22,9 @@ export default function RootLayout({
       <body
         className={`${inter.variable} antialiased bg-[#080a0e] text-white`}
       >
-        {children}
+        <WebSocketProvider>
+          {children}
+        </WebSocketProvider>
 
         <Toaster
           position="bottom-right"

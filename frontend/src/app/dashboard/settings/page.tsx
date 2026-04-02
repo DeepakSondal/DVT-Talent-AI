@@ -1,128 +1,127 @@
 "use client";
 
+import { 
+  Settings, User, Shield, 
+  Bell, Globe, Zap, 
+  CreditCard, Key, Smartphone,
+  Save, RefreshCw, Mail
+} from "lucide-react";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { Settings, User, Key, Bell, Shield, Globe, Save, Zap, Database, Mail, Search, Brain } from "lucide-react";
-import { toast } from "sonner";
 
 export default function SettingsPage() {
-  const handleSave = () => {
-    toast.success("Settings saved successfully!");
-  };
-
   return (
-    <div className="max-w-4xl space-y-10 font-['Geist',_sans-serif]">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-10 max-w-4xl"
+    >
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">System Configuration</h1>
-        <p className="text-sm text-zinc-500 mt-1">Manage your professional profile and autonomous agent credentials.</p>
+      <div className="flex items-end justify-between">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Settings className="w-5 h-5 text-primary" />
+            <span className="text-[10px] font-black uppercase text-primary tracking-[0.2em]">System Preferences</span>
+          </div>
+          <h1 className="text-4xl font-black tracking-tight text-white">Settings</h1>
+          <p className="text-white/30 text-lg">Manage your account, autonomous agents, and billing.</p>
+        </div>
+        <Button variant="primary" className="gap-2 shadow-indigo-600/30">
+          <Save className="w-4 h-4 fill-white" />
+          Save Changes
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Navigation Sidebar (Local) */}
-        <div className="space-y-1">
+      <div className="grid grid-cols-12 gap-8">
+        {/* Navigation */}
+        <div className="col-span-12 lg:col-span-3 space-y-2">
           {[
             { label: "Profile", icon: User, active: true },
-            { label: "API Credentials", icon: Key, active: false },
-            { label: "Notifications", icon: Bell, active: false },
-            { label: "Security", icon: Shield, active: false },
-            { label: "Integrations", icon: Globe, active: false },
-          ].map((item, i) => (
-            <button 
-              key={i}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                item.active 
-                  ? "bg-indigo-600/10 text-indigo-400 border border-indigo-600/20" 
-                  : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent"
-              }`}
+            { label: "Security", icon: Shield },
+            { label: "Notifications", icon: Bell },
+            { label: "Integrations", icon: Zap },
+            { label: "Billing", icon: CreditCard },
+          ].map((item) => (
+            <div 
+              key={item.label}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-2xl cursor-pointer transition-all border border-transparent",
+                item.active ? "bg-primary/10 text-primary border-primary/20" : "text-white/40 hover:bg-white/[0.03] hover:text-white"
+              )}
             >
-              <item.icon className="w-4 h-4" />
-              {item.label}
-            </button>
+               <item.icon className="w-4 h-4" />
+               <span className="text-sm font-bold uppercase tracking-widest">{item.label}</span>
+            </div>
           ))}
         </div>
 
-        {/* Content Area */}
-        <div className="md:col-span-2 space-y-8">
-          {/* Section: Profile */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
-              <User className="w-4 h-4 text-indigo-400" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-widest">Account Profile</h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5 uppercase tracking-widest">Full Name</label>
-                <input 
-                  type="text" 
-                  defaultValue="Deepak Sondal"
-                  className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-all"
-                />
+        {/* Content */}
+        <div className="col-span-12 lg:col-span-9 space-y-8">
+           <Card className="space-y-8">
+              <div className="space-y-6">
+                 <h3 className="text-xl font-black text-white">Public Profile</h3>
+                 <div className="grid grid-cols-2 gap-6">
+                    <Input label="Full Name" defaultValue="Deepak Sondal" />
+                    <Input label="Company Name" defaultValue="DVT Talent AI" />
+                    <div className="col-span-2">
+                       <Input label="Business Email" defaultValue="deepak.sondal@dvttalent.ai" />
+                    </div>
+                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5 uppercase tracking-widest">Job Title</label>
-                <input 
-                  type="text" 
-                  defaultValue="Administrator"
-                  className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-all"
-                />
+
+              <div className="pt-8 border-t border-white/5 space-y-6">
+                 <div className="flex items-center justify-between">
+                    <div>
+                       <h3 className="text-xl font-black text-white">Autonomous Mode</h3>
+                       <p className="text-sm text-white/30 mt-1 font-medium">Enable AI to execute outreach without manual approval.</p>
+                    </div>
+                    <button className="w-12 h-6 rounded-full bg-primary relative p-1 transition-all">
+                       <div className="w-4 h-4 bg-white rounded-full shadow-lg translate-x-6" />
+                    </button>
+                 </div>
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5 uppercase tracking-widest">Email Address</label>
-                <input 
-                  type="email" 
-                  defaultValue="admin@dvt.com"
-                  className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500/50 transition-all opacity-50"
-                  readOnly
-                />
+
+              <div className="pt-8 border-t border-white/5 space-y-6">
+                 <h3 className="text-xl font-black text-white">Active Integrations</h3>
+                 <div className="grid grid-cols-1 gap-4">
+                    {[
+                      { name: "LinkedIn", status: "Connected", icon: Globe, color: "text-blue-400" },
+                      { name: "Gmail", status: "Pending", icon: Mail, color: "text-rose-400" },
+                      { name: "Apollo.io", status: "Connected", icon: Zap, color: "text-amber-400" },
+                    ].map((int) => (
+                      <div key={int.name} className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-white/10 transition-all">
+                         <div className="flex items-center gap-4">
+                            <div className={cn("p-2 rounded-xl bg-white/5", int.color)}>
+                               <int.icon className="w-5 h-5" />
+                            </div>
+                            <span className="font-bold text-white">{int.name}</span>
+                         </div>
+                         <div className="flex items-center gap-4">
+                            <Badge variant={int.status === "Connected" ? "success" : "secondary"}>{int.status}</Badge>
+                            <Button variant="ghost" size="sm">Configure</Button>
+                         </div>
+                      </div>
+                    ))}
+                 </div>
               </div>
-            </div>
-          </section>
+           </Card>
 
-          {/* Section: API Credentials */}
-          <section className="space-y-6">
-            <div className="flex items-center gap-2 pb-2 border-b border-white/[0.06]">
-              <Key className="w-4 h-4 text-indigo-400" />
-              <h2 className="text-sm font-bold text-white uppercase tracking-widest">Autonomous Credentials</h2>
-            </div>
-
-            <div className="space-y-4">
-              {[
-                { label: "Groq Cloud API Key", icon: Zap, placeholder: "gsk_••••••••••••••••••••••••" },
-                { label: "Serper API Key", icon: Search, placeholder: "••••••••••••••••••••••••••••••••" },
-                { label: "Kim-AI API Key", icon: Brain, placeholder: "kii_••••••••••••••••••••••••" },
-                { label: "SendGrid/SMTP Host", icon: Mail, placeholder: "smtp.sendgrid.net" },
-              ].map((key, i) => (
-                <div key={i}>
-                  <label className="block text-xs font-medium text-zinc-500 mb-1.5 flex items-center gap-2">
-                    <key.icon className="w-3 h-3 text-zinc-600" /> {key.label}
-                  </label>
-                  <div className="relative">
-                    <input 
-                      type="password" 
-                      placeholder={key.placeholder}
-                      className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white placeholder-zinc-700 focus:outline-none focus:border-indigo-500/50 transition-all"
-                    />
-                    <button className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-indigo-400 uppercase hover:text-indigo-300">Update</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Footer Actions */}
-          <div className="pt-6 flex items-center justify-end gap-3 border-t border-white/[0.06]">
-            <button className="px-6 py-2.5 text-sm font-semibold text-zinc-400 hover:text-zinc-200 transition-colors">Discard</button>
-            <button 
-              onClick={handleSave}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              <span>Save Configuration</span>
-            </button>
-          </div>
+           <Card variant="solid" className="bg-rose-500/[0.02] border-rose-500/20">
+              <h3 className="text-lg font-black text-rose-500 mb-4">Danger Zone</h3>
+              <p className="text-sm text-white/30 mb-6 font-medium">
+                Permanently delete your account and all associated AI training data. This action is irreversible.
+              </p>
+              <Button variant="outline" className="text-rose-500 border-rose-500/20 hover:bg-rose-500/10 hover:border-rose-500/40">
+                Delete Account
+              </Button>
+           </Card>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

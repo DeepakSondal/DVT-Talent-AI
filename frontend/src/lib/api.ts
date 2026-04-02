@@ -40,6 +40,14 @@ api.interceptors.response.use(
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface LoginCredentials { email: string; password: string; }
+export type UserRole = "admin" | "recruiter" | "viewer";
+
+export interface UserOut {
+  id: string; email: string; full_name: string; role: UserRole;
+  is_active: boolean; is_verified: boolean; avatar_url?: string;
+  last_login?: string; created_at: string;
+}
+
 export interface AuthResponse {
   access_token: string;
   refresh_token: string;
@@ -73,6 +81,7 @@ export interface Candidate {
   linkedin_url?: string; github_url?: string; skills?: string[];
   experience_years?: number; current_company?: string; status: string;
   source?: string; score: number; ai_summary?: string; created_at: string;
+  meta_data?: any;
 }
 
 export interface Lead {
@@ -80,6 +89,8 @@ export interface Lead {
   status: string; source?: string; score: number;
   notes?: string; next_action?: string; next_action_date?: string;
   value_estimate?: number; created_at: string; updated_at: string;
+  company_name?: string; domain?: string;
+  meta_data?: any;
 }
 
 export interface PaginatedResponse<T> {
@@ -101,6 +112,20 @@ export interface EmailSent {
 export interface AgentTask {
   id: string; agent_name: string; task_type: string; status: string;
   started_at?: string; completed_at?: string; error?: string; created_at: string;
+}
+
+export interface Job {
+  id: string; company_id?: string; title: string; description?: string;
+  location?: string; remote: boolean; salary_min?: number; salary_max?: number;
+  skills_required?: string[]; experience_years?: number; job_type?: string;
+  source_url?: string; is_active: boolean; created_at: string;
+}
+
+export interface JobCreate {
+  company_id: string; title: string; description?: string;
+  requirements?: string; location?: string; remote: boolean;
+  salary_min?: number; salary_max?: number; skills_required?: string[];
+  experience_years?: number; job_type?: string;
 }
 
 // ── Auth API ───────────────────────────────────────────────────────────────
@@ -188,18 +213,6 @@ export const leadsApi = {
   delete: (id: string) => api.delete(`/leads/${id}`),
 };
 
-// ── Agents API ─────────────────────────────────────────────────────────────
-export const agentsApi = {
-  trigger: (agent: string, params?: Record<string, any>) =>
-    api.post("/agents/trigger", { agent, params }).then((r) => r.data),
-  runFullPipeline: (config?: { industry?: string; location?: string; send_emails?: boolean }) => 
-    api.post("/agents/run-full-pipeline", config || { industry: "technology", location: "United States", send_emails: false }).then((r) => r.data),
-  listTasks: (limit = 50): Promise<{ tasks: AgentTask[] }> =>
-    api.get(`/agents/tasks?limit=${limit}`).then((r) => r.data),
-  getTaskStatus: (taskId: string) =>
-    api.get(`/agents/status/${taskId}`).then((r) => r.data),
-};
-
 // ── Campaigns API ─────────────────────────────────────────────────────────
 export const campaignsApi = {
   list: (params?: { page?: number; page_size?: number }): Promise<PaginatedResponse<EmailCampaign>> =>
@@ -210,6 +223,33 @@ export const campaignsApi = {
   sendSync: (id: string) => api.post(`/campaigns/${id}/send`).then((r) => r.data),
   listEmails: (id: string, params?: { page?: number; status?: string }): Promise<PaginatedResponse<EmailSent>> =>
     api.get(`/campaigns/${id}/emails`, { params }).then((r) => r.data),
+};
+
+// ── Jobs API ──────────────────────────────────────────────────────────────
+export const jobsApi = {
+  list: (params?: { page?: number; search?: string; remote?: boolean }): Promise<PaginatedResponse<Job>> =>
+    api.get("/jobs", { params }).then((r) => r.data),
+  get: (id: string): Promise<Job> => api.get(`/jobs/${id}`).then((r) => r.data),
+  create: (data: JobCreate): Promise<Job> => api.post("/jobs", data).then((r) => r.data),
+  deactivate: (id: string) => api.patch(`/jobs/${id}/deactivate`).then((r) => r.data),
+};
+
+// ── Users API ─────────────────────────────────────────────────────────────
+export const usersApi = {
+  me: (): Promise<UserOut> => api.get("/users/me").then((r) => r.data),
+  list: (): Promise<PaginatedResponse<UserOut>> => api.get("/users").then((r) => r.data),
+  updateRole: (id: string, role: UserRole) => api.patch(`/users/${id}/role`, { role }).then((r) => r.data),
+  deactivate: (id: string) => api.patch(`/users/${id}/deactivate`).then((r) => r.data),
+};
+
+// ── Agents API ────────────────────────────────────────────────────────────
+export const agentsApi = {
+  trigger: (agent: string, params: any = {}) => api.post("/agents/trigger", { agent, params }).then((r) => r.data),
+  runPipeline: (config: { industry: string; location: string; send_emails: boolean }) =>
+    api.post("/agents/run-full-pipeline", config).then((r) => r.data),
+  listTasks: (limit: number = 50): Promise<{ tasks: AgentTask[] }> =>
+    api.get("/agents/tasks", { params: { limit } }).then((r) => r.data),
+  getStatus: (taskId: string) => api.get(`/agents/status/${taskId}`).then((r) => r.data),
 };
 
 export default api;
