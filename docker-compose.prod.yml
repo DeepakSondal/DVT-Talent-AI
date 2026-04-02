@@ -60,8 +60,9 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: worker
     container_name: dvt_worker
-    command: celery -A workers.tasks worker --loglevel=info
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=4
     restart: always
     environment:
       - APP_ENV=production
