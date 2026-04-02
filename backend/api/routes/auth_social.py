@@ -5,6 +5,7 @@ Handlers for Google, GitHub, and LinkedIn
 import uuid
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from authlib.integrations.starlette_client import OAuth
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select

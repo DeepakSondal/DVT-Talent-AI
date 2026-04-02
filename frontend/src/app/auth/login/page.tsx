@@ -23,7 +23,9 @@ export default function LoginPage() {
       toast.success("Welcome back!");
       router.push("/dashboard");
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Login failed. Check your credentials.";
+      const msg = typeof err?.response?.data?.detail === "string" 
+        ? err.response.data.detail 
+        : "Login failed. Check your credentials.";
       toast.error(msg);
     } finally {
       setLoading(false);
