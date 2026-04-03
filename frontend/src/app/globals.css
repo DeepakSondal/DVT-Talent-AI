@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --background: #f8fafc;
-  --foreground: #020617;
+  --background: #f1f5f9;
+  --foreground: #1e293b;
   --card: #ffffff;
-  --border: rgba(15, 23, 42, 0.08);
-  --primary: #4f46e5;
-  --accent: #7c3aed;
+  --border: rgba(15, 23, 42, 0.06);
+  --primary: #2563eb;
+  --accent: #3b82f6;
 }
 
 @layer base {
@@ -23,11 +23,11 @@
 
 @layer utilities {
   .glass {
-    @apply bg-white/70 backdrop-blur-xl border border-black/[0.05] shadow-premium-sm;
+    @apply bg-white/80 backdrop-blur-xl border border-white/40 shadow-premium-sm;
   }
   
   .glass-card {
-    @apply bg-white/80 backdrop-blur-md border border-black/[0.04] shadow-premium-md hover:bg-white/90 hover:shadow-premium-lg transition-all duration-300;
+    @apply bg-white/90 backdrop-blur-md border border-white/50 shadow-premium-md hover:bg-white hover:shadow-premium-lg transition-all duration-300;
   }
 
   .text-gradient {
@@ -35,14 +35,14 @@
   }
 
   .text-gradient-primary {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-sky-600 to-indigo-600;
   }
 
   .bg-grid {
-    background-size: 40px 40px;
+    background-size: 30px 30px;
     background-image: 
-      linear-gradient(to right, rgba(15,23,42,0.03) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(15,23,42,0.03) 1px, transparent 1px);
+      linear-gradient(to right, rgba(15,23,42,0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15,23,42,0.02) 1px, transparent 1px);
   }
 }
 
@@ -52,19 +52,19 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(15, 23, 42, 0.1);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(15, 23, 42, 0.2);
 }
 
 ::selection {
-  background: rgba(79, 70, 229, 0.1);
-  color: #4f46e5;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
 }

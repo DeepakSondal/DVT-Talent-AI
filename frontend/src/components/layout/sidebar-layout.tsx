@@ -28,10 +28,10 @@ function SidebarItem({ icon: Icon, label, href, active, collapsed }: SidebarItem
       <div className={cn(
         "group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300 cursor-pointer relative",
         active 
-          ? "bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm" 
+          ? "bg-blue-50 text-blue-600 border border-blue-100 shadow-sm" 
           : "text-slate-500 hover:text-slate-900 hover:bg-slate-50 border border-transparent"
       )}>
-        <Icon className={cn("w-5 h-5 shrink-0 transition-colors", active ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600")} />
+        <Icon className={cn("w-5 h-5 shrink-0 transition-colors", active ? "text-blue-600" : "text-slate-400 group-hover:text-slate-600")} />
         
         {!collapsed && (
           <motion.span 
@@ -46,7 +46,7 @@ function SidebarItem({ icon: Icon, label, href, active, collapsed }: SidebarItem
         {active && (
           <motion.div 
             layoutId="sidebar-active"
-            className="absolute -left-1 w-1 h-6 bg-indigo-600 rounded-r-full shadow-lg shadow-indigo-600/20" 
+            className="absolute -left-1 w-1 h-6 bg-blue-600 rounded-r-full shadow-lg shadow-blue-600/20" 
           />
         )}
       </div>
@@ -101,7 +101,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Logo */}
         <div className="h-20 flex items-center px-6 gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
             <Bot className="w-6 h-6 text-white" />
           </div>
           {!collapsed && (
@@ -161,9 +161,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         <header className="h-20 border-b border-slate-200 flex items-center justify-between px-8 bg-white/70 backdrop-blur-2xl sticky top-0 z-40">
           <div className={cn(
             "flex items-center gap-4 bg-slate-50 border rounded-2xl px-5 py-2.5 w-[450px] group transition-all duration-300 h-11",
-            searchFocused ? "border-primary/40 bg-white shadow-xl shadow-indigo-500/5" : "border-slate-200"
+            searchFocused ? "border-blue-600/40 bg-white shadow-xl shadow-blue-500/5" : "border-slate-200"
           )}>
-            <div className="flex items-center gap-2 text-slate-300 group-focus-within:text-primary transition-colors">
+            <div className="flex items-center gap-2 text-slate-300 group-focus-within:text-blue-600 transition-colors">
               <Command className="w-3.5 h-3.5" />
               <span className="text-xs font-bold">K</span>
             </div>
@@ -174,7 +174,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
             />
-            <Search className="w-4 h-4 text-slate-300 group-focus-within:text-primary transition-colors" />
+            <Search className="w-4 h-4 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
           </div>
 
           <div className="flex items-center gap-6">
@@ -195,23 +195,23 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setStreamOpen(!streamOpen)}
               className={cn(
                 "w-11 h-11 rounded-2xl flex items-center justify-center border transition-all relative group",
-                streamOpen ? "bg-indigo-600 border-indigo-500 shadow-lg shadow-indigo-600/20" : "bg-slate-50 border-slate-200 hover:bg-white hover:shadow-md"
+                streamOpen ? "bg-blue-600 border-blue-500 shadow-lg shadow-blue-600/20" : "bg-slate-50 border-slate-200 hover:bg-white hover:shadow-md"
               )}
             >
-              <Zap className={cn("w-5 h-5 transition-colors", streamOpen ? "text-white" : "text-slate-400 group-hover:text-indigo-600")} />
+              <Zap className={cn("w-5 h-5 transition-colors", streamOpen ? "text-white" : "text-slate-400 group-hover:text-blue-600")} />
               {isConnected && !streamOpen && (
-                 <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-indigo-600 ring-4 ring-white" />
+                 <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-blue-600 ring-4 ring-white" />
               )}
             </button>
             
             <div className="h-10 w-[1px] bg-slate-100" />
             
             <button className="flex items-center gap-3 p-1.5 pr-5 rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all group active:scale-95">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[10px] font-black text-white shadow-md">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-[10px] font-black text-white shadow-md">
                 {user?.full_name?.split(' ').map(n => n[0]).join('') || "?"}
               </div>
               <div className="flex flex-col items-start leading-tight">
-                <span className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{user?.full_name || "Synchronizing..."}</span>
+                <span className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{user?.full_name || "Synchronizing..."}</span>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{user?.role || "Operator"}</span>
               </div>
             </button>

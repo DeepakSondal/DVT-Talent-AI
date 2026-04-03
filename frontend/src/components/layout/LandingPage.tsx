@@ -55,7 +55,7 @@ export default function LandingPage() {
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-110 transition-transform">
               <Bot className="w-6 h-6 text-white" />
             </div>
             <span className="text-xl font-black tracking-tight text-slate-950 uppercase italic">
@@ -64,11 +64,11 @@ export default function LandingPage() {
           </Link>
 
           <div className="hidden md:flex items-center gap-8 text-slate-500 font-black uppercase text-[10px] tracking-widest">
-            <Link href="#features" className="hover:text-indigo-600 transition-colors">Agents</Link>
-            <Link href="#how-it-works" className="hover:text-indigo-600 transition-colors">Workflow</Link>
-            <Link href="#preview" className="hover:text-indigo-600 transition-colors">Platform</Link>
+            <Link href="#features" className="hover:text-blue-600 transition-colors">Agents</Link>
+            <Link href="#how-it-works" className="hover:text-blue-600 transition-colors">Workflow</Link>
+            <Link href="#preview" className="hover:text-blue-600 transition-colors">Platform</Link>
             <Link href="/dashboard">
-              <Button variant="primary" size="sm" className="shadow-lg shadow-indigo-600/10">Launch Console</Button>
+              <Button variant="primary" size="sm" className="shadow-lg shadow-blue-600/10">Launch Console</Button>
             </Link>
           </div>
         </div>
@@ -87,7 +87,7 @@ export default function LandingPage() {
                 className="space-y-10"
               >
                 <motion.div variants={fadeIn}>
-                  <Badge variant="primary" className="py-1 px-4 text-xs font-black uppercase tracking-widest bg-indigo-50 text-primary border-indigo-100">
+                  <Badge variant="primary" className="py-1 px-4 text-xs font-black uppercase tracking-widest bg-blue-50 text-blue-600 border-blue-100">
                     <Sparkles className="w-3.5 h-3.5 mr-2 inline" />
                     AI-Powered Talent Revolution
                   </Badge>
@@ -106,7 +106,7 @@ export default function LandingPage() {
 
                 <motion.div variants={fadeIn} className="flex flex-col sm:flex-row items-center gap-5 justify-center lg:justify-start">
                   <Link href="/dashboard" className="w-full sm:w-auto">
-                    <Button size="lg" className="w-full h-16 px-10 text-sm font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20">
+                    <Button size="lg" className="w-full h-16 px-10 text-sm font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">
                       Start Initialization
                       <ArrowRight className="ml-2 w-5 h-5" />
                     </Button>
@@ -215,9 +215,9 @@ export default function LandingPage() {
             <div className="grid lg:grid-cols-2 gap-20 items-center">
               <div className="space-y-12">
                 <div className="space-y-5 text-center lg:text-left">
-                  <Badge variant="primary" className="bg-indigo-50 text-primary border-indigo-100">The Workflow</Badge>
+                  <Badge variant="primary" className="bg-blue-50 text-blue-600 border-blue-100">The Workflow</Badge>
                   <h2 className="text-4xl lg:text-6xl font-black leading-tight text-slate-900 tracking-tight">
-                    From Goal to <br /> Outcome in <span className="text-primary tracking-tighter">3 Steps</span>
+                    From Goal to <br /> Outcome in <span className="text-blue-600 tracking-tighter">3 Steps</span>
                   </h2>
                 </div>
 
@@ -262,11 +262,11 @@ export default function LandingPage() {
                         <div className="w-full h-1.5 bg-slate-50 rounded-full" />
                       </div>
                     </div>
-                    <div className="p-5 rounded-2xl bg-indigo-50 border border-indigo-100">
-                      <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mb-2">Agent Active</p>
+                    <div className="p-5 rounded-2xl bg-blue-50 border border-blue-100">
+                      <p className="text-[10px] text-blue-600 font-black uppercase tracking-widest mb-2">Agent Active</p>
                       <p className="text-xs text-slate-600 font-medium italic leading-relaxed">"Sourcing top 10% React developers in NYC for fintech expansion..."</p>
-                      <div className="mt-4 h-1 w-full bg-indigo-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-primary w-2/3 animate-pulse" />
+                      <div className="mt-4 h-1 w-full bg-blue-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-600 w-2/3 animate-pulse" />
                       </div>
                     </div>
                   </div>
@@ -325,7 +325,7 @@ export default function LandingPage() {
               transition={{ delay: 0.3 }}
             >
               <Link href="/dashboard">
-                <Button size="lg" className="px-16 py-8 text-2xl h-auto font-black uppercase tracking-widest shadow-2xl shadow-indigo-600/30">
+                <Button size="lg" className="px-16 py-8 text-2xl h-auto font-black uppercase tracking-widest shadow-2xl shadow-blue-600/30">
                   Deploy Your AI Agent
                 </Button>
               </Link>

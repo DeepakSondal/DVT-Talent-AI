@@ -34,14 +34,21 @@ const VELOCITY_DATA = [
   { name: "Week 7", value: 1200 },
 ];
 
-const FLYWHEEL_RADAR = [
-  { subject: 'Intelligence', A: 120, fullMark: 150 },
-  { subject: 'Discovery', A: 98, fullMark: 150 },
-  { subject: 'Engagement', A: 86, fullMark: 150 },
-  { subject: 'Selection', A: 99, fullMark: 150 },
-  { subject: 'Velocity', A: 85, fullMark: 150 },
-  { subject: 'Integrity', A: 110, fullMark: 150 },
+const RADAR_DATA = [
+  { subject: 'Sourcing Speed', A: 120, fullMark: 150 },
+  { subject: 'Engagement %', A: 98, fullMark: 150 },
+  { subject: 'Cost Efficiency', A: 86, fullMark: 150 },
+  { subject: 'Retention Pred.', A: 99, fullMark: 150 },
+  { subject: 'Skill Match', A: 85, fullMark: 150 },
+  { subject: 'Culture Fit', A: 65, fullMark: 150 },
 ];
+
+const CHART_COLORS = {
+  primary: '#2563eb', // Nordic Blue
+  accent: '#7dd3fc', // Sky
+  success: '#10b981', 
+  warning: '#f59e0b'
+};
 
 const CONVERSION_FUNNEL = [
   { label: 'Market Scanned', value: '42,902', percent: 100, color: 'bg-white/5' },
@@ -80,42 +87,36 @@ export default function ExecutiveDashboard() {
       className="space-y-12 pb-20"
     >
       {/* Header Area */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100">
-               <ShieldCheck className="w-4 h-4 text-indigo-600" />
-            </div>
-            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Executive Command Center</span>
-          </div>
-          <h1 className="text-5xl font-black tracking-tighter text-slate-900">Platform ROI Overview</h1>
-          <p className="text-lg text-slate-400 font-medium italic">Strategic visualization of autonomous human-hour elevation and pipeline velocity.</p>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-1.5">
+          <Badge variant="primary" className="bg-blue-50 text-blue-600 border-blue-100">Executive Overview</Badge>
+          <h1 className="text-4xl font-black tracking-tight text-slate-900 uppercase italic">Command Center</h1>
+          <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">Real-time Autonomous Talent Orchestration</p>
         </div>
         <div className="flex items-center gap-3">
-           <Button variant="secondary" className="h-12 px-6 rounded-xl border-slate-200 gap-2">
-              <History className="w-4 h-4" />
-              Intelligence Logs
-           </Button>
-           <Button 
-            variant="primary" 
-            className="h-12 px-8 rounded-xl gap-2 shadow-indigo-600/20"
+          <Button variant="secondary" className="bg-white border-slate-200">
+             <ArrowUpRight className="w-4 h-4 mr-2 text-slate-400" />
+             View Audit Logs
+          </Button>
+          <Button 
+            className="bg-blue-600 shadow-xl shadow-blue-500/20"
             onClick={handleRunPipeline}
             disabled={executing}
             isLoading={executing}
-           >
-              <Rocket className="w-4 h-4" />
-              Execute Pipeline
-           </Button>
+          >
+             <Zap className="w-4 h-4 mr-2" />
+             Update Strategy
+          </Button>
         </div>
-      </div>
+      </header>
 
       {/* Hero ROI Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-         <Card className="p-8 border-indigo-100 bg-indigo-50/10 relative overflow-hidden group hover:border-indigo-300 transition-all shadow-sm">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-[60px] pointer-events-none" />
+         <Card className="p-8 border-blue-100 bg-blue-50/10 relative overflow-hidden group hover:border-blue-300 transition-all shadow-sm">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-[60px] pointer-events-none" />
             <div className="space-y-6">
                <div className="flex items-center justify-between">
-                  <Timer className="w-6 h-6 text-indigo-600" />
+                  <Timer className="w-6 h-6 text-blue-600" />
                   <Badge variant="primary">Target Achieved</Badge>
                </div>
                <div className="space-y-1">
@@ -154,7 +155,7 @@ export default function ExecutiveDashboard() {
          <Card variant="solid" className="p-8 relative overflow-hidden group transition-all">
             <div className="space-y-6">
                <div className="flex items-center justify-between">
-                  <Globe className="w-6 h-6 text-indigo-500" />
+                  <Globe className="w-6 h-6 text-blue-500" />
                   <Badge variant="outline">Global Network</Badge>
                </div>
                <div className="space-y-1">
@@ -162,7 +163,7 @@ export default function ExecutiveDashboard() {
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Active Talent Nodes Synced</p>
                </div>
                <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest flex items-center gap-1">
+                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
                      Latency: 140ms
                   </span>
                   <RefreshCw className="w-3 h-3 text-slate-200 animate-spin-slow" />
@@ -177,22 +178,22 @@ export default function ExecutiveDashboard() {
          {/* Flywheel Intensity Radar */}
          <Card className="col-span-12 lg:col-span-5 p-10 bg-white border-slate-100 space-y-10 relative overflow-hidden group shadow-sm">
             <div className="flex flex-col gap-2">
-               <h3 className="text-xs font-black uppercase tracking-[0.3em] text-indigo-600">Flywheel Performance</h3>
+               <h3 className="text-xs font-black uppercase tracking-[0.3em] text-blue-600">Flywheel Performance</h3>
                <h2 className="text-2xl font-black text-slate-900">Autonomous Intensity</h2>
             </div>
             <div className="h-[350px] w-full">
                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={FLYWHEEL_RADAR}>
-                     <PolarGrid stroke="#e2e8f0" />
-                     <PolarAngleAxis dataKey="subject" stroke="#94a3b8" fontSize={10} fontWeight="bold" />
-                     <Radar
-                        name="Platform"
-                        dataKey="A"
-                        stroke="#4f46e5"
-                        fill="#4f46e5"
-                        fillOpacity={0.1}
-                     />
-                     <Tooltip 
+                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={RADAR_DATA}>
+                    <PolarGrid stroke="#e2e8f0" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'black' }} />
+                    <Radar
+                       name="Intelligence"
+                       dataKey="A"
+                       stroke={CHART_COLORS.primary}
+                       fill={CHART_COLORS.primary}
+                       fillOpacity={0.15}
+                    />
+                    <Tooltip 
                         contentStyle={{ backgroundColor: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)" }}
                      />
                   </RadarChart>
@@ -213,7 +214,7 @@ export default function ExecutiveDashboard() {
                      <Card 
                         className={cn(
                            "h-20 border-slate-100 flex items-center justify-between px-10 transition-all duration-700 bg-slate-50 shadow-sm",
-                           "hover:border-indigo-200"
+                           "hover:border-blue-200"
                         )}
                         style={{ width: `${100 - (i * 8)}%`, marginLeft: `${i * 4}%` }}
                      >
@@ -238,13 +239,13 @@ export default function ExecutiveDashboard() {
             <div className="space-y-2">
                <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Sourcing Alpha Velocity</h2>
                <p className="text-sm text-slate-400 font-medium flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-indigo-600" />
+                  <TrendingUp className="w-4 h-4 text-blue-600" />
                   Growth in automated talent acquisition cycles
                </p>
             </div>
             <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
                {['7D', '30D', '90D', 'ALL'].map(t => (
-                  <button key={t} className={cn("px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all", t === '30D' ? "bg-indigo-600 text-white shadow-md" : "text-slate-400 hover:text-slate-900")}>
+                  <button key={t} className={cn("px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all", t === '30D' ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-slate-900")}>
                      {t}
                   </button>
                ))}
@@ -255,8 +256,8 @@ export default function ExecutiveDashboard() {
                <AreaChart data={VELOCITY_DATA}>
                   <defs>
                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                        <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0}/>
                      </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -284,7 +285,7 @@ export default function ExecutiveDashboard() {
                   <Area 
                      type="monotone" 
                      dataKey="value" 
-                     stroke="#4f46e5" 
+                     stroke={CHART_COLORS.primary} 
                      strokeWidth={3}
                      fillOpacity={1} 
                      fill="url(#colorValue)" 

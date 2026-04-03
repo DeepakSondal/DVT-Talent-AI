@@ -13,10 +13,10 @@ interface ButtonProps extends Omit<HTMLMotionProps<"button">, "ref"> {
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "md", isLoading, children, ...props }, ref) => {
     const variants = {
-      primary: "bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-600/10",
-      secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200 border border-slate-200",
-      outline: "bg-transparent border border-slate-200 text-slate-600 hover:bg-slate-50",
-      ghost: "bg-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-100",
+      primary: "bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 hover:shadow-blue-600/30",
+      secondary: "bg-slate-200 text-slate-900 border border-slate-300 hover:bg-slate-300",
+      outline: "bg-transparent border-2 border-blue-600 text-blue-600 hover:bg-blue-50",
+      ghost: "bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-900",
       glass: "bg-white/70 backdrop-blur-md border border-slate-200 text-slate-900 hover:bg-white/90",
     };
 

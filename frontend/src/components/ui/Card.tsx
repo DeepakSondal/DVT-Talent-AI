@@ -11,8 +11,8 @@ interface CardProps extends HTMLMotionProps<"div"> {
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ className, variant = "glass", ...props }, ref) => {
     const variants = {
-      glass: "bg-white/70 backdrop-blur-xl border border-slate-200/60 shadow-sm",
-      solid: "bg-white border border-slate-200 shadow-sm",
+      glass: "bg-white/80 backdrop-blur-md border border-white/40 shadow-sm",
+      solid: "bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow",
       outline: "bg-transparent border border-slate-200",
     };
 
