@@ -113,8 +113,7 @@ Return JSON:
       "department": "Engineering",
       "seniority": "VP",
       "linkedin_url": "https://linkedin.com/in/janesmith",
-      "email_guess": "jane.smith@{company_domain}",
-      "email_pattern": "firstname.lastname",
+      "email": "jane.smith@{company_domain}",
       "is_decision_maker": true,
       "confidence": 85,
       "source": "linkedin"

@@ -114,6 +114,8 @@ services:
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - dvt-net
+    ports:
+      - "5432:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dvt_user -d dvt_talent"]
@@ -129,6 +131,8 @@ services:
       - redis_data:/data
     networks:
       - dvt-net
+    ports:
+      - "6379:6379"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

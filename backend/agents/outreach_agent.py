@@ -46,7 +46,7 @@ class OutreachAgent(BaseAgent):
             description="Writes and sends personalized cold emails for recruiting outreach",
         )
 
-    def run(
+    async def run(
         self,
         outreach_type: str,  # "candidate" or "client"
         recipient: Dict[str, Any],
@@ -57,9 +57,9 @@ class OutreachAgent(BaseAgent):
 
         try:
             if outreach_type == "candidate":
-                email_data = self._write_candidate_email(recipient, context)
+                email_data = await self._write_candidate_email_async(recipient, context)
             elif outreach_type == "client":
-                email_data = self._write_client_email(recipient, context)
+                email_data = await self._write_client_email_async(recipient, context)
             else:
                 raise ValueError(f"Unknown outreach type: {outreach_type}")
 
@@ -83,8 +83,8 @@ class OutreachAgent(BaseAgent):
                 result["sent"] = send_result.get("success", False)
                 result["gmail_message_id"] = send_result.get("message_id")
 
-            # Save to Database
-            self._save_to_db(outreach_type, recipient, result, context)
+            # Save to Database (Async)
+            await self._save_to_db_async(outreach_type, recipient, result, context)
 
             self.log_complete(f"Email drafted for {recipient.get('email')}, sent={result['sent']}")
             return result
@@ -93,54 +93,50 @@ class OutreachAgent(BaseAgent):
             self.log_error(e)
             return {"error": str(e), "sent": False}
 
-    def _save_to_db(self, outreach_type: str, recipient: Dict[str, Any], result: Dict[str, Any], context: Dict[str, Any]):
-        """Save the outreach attempt to the database for tracking & review"""
+    async def _save_to_db_async(self, outreach_type: str, recipient: Dict[str, Any], result: Dict[str, Any], context: Dict[str, Any]):
+        """Asynchronously save the outreach attempt to the database for tracking & review"""
         try:
-            from sqlalchemy import create_engine, text
-            from config import settings
-            engine = create_engine(settings.database_sync_url)
+            from db.models import AsyncSessionLocal, EmailCampaign, EmailSent
+            from sqlalchemy import select
             
-            with engine.connect() as conn:
+            async with AsyncSessionLocal() as session:
                 # 1. Ensure a default campaign exists if not provided
                 campaign_id = context.get("campaign_id")
                 if not campaign_id:
                     # Find or create a 'General' campaign
                     campaign_name = f"General {outreach_type.capitalize()} Outreach"
-                    row = conn.execute(
-                        text("SELECT id FROM email_campaigns WHERE name = :name LIMIT 1"),
-                        {"name": campaign_name}
-                    ).fetchone()
-                    if row:
-                        campaign_id = str(row[0])
+                    stmt = select(EmailCampaign).where(EmailCampaign.name == campaign_name)
+                    res = await session.execute(stmt)
+                    campaign = res.scalar_one_or_none()
+                    
+                    if campaign:
+                        campaign_id = campaign.id
                     else:
-                        campaign_id = str(uuid.uuid4())
-                        conn.execute(
-                            text("INSERT INTO email_campaigns (id, name, campaign_type, is_active) VALUES (:id, :name, :type, TRUE)"),
-                            {"id": campaign_id, "name": campaign_name, "type": f"{outreach_type}_outreach"}
+                        campaign = EmailCampaign(
+                            name=campaign_name, 
+                            campaign_type=f"{outreach_type}_outreach", 
+                            is_active=True
                         )
+                        session.add(campaign)
+                        await session.flush()
+                        campaign_id = campaign.id
 
                 # 2. Insert EmailSent record
-                conn.execute(
-                    text("""
-                        INSERT INTO email_sent 
-                        (id, campaign_id, to_email, subject, body, status, sent_at)
-                        VALUES (:id, :cid, :email, :sub, :body, :status, :sent_at)
-                    """),
-                    {
-                        "id": result["tracking_id"],
-                        "cid": campaign_id,
-                        "email": result["to_email"],
-                        "sub": result["subject"],
-                        "body": result["body"],
-                        "status": "sent" if result["sent"] else "draft",
-                        "sent_at": datetime.utcnow() if result["sent"] else None
-                    }
+                new_email = EmailSent(
+                    id=result["tracking_id"],
+                    campaign_id=campaign_id,
+                    to_email=result["to_email"],
+                    subject=result["subject"],
+                    body=result["body"],
+                    status="sent" if result["sent"] else "draft",
+                    sent_at=datetime.utcnow() if result["sent"] else None
                 )
-                conn.commit()
+                session.add(new_email)
+                await session.commit()
         except Exception as e:
             self.log.error("db_save_failed", error=str(e))
 
-    def _write_candidate_email(self, candidate: Dict[str, Any], context: Dict[str, Any]) -> dict:
+    async def _write_candidate_email_async(self, candidate: Dict[str, Any], context: Dict[str, Any]) -> dict:
         """Write personalized email to a candidate about an opportunity"""
         job = context.get("job", {})
         company = context.get("company", {})
@@ -177,7 +173,7 @@ Return JSON:
 }}"""
 
         try:
-            response = self.chat(SYSTEM_PROMPT, user_prompt, json_mode=True, temperature=0.7)
+            response = await self.chat_async(SYSTEM_PROMPT, user_prompt, json_mode=True, temperature=0.7)
             return json.loads(response)
         except Exception:
             return {
@@ -187,7 +183,7 @@ Return JSON:
                 "follow_up_day": 3,
             }
 
-    def _write_client_email(self, contact: Dict[str, Any], context: Dict[str, Any]) -> dict:
+    async def _write_client_email_async(self, contact: Dict[str, Any], context: Dict[str, Any]) -> dict:
         """Write personalized email to a hiring manager/HR director"""
         company = context.get("company", {})
         candidates = context.get("candidates", [])
@@ -224,7 +220,7 @@ Return JSON:
 }}"""
 
         try:
-            response = self.chat(SYSTEM_PROMPT, user_prompt, json_mode=True, temperature=0.7)
+            response = await self.chat_async(SYSTEM_PROMPT, user_prompt, json_mode=True, temperature=0.7)
             data = json.loads(response)
             # Replace placeholder
             company_name = company.get('name', 'your company')

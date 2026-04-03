@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --background: #080a0e;
-  --foreground: #ffffff;
-  --card: #0f1117;
-  --border: rgba(255, 255, 255, 0.08);
-  --primary: #6366f1;
-  --accent: #8b5cf6;
+  --background: #f8fafc;
+  --foreground: #020617;
+  --card: #ffffff;
+  --border: rgba(15, 23, 42, 0.08);
+  --primary: #4f46e5;
+  --accent: #7c3aed;
 }
 
 @layer base {
@@ -23,48 +23,48 @@
 
 @layer utilities {
   .glass {
-    @apply bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] shadow-premium-sm;
+    @apply bg-white/70 backdrop-blur-xl border border-black/[0.05] shadow-premium-sm;
   }
   
   .glass-card {
-    @apply bg-white/[0.02] backdrop-blur-md border border-white/[0.05] shadow-premium-md hover:bg-white/[0.04] transition-all duration-300;
+    @apply bg-white/80 backdrop-blur-md border border-black/[0.04] shadow-premium-md hover:bg-white/90 hover:shadow-premium-lg transition-all duration-300;
   }
 
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-br from-white via-white to-white/40;
+    @apply bg-clip-text text-transparent bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700/60;
   }
 
   .text-gradient-primary {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600;
   }
 
   .bg-grid {
     background-size: 40px 40px;
     background-image: 
-      linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+      linear-gradient(to right, rgba(15,23,42,0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(15,23,42,0.03) 1px, transparent 1px);
   }
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 5px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.1);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.3);
-  color: white;
+  background: rgba(79, 70, 229, 0.1);
+  color: #4f46e5;
 }

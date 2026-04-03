@@ -39,35 +39,36 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden font-sans">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 overflow-x-hidden font-sans">
       {/* Background Decor */}
       <div className="fixed inset-0 bg-grid -z-10" />
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-primary/10 blur-[120px] rounded-full -z-10" />
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-indigo-500/5 blur-[120px] rounded-full -z-10" />
 
       {/* Navigation */}
       <nav 
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b ${
+        className={cn(
+          "fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b",
           isScrolled 
-            ? "py-4 bg-background/80 backdrop-blur-xl border-white/10" 
+            ? "py-4 bg-white/70 backdrop-blur-xl border-slate-200 shadow-sm" 
             : "py-6 bg-transparent border-transparent"
-        }`}
+        )}
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center shadow-premium-md group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform">
               <Bot className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-gradient">
+            <span className="text-xl font-black tracking-tight text-slate-950 uppercase italic">
               DVT Talent
             </span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-8 text-white/50 font-medium">
-            <Link href="#features" className="hover:text-white transition-colors">Agents</Link>
-            <Link href="#how-it-works" className="hover:text-white transition-colors">Workflow</Link>
-            <Link href="#preview" className="hover:text-white transition-colors">Platform</Link>
+          <div className="hidden md:flex items-center gap-8 text-slate-400 font-bold uppercase text-[10px] tracking-widest">
+            <Link href="#features" className="hover:text-primary transition-colors">Agents</Link>
+            <Link href="#how-it-works" className="hover:text-primary transition-colors">Workflow</Link>
+            <Link href="#preview" className="hover:text-primary transition-colors">Platform</Link>
             <Link href="/dashboard">
-              <Button variant="secondary" size="sm">Dashboard</Button>
+              <Button variant="primary" size="sm" className="shadow-lg shadow-indigo-600/10">Launch Console</Button>
             </Link>
           </div>
         </div>
@@ -86,69 +87,70 @@ export default function LandingPage() {
                 className="space-y-10"
               >
                 <motion.div variants={fadeIn}>
-                  <Badge variant="primary" className="py-1 px-4 text-sm">
+                  <Badge variant="primary" className="py-1 px-4 text-xs font-black uppercase tracking-widest bg-indigo-50 text-primary border-indigo-100">
                     <Sparkles className="w-3.5 h-3.5 mr-2 inline" />
                     AI-Powered Talent Revolution
                   </Badge>
                 </motion.div>
 
-                <motion.h1 variants={fadeIn} className="text-6xl lg:text-8xl font-bold leading-[1] tracking-tight">
+                <motion.h1 variants={fadeIn} className="text-6xl lg:text-8xl font-black leading-[1] tracking-tighter text-slate-950">
                   Automate <br />
-                  <span className="text-gradient-primary">Hiring & Outbound</span>
+                  <span className="text-gradient-primary">Hiring & Sales</span>
                   <br /> with AI Agents
                 </motion.h1>
 
-                <motion.p variants={fadeIn} className="text-xl text-white/50 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                <motion.p variants={fadeIn} className="text-xl text-slate-400 max-w-xl mx-auto lg:mx-0 leading-relaxed font-medium">
                   The first recruiting & sales command center that thinks, scouts, and outreaches for you. 
                   Scale your human potential with autonomous intelligence.
                 </motion.p>
 
                 <motion.div variants={fadeIn} className="flex flex-col sm:flex-row items-center gap-5 justify-center lg:justify-start">
                   <Link href="/dashboard" className="w-full sm:w-auto">
-                    <Button size="lg" className="w-full">
-                      Start Free Trial
+                    <Button size="lg" className="w-full h-16 px-10 text-sm font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20">
+                      Start Initialization
                       <ArrowRight className="ml-2 w-5 h-5" />
                     </Button>
                   </Link>
                   <Link href="#preview" className="w-full sm:w-auto">
-                    <Button variant="secondary" size="lg" className="w-full">
-                      Book a Demo
+                    <Button variant="secondary" size="lg" className="w-full h-16 px-10 text-sm font-black uppercase tracking-widest bg-white border-slate-200 shadow-sm">
+                      Watch Intelligence
                     </Button>
                   </Link>
                 </motion.div>
               </motion.div>
 
               <motion.div 
-                initial={{ opacity: 0, x: 50, rotateY: -10 }}
-                whileInView={{ opacity: 1, x: 0, rotateY: 0 }}
+                initial={{ opacity: 0, x: 50 }}
+                whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 1, ease: "easeOut" }}
                 className="relative hidden lg:block"
               >
-                <div className="relative z-10 rounded-[2.5rem] overflow-hidden border border-white/10 shadow-premium-lg bg-card">
-                  <Image 
-                    src="/dvt_talent_dashboard_preview_1775159797481.png" 
-                    alt="DVT Talent Command Center"
-                    width={1200}
-                    height={800}
-                    className="w-full h-auto object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-background/40 via-transparent to-transparent" />
+                <div className="relative z-10 rounded-[2.5rem] overflow-hidden border border-slate-200 shadow-2xl bg-white p-2">
+                  <div className="rounded-[2rem] overflow-hidden">
+                    <Image 
+                      src="/dvt_talent_dashboard_premium_refactored_1775024300321.png" 
+                      alt="DVT Talent Command Center"
+                      width={1200}
+                      height={800}
+                      className="w-full h-auto object-cover"
+                    />
+                  </div>
                 </div>
-                <div className="absolute -top-10 -right-10 w-64 h-64 bg-primary/20 blur-[100px] rounded-full -z-10" />
-                <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-accent/20 blur-[100px] rounded-full -z-10" />
+                <div className="absolute -top-10 -right-10 w-64 h-64 bg-indigo-500/10 blur-[100px] rounded-full -z-10" />
+                <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-purple-500/10 blur-[100px] rounded-full -z-10" />
               </motion.div>
             </div>
           </div>
         </section>
 
         {/* Features Matrix */}
-        <section id="features" className="py-32 relative">
+        <section id="features" className="py-32 relative bg-white border-y border-slate-100">
           <div className="max-w-7xl mx-auto px-6">
             <div className="text-center mb-24 space-y-5">
-              <Badge variant="secondary">Core Capabilities</Badge>
-              <h2 className="text-4xl lg:text-6xl font-bold text-gradient">Autonomous Expertise</h2>
-              <p className="text-white/50 max-w-2xl mx-auto text-lg">
+              <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest border-slate-200">Core Capabilities</Badge>
+              <h2 className="text-4xl lg:text-6xl font-black text-slate-900 tracking-tight">Autonomous Expertise</h2>
+              <p className="text-slate-400 max-w-2xl mx-auto text-lg font-medium leading-relaxed">
                 Four specialized AI agents designed to handle your manual workflows with superhuman precision.
               </p>
             </div>
@@ -159,42 +161,46 @@ export default function LandingPage() {
                   icon: Target, 
                   title: "AI Sales Agent", 
                   desc: "Hyper-focused lead generation. Scans 50+ platforms to find your ideal high-intent enterprise buyers.",
-                  color: "from-blue-500/20 to-indigo-500/20",
-                  border: "border-blue-500/20"
+                  color: "bg-blue-50",
+                  iconColor: "text-blue-600",
+                  border: "border-blue-100"
                 },
                 { 
                   icon: Mail, 
                   title: "Outreach Agent", 
                   desc: "Personalized cold emails at scale. Crafts unique, research-backed messages that get 3x higher reply rates.",
-                  color: "from-purple-500/20 to-pink-500/20",
-                  border: "border-purple-500/20"
+                  color: "bg-purple-50",
+                  iconColor: "text-purple-600",
+                  border: "border-purple-100"
                 },
                 { 
                   icon: Users, 
                   title: "Recruiting AI", 
                   desc: "Autonomous candidate sourcing. Ranks global talent based on deep skill analysis and cultural fit.",
-                  color: "from-emerald-500/20 to-teal-500/20",
-                  border: "border-emerald-500/20"
+                  color: "bg-emerald-50",
+                  iconColor: "text-emerald-600",
+                  border: "border-emerald-100"
                 },
                 { 
-                  icon: FileText, 
+                  icon: Bot, 
                   title: "Resume Analyzer", 
                   desc: "Instant candidate scoring. Processes thousands of resumes per minute with human-level understanding.",
-                  color: "from-amber-500/20 to-orange-500/20",
-                  border: "border-amber-500/20"
+                  color: "bg-amber-50",
+                  iconColor: "text-amber-600",
+                  border: "border-amber-100"
                 }
               ].map((feat, i) => (
                 <Card 
                   key={i}
-                  className={cn("group hover:-translate-y-2 transition-all duration-500", feat.border)}
+                  className={cn("bg-white border hover:shadow-xl transition-all duration-500 p-8", feat.border)}
                 >
-                  <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center mb-8 bg-gradient-to-br", feat.color)}>
-                    <feat.icon className="w-8 h-8 text-white" />
+                  <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center mb-8", feat.color)}>
+                    <feat.icon className={cn("w-7 h-7", feat.iconColor)} />
                   </div>
-                  <h3 className="text-2xl font-bold mb-4">{feat.title}</h3>
-                  <p className="text-white/40 leading-relaxed text-sm">{feat.desc}</p>
-                  <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between group-hover:text-primary transition-colors">
-                    <span className="text-xs font-bold uppercase tracking-widest">Learn More</span>
+                  <h3 className="text-xl font-black text-slate-900 mb-4">{feat.title}</h3>
+                  <p className="text-slate-400 leading-relaxed text-sm font-medium">{feat.desc}</p>
+                  <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary">Learn More</span>
                     <ChevronRight className="w-4 h-4" />
                   </div>
                 </Card>
@@ -204,18 +210,18 @@ export default function LandingPage() {
         </section>
 
         {/* How It Works */}
-        <section id="how-it-works" className="py-32 bg-white/[0.02] border-y border-white/5">
+        <section id="how-it-works" className="py-32 relative">
           <div className="max-w-7xl mx-auto px-6">
             <div className="grid lg:grid-cols-2 gap-20 items-center">
               <div className="space-y-12">
-                <div className="space-y-5">
-                  <Badge variant="primary">The Workflow</Badge>
-                  <h2 className="text-4xl lg:text-6xl font-bold leading-tight">
-                    From Goal to <br /> Outcome in <span className="text-primary">3 Steps</span>
+                <div className="space-y-5 text-center lg:text-left">
+                  <Badge variant="primary" className="bg-indigo-50 text-primary border-indigo-100">The Workflow</Badge>
+                  <h2 className="text-4xl lg:text-6xl font-black leading-tight text-slate-900 tracking-tight">
+                    From Goal to <br /> Outcome in <span className="text-primary tracking-tighter">3 Steps</span>
                   </h2>
                 </div>
 
-                <div className="space-y-8">
+                <div className="space-y-10">
                   {[
                     { step: "01", title: "Input Your Target", desc: "Define your ideal candidate or customer profile in plain natural language." },
                     { step: "02", title: "AI Intelligence Deploy", desc: "Our agents scan global databases, social signals, and public records for matches." },
@@ -227,12 +233,12 @@ export default function LandingPage() {
                       whileInView={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.2 }}
                       viewport={{ once: true }}
-                      className="flex gap-6 items-start"
+                      className="flex gap-8 items-start group"
                     >
-                      <span className="text-4xl font-black text-white/10">{s.step}</span>
-                      <div className="space-y-2">
-                        <h4 className="text-xl font-bold">{s.title}</h4>
-                        <p className="text-white/40 leading-relaxed">{s.desc}</p>
+                      <span className="text-5xl font-black text-slate-50 group-hover:text-indigo-50 transition-colors">{s.step}</span>
+                      <div className="space-y-2 pt-1">
+                        <h4 className="text-lg font-black text-slate-900">{s.title}</h4>
+                        <p className="text-slate-400 leading-relaxed font-medium">{s.desc}</p>
                       </div>
                     </motion.div>
                   ))}
@@ -240,45 +246,44 @@ export default function LandingPage() {
               </div>
 
               <div className="relative">
-                <Card variant="solid" className="p-0 overflow-hidden ring-1 ring-white/10 shadow-indigo-glow">
-                  <div className="bg-white/5 p-4 border-b border-white/10 flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-rose-500" />
-                    <div className="w-3 h-3 rounded-full bg-amber-500" />
-                    <div className="w-3 h-3 rounded-full bg-emerald-500" />
-                    <div className="ml-auto flex gap-4">
-                      <div className="w-24 h-2 bg-white/10 rounded-full" />
-                    </div>
+                <Card className="bg-white border-slate-200 shadow-2xl p-0 overflow-hidden ring-1 ring-slate-100">
+                  <div className="bg-slate-50 p-4 border-b border-slate-100 flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-rose-400" />
+                    <div className="w-3 h-3 rounded-full bg-amber-400" />
+                    <div className="w-3 h-3 rounded-full bg-emerald-400" />
+                    <div className="ml-auto w-20 h-1.5 bg-slate-200 rounded-full" />
                   </div>
                   <div className="p-8 space-y-6">
                     <div className="flex gap-4">
-                      <div className="w-10 h-10 rounded-full bg-indigo-500/20 animate-pulse" />
-                      <div className="flex-1 space-y-3">
-                        <div className="w-1/2 h-3 bg-white/10 rounded-full" />
-                        <div className="w-full h-2 bg-white/5 rounded-full" />
-                        <div className="w-full h-2 bg-white/5 rounded-full" />
+                      <div className="w-10 h-10 rounded-full bg-primary/10 animate-pulse" />
+                      <div className="flex-1 space-y-3 pt-1">
+                        <div className="w-1/2 h-2.5 bg-slate-100 rounded-full" />
+                        <div className="w-full h-1.5 bg-slate-50 rounded-full" />
+                        <div className="w-full h-1.5 bg-slate-50 rounded-full" />
                       </div>
                     </div>
-                    <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
-                      <p className="text-xs text-indigo-400 font-mono">AI AGENT: Sourcing top 10% React developers in NYC...</p>
-                      <div className="mt-3 flex gap-2">
-                        <div className="w-full h-1 bg-indigo-500 animate-[loading_2s_infinite]" />
+                    <div className="p-5 rounded-2xl bg-indigo-50 border border-indigo-100">
+                      <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mb-2">Agent Active</p>
+                      <p className="text-xs text-slate-600 font-medium italic leading-relaxed">"Sourcing top 10% React developers in NYC for fintech expansion..."</p>
+                      <div className="mt-4 h-1 w-full bg-indigo-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary w-2/3 animate-pulse" />
                       </div>
                     </div>
                   </div>
                 </Card>
-                <div className="absolute -z-10 inset-0 bg-primary/20 blur-[80px] rounded-full scale-75" />
+                <div className="absolute -z-10 inset-0 bg-primary/5 blur-[80px] rounded-full scale-125" />
               </div>
             </div>
           </div>
         </section>
 
         {/* Product Preview */}
-        <section id="preview" className="py-32 overflow-hidden">
+        <section id="preview" className="py-32 overflow-hidden bg-white/50 border-y border-slate-100">
           <div className="max-w-7xl mx-auto px-6">
             <div className="text-center mb-24 space-y-5">
-              <Badge variant="secondary">In-App Experience</Badge>
-              <h2 className="text-4xl lg:text-6xl font-bold text-gradient">The Command Center</h2>
-              <p className="text-white/50 max-w-2xl mx-auto text-lg text-balance">
+              <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest border-slate-200">The Command Center</Badge>
+              <h2 className="text-4xl lg:text-6xl font-black text-slate-900 tracking-tight">Beautiful Intelligence</h2>
+              <p className="text-slate-400 max-w-2xl mx-auto text-lg font-medium leading-relaxed">
                 Everything you need to orchestrate your AI workforce. No complex setup, just pure results.
               </p>
             </div>
@@ -287,43 +292,32 @@ export default function LandingPage() {
               initial={{ y: 100, opacity: 0 }}
               whileInView={{ y: 0, opacity: 1 }}
               transition={{ duration: 1 }}
-              className="relative rounded-[3rem] border border-white/10 overflow-hidden shadow-premium-lg"
+              className="relative rounded-[3rem] border border-slate-200 overflow-hidden shadow-2xl bg-white p-4"
             >
-              <Image 
-                src="/dvt_talent_dashboard_preview_1775159797481.png" 
-                alt="DVT Talent UI structure"
-                width={1920}
-                height={1080}
-                className="w-full h-auto"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
-              
-              {/* Floating Info Cards */}
-              <div className="absolute top-1/4 left-10 hidden xl:block">
-                <Card className="max-w-[240px] border-indigo-500/30 scale-90">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                      <Zap className="w-4 h-4 text-indigo-400" />
-                    </div>
-                    <span className="text-sm font-bold">Real-time Intel</span>
-                  </div>
-                  <p className="text-xs text-white/40">AI is currently scanning 12,482 relevant profiles across platforms.</p>
-                </Card>
+              <div className="rounded-[2.5rem] overflow-hidden border border-slate-100">
+                <Image 
+                  src="/dashboard_overview_1775155760122.png" 
+                  alt="DVT Talent UI structure"
+                  width={1920}
+                  height={1080}
+                  className="w-full h-auto"
+                />
               </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-white/30 via-transparent to-transparent" />
             </motion.div>
           </div>
         </section>
 
         {/* Final CTA */}
-        <section className="py-48 relative">
+        <section className="py-48 relative overflow-hidden">
           <div className="max-w-5xl mx-auto px-6 text-center space-y-12">
             <motion.h2 
               initial={{ scale: 0.9, opacity: 0 }}
               whileInView={{ scale: 1, opacity: 1 }}
-              className="text-5xl lg:text-8xl font-bold leading-tight tracking-tighter"
+              className="text-5xl lg:text-9xl font-black leading-tight tracking-tighter text-slate-950"
             >
-              Ready to automate <br />
-              <span className="text-white/20">your talent lifecycle?</span>
+              Ready to <br />
+              <span className="text-slate-200">Launch?</span>
             </motion.h2>
             <motion.div
               initial={{ y: 20, opacity: 0 }}
@@ -331,55 +325,54 @@ export default function LandingPage() {
               transition={{ delay: 0.3 }}
             >
               <Link href="/dashboard">
-                <Button size="lg" className="px-16 py-8 text-2xl h-auto">
-                  Launch Your AI Agent
+                <Button size="lg" className="px-16 py-8 text-2xl h-auto font-black uppercase tracking-widest shadow-2xl shadow-indigo-600/30">
+                  Deploy Your AI Agent
                 </Button>
               </Link>
             </motion.div>
           </div>
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-primary/5 blur-[120px] -z-10" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-indigo-500/5 blur-[120px] -z-10" />
         </section>
       </main>
 
       {/* Footer */}
-      <footer className="py-20 border-t border-white/5 relative bg-black/20">
+      <footer className="py-20 border-t border-slate-100 relative bg-white">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="grid md:grid-cols-4 gap-12 mb-20">
+          <div className="grid md:grid-cols-4 gap-16 mb-20">
             <div className="col-span-2 space-y-8">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-                  <Bot className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-600/20">
+                  <Bot className="w-6 h-6 text-white" />
                 </div>
-                <span className="text-lg font-bold tracking-tight">DVT Talent</span>
+                <span className="text-xl font-black tracking-tight text-slate-900 uppercase">DVT Talent</span>
               </div>
-              <p className="text-white/40 max-w-sm leading-relaxed">
+              <p className="text-slate-400 max-w-sm leading-relaxed font-medium">
                 The leading AI platform for recruiting and sales automation. 
-                Built for founders, recruiters, and sales teams who want to move faster.
+                Built for teams who want to scale intelligence.
               </p>
             </div>
             <div className="space-y-6">
-              <h4 className="font-bold uppercase text-xs tracking-widest text-white/30">Platform</h4>
-              <ul className="space-y-4 text-sm text-white/50">
-                <li><Link href="#features" className="hover:text-white transition-colors">AI Agents</Link></li>
-                <li><Link href="#how-it-works" className="hover:text-white transition-colors">Workflow</Link></li>
-                <li><Link href="/dashboard" className="hover:text-white transition-colors">Command Center</Link></li>
+              <h4 className="font-black uppercase text-[10px] tracking-[0.3em] text-slate-300">Platform</h4>
+              <ul className="space-y-4 text-sm text-slate-500 font-bold">
+                <li><Link href="#features" className="hover:text-primary transition-colors">AI Agents</Link></li>
+                <li><Link href="#how-it-works" className="hover:text-primary transition-colors">Workflow</Link></li>
+                <li><Link href="/dashboard" className="hover:text-primary transition-colors">Command Center</Link></li>
               </ul>
             </div>
             <div className="space-y-6">
-              <h4 className="font-bold uppercase text-xs tracking-widest text-white/30">Company</h4>
-              <ul className="space-y-4 text-sm text-white/50">
-                <li><Link href="#" className="hover:text-white transition-colors">Terms of Service</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Support</Link></li>
+              <h4 className="font-black uppercase text-[10px] tracking-[0.3em] text-slate-300">Legal</h4>
+              <ul className="space-y-4 text-sm text-slate-500 font-bold">
+                <li><Link href="#" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
+                <li><Link href="#" className="hover:text-primary transition-colors">Terms of Service</Link></li>
+                <li><Link href="#" className="hover:text-primary transition-colors">Contact</Link></li>
               </ul>
             </div>
           </div>
-          <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-white/30 text-xs">
-            <p>© 2026 DVT Talent AI. All rights reserved.</p>
+          <div className="pt-10 border-t border-slate-50 flex flex-col md:flex-row justify-between items-center gap-6 text-slate-300 text-[10px] font-black uppercase tracking-widest">
+            <p>© 2026 DVT Talent AI. Autonomous Workforce Inc.</p>
             <div className="flex gap-8">
-              <Link href="#" className="hover:text-white transition-colors">Twitter</Link>
-              <Link href="#" className="hover:text-white transition-colors">LinkedIn</Link>
-              <Link href="#" className="hover:text-white transition-colors">GitHub</Link>
+              <Link href="#" className="hover:text-slate-600 transition-colors">Twitter</Link>
+              <Link href="#" className="hover:text-slate-600 transition-colors">LinkedIn</Link>
             </div>
           </div>
         </div>

@@ -77,7 +77,23 @@ class AgentOrchestrator:
             self._log_run(agent_name, "failed", {"error": str(e)}, duration)
             raise
 
-    def run_full_pipeline(
+    async def _emit_signal(self, type: str, message: str, data: dict = None):
+        """Broadcast an intelligence signal to the frontend via Redis"""
+        try:
+             import redis.asyncio as redis
+             r = redis.from_url(settings.redis_url)
+             signal = {
+                 "type": type,
+                 "message": message,
+                 "data": data or {},
+                 "timestamp": datetime.utcnow().isoformat()
+             }
+             await r.publish("dvt_signals", json.dumps(signal))
+             log.info("signal_emitted", type=type)
+        except Exception as e:
+             log.error("signal_failed", error=str(e))
+
+    async def run_full_pipeline(
         self,
         industry: str = "technology",
         location: str = "United States",
@@ -86,10 +102,11 @@ class AgentOrchestrator:
         send_emails: bool = False,
     ) -> Dict[str, Any]:
         """
-        Run the complete autonomous recruiting pipeline end-to-end.
+        Run the complete autonomous recruiting pipeline end-to-end (Asynchronous).
         """
         pipeline_start = datetime.utcnow()
         log.info("full_pipeline_started", industry=industry, location=location)
+        await self._emit_signal("pipeline_start", f"Initializing autonomous discovery for {industry} in {location}")
 
         pipeline_results = {
             "started_at": pipeline_start.isoformat(),
@@ -107,13 +124,14 @@ class AgentOrchestrator:
             companies = market_result.get("companies", [])
             self.shared_memory["companies"] = companies
             
-            # SAVE TO DB
+            # SAVE TO DB (Async)
+            saved_count = 0
             for c in companies:
-                self._save_company(c)
+                cid = await self._save_company(c)
+                if cid: saved_count += 1
                 
-            pipeline_results["stages"]["market_intelligence"] = {
-                "companies_found": len(companies),
-            }
+            await self._emit_signal("agent_success", f"Market Intel completed: {saved_count} companies identified", {"count": saved_count})
+            pipeline_results["stages"]["market_intelligence"] = {"companies_found": len(companies)}
 
             # ── Stage 2: Company Research ─────────────────────────────────
             log.info("pipeline_stage", stage=2, name="company_research")
@@ -125,15 +143,16 @@ class AgentOrchestrator:
                 )
                 company.update(research)
                 enriched_companies.append(company)
+                await self._save_company(company) # Update with research
+            
             self.shared_memory["enriched_companies"] = enriched_companies
-            pipeline_results["stages"]["company_research"] = {
-                "companies_enriched": len(enriched_companies),
-            }
+            await self._emit_signal("agent_success", f"Company research completed for {len(enriched_companies)} targets")
+            pipeline_results["stages"]["company_research"] = {"companies_enriched": len(enriched_companies)}
 
             # ── Stage 3: Lead Discovery ───────────────────────────────────
             log.info("pipeline_stage", stage=3, name="lead_discovery")
             all_contacts = []
-            for company in enriched_companies[:5]:  # Top 5 companies
+            for company in enriched_companies[:5]:
                 contacts_result = self.agents["lead_discovery"].run(
                     company_name=company.get("name", ""),
                     company_domain=company.get("domain", ""),
@@ -142,16 +161,12 @@ class AgentOrchestrator:
                 contacts = contacts_result.get("contacts", [])
                 for c in contacts:
                     c["company"] = company
+                    await self._save_lead(c)
                 all_contacts.extend(contacts)
-            self.shared_memory["contacts"] = all_contacts
             
-            # SAVE TO DB
-            for contact in all_contacts:
-                self._save_lead(contact)
-
-            pipeline_results["stages"]["lead_discovery"] = {
-                "contacts_found": len(all_contacts),
-            }
+            self.shared_memory["contacts"] = all_contacts
+            await self._emit_signal("agent_success", f"Lead discovery finished: {len(all_contacts)} decision makers found")
+            pipeline_results["stages"]["lead_discovery"] = {"contacts_found": len(all_contacts)}
 
             # ── Stage 4: Candidate Sourcing ───────────────────────────────
             log.info("pipeline_stage", stage=4, name="candidate_sourcing")
@@ -159,81 +174,63 @@ class AgentOrchestrator:
             for company in enriched_companies[:3]:
                 roles = company.get("open_roles", ["Software Engineer"])
                 tech_stack = company.get("tech_stack", ["Python"])
-                for role in roles[:2]:
+                for role in roles[:1]:
                     candidate_result = self.agents["candidate_sourcing"].run(
                         job_title=role,
-                        skills=tech_stack[:4],
+                        skills=tech_stack[:3],
                         location=location if not company.get("remote") else None,
                         limit=target_candidates_per_role,
                     )
                     candidates = candidate_result.get("candidates", [])
                     for c in candidates:
-                        c["target_role"] = role
-                        c["target_company"] = company.get("name")
+                        await self._save_candidate(c)
                     all_candidates.extend(candidates)
-            self.shared_memory["candidates"] = all_candidates
             
-            # SAVE TO DB
-            for candidate in all_candidates:
-                self._save_candidate(candidate)
+            self.shared_memory["candidates"] = all_candidates
+            await self._emit_signal("agent_success", f"Candidate sourcing complete: {len(all_candidates)} matched profiles")
+            pipeline_results["stages"]["candidate_sourcing"] = {"candidates_found": len(all_candidates)}
 
-            pipeline_results["stages"]["candidate_sourcing"] = {
-                "candidates_found": len(all_candidates),
-            }
-
-            # ── Stage 5: Outreach ─────────────────────────────────────────
+            # ── Stage 5: Outreach (New Async Logic) ───────────────────────
+            log.info("pipeline_stage", stage=5, name="outreach")
+            outreach_count = 0
             if all_contacts:
-                log.info("pipeline_stage", stage=5, name="client_outreach")
-                outreach_results = []
-                for contact in all_contacts[:10]:
+                for contact in all_contacts[:target_companies]:
                     company = contact.get("company", {})
                     context = {
                         "company": company,
-                        "candidates": all_candidates[:5],
+                        "candidates": all_candidates[:3],
                         "open_roles": company.get("open_roles", []),
                     }
-                    result = self.agents["outreach"].run(
+                    await self.agents["outreach"].run(
                         outreach_type="client",
                         recipient=contact,
                         context=context,
-                        send_email=send_emails,
+                        send_email=send_emails
                     )
-                    outreach_results.append(result)
-                pipeline_results["stages"]["client_outreach"] = {
-                    "emails_sent": sum(1 for r in outreach_results if r.get("sent")),
-                    "emails_drafted": len(outreach_results),
-                }
+                    outreach_count += 1
+                
+            await self._emit_signal("agent_success", f"Outreach drafting complete: {outreach_count} hyper-personalized messages ready.")
+            pipeline_results["stages"]["outreach"] = {"drafts_created": outreach_count}
 
-            # ── Stage 6: CRM Update ───────────────────────────────────────
-            log.info("pipeline_stage", stage=6, name="crm_management")
-            crm_result = self.agents["crm_management"].run()
+            # ── Stage 6: CRM & Analytics (New Data-Driven Logic) ──────────
+            log.info("pipeline_stage", stage=6, name="crm_and_analytics")
+            crm_result = await self.agents["crm_management"].run()
+            analytics_result = await self.agents["analytics"].run()
+            
+            await self._emit_signal("agent_success", "Intelligence Stream updated with real-time performance metrics")
             pipeline_results["stages"]["crm_management"] = crm_result
-
-            # ── Stage 7: Analytics ────────────────────────────────────────
-            log.info("pipeline_stage", stage=7, name="analytics")
-            analytics_result = self.agents["analytics"].run()
-            pipeline_results["stages"]["analytics"] = {
-                "insights": len(analytics_result.get("insights", [])),
-            }
-
-            # ── Stage 8: Learning ─────────────────────────────────────────
-            log.info("pipeline_stage", stage=8, name="learning")
-            learning_result = self.agents["learning"].run(
-                performance_data=pipeline_results.get("stages", {})
-            )
-            pipeline_results["stages"]["learning"] = {
-                "improvements": len(learning_result.get("improvements", [])),
-            }
+            pipeline_results["stages"]["analytics"] = analytics_result
 
         except Exception as e:
             log.error("pipeline_error", error=str(e), exc_info=True)
+            await self._emit_signal("agent_failed", f"Pipeline interrupted: {str(e)}")
             pipeline_results["error"] = str(e)
 
         pipeline_end = datetime.utcnow()
         pipeline_results["completed_at"] = pipeline_end.isoformat()
         pipeline_results["duration_seconds"] = (pipeline_end - pipeline_start).total_seconds()
 
-        log.info("full_pipeline_completed", duration=pipeline_results["duration_seconds"])
+        await self._emit_signal("pipeline_complete", "Autonomous recruiting cycle successfully finished")
         return pipeline_results
 
     def _log_run(self, agent_name: str, status: str, result: dict, duration: float):
@@ -254,73 +251,131 @@ class AgentOrchestrator:
             "shared_memory_keys": list(self.shared_memory.keys()),
         }
 
-    # ── DB Persistence Helpers ───────────────────────────────────────────
-    def _save_company(self, data: dict):
-        try:
-            engine = create_engine(settings.database_sync_url)
-            with engine.connect() as conn:
-                conn.execute(
-                    text("""
-                        INSERT INTO companies (id, name, domain, industry, location, score, created_at)
-                        VALUES (gen_random_uuid(), :name, :domain, :industry, :location, :score, NOW())
-                        ON CONFLICT (domain) DO UPDATE SET score = EXCLUDED.score, last_enriched = NOW()
-                    """),
-                    {
-                        "name": data.get("name", "Unknown"),
-                        "domain": data.get("domain", ""),
-                        "industry": data.get("industry", "Technology"),
-                        "location": data.get("location", "Global"),
-                        "score": data.get("company_score", 50),
-                    }
-                )
-                conn.commit()
-        except Exception as e:
-            log.error("db_save_failed", type="company", error=str(e))
+    # ── DB Persistence Helpers (Asynchronous & Robust Upsert) ────────────────
+    async def _get_async_session(self):
+        from db.models import AsyncSessionLocal
+        return AsyncSessionLocal()
 
-    def _save_lead(self, data: dict):
-        try:
-            engine = create_engine(settings.database_sync_url)
-            with engine.connect() as conn:
-                # Find company_id by domain
-                comp = conn.execute(
-                    text("SELECT id FROM companies WHERE domain = :domain LIMIT 1"),
-                    {"domain": data.get("domain", "") or data.get("company", {}).get("domain", "")}
-                ).fetchone()
+    async def _save_company(self, data: dict):
+        """Asynchronously save or update a company found by AI agents"""
+        async with await self._get_async_session() as session:
+            try:
+                from sqlalchemy import select
+                from db.models import Company
                 
-                conn.execute(
-                    text("""
-                        INSERT INTO leads (id, company_id, status, source, score, meta_data, created_at)
-                        VALUES (gen_random_uuid(), :comp_id, 'new', 'ai_discovery', :score, :meta, NOW())
-                    """),
-                    {
-                        "comp_id": comp[0] if comp else None,
-                        "score": data.get("score", 0),
-                        "meta": json.dumps(data),
-                    }
-                )
-                conn.commit()
-        except Exception as e:
-            log.error("db_save_failed", type="lead", error=str(e))
+                # Check for existing company by domain
+                domain = data.get("domain", "").lower()
+                stmt = select(Company).where(Company.domain == domain)
+                result = await session.execute(stmt)
+                company = result.scalar_one_or_none()
+                
+                if company:
+                    # Update existing
+                    company.score = data.get("company_score", company.score)
+                    company.tech_stack = data.get("tech_stack", company.tech_stack)
+                    company.last_enriched = datetime.utcnow()
+                    log.info("company_updated", domain=domain)
+                else:
+                    # Create new
+                    company = Company(
+                        name=data.get("name", "Unknown"),
+                        domain=domain,
+                        industry=data.get("industry", "Technology"),
+                        location=data.get("location", "Global"),
+                        score=data.get("company_score", 50),
+                        tech_stack=data.get("tech_stack", []),
+                        last_enriched=datetime.utcnow()
+                    )
+                    session.add(company)
+                    log.info("company_created", domain=domain)
+                
+                await session.commit()
+                return company.id
+            except Exception as e:
+                await session.rollback()
+                log.error("db_save_failed", type="company", error=str(e))
+                return None
 
-    def _save_candidate(self, data: dict):
-        try:
-            engine = create_engine(settings.database_sync_url)
-            with engine.connect() as conn:
-                conn.execute(
-                    text("""
-                        INSERT INTO candidates (id, first_name, last_name, email, title, location, score, created_at)
-                        VALUES (gen_random_uuid(), :fn, :ln, :email, :title, :loc, :score, NOW())
-                        ON CONFLICT (email) DO NOTHING
-                    """),
-                    {
-                        "fn": data.get("first_name", "AI"),
-                        "ln": data.get("last_name", "Candidate"),
-                        "email": data.get("email", f"ai_{__import__('uuid').uuid4()}@dvt.local"),
-                        "title": data.get("title", data.get("target_role", "Software Engineer")),
-                        "loc": data.get("location", "Remote"),
-                        "score": data.get("score", 0),
-                    }
+    async def _save_lead(self, data: dict):
+        """Asynchronously save a lead and link to company"""
+        async with await self._get_async_session() as session:
+            try:
+                from db.models import Lead, Company, Contact
+                from sqlalchemy import select
+                
+                # 1. Find or Create Contact
+                email = data.get("email", "").lower()
+                stmt = select(Contact).where(Contact.email == email)
+                res = await session.execute(stmt)
+                contact = res.scalar_one_or_none()
+                
+                if not contact:
+                    contact = Contact(
+                        first_name=data.get("first_name", "AI"),
+                        last_name=data.get("last_name", "Lead"),
+                        email=email,
+                        title=data.get("title", "Unknown"),
+                        linkedin_url=data.get("linkedin_url"),
+                        meta_data=data
+                    )
+                    session.add(contact)
+                    await session.flush()
+                
+                # 2. Find Company
+                domain = data.get("domain", "").lower() or data.get("company", {}).get("domain", "").lower()
+                stmt = select(Company).where(Company.domain == domain)
+                res = await session.execute(stmt)
+                comp = res.scalar_one_or_none()
+                
+                # 3. Create Lead
+                lead = Lead(
+                    company_id=comp.id if comp else None,
+                    contact_id=contact.id,
+                    status="new",
+                    source="ai_discovery",
+                    score=data.get("score", 0),
+                    meta_data=data
                 )
-                conn.commit()
-        except Exception as e:
-            log.error("db_save_failed", type="candidate", error=str(e))
+                session.add(lead)
+                await session.commit()
+                log.info("lead_persisted", email=email)
+            except Exception as e:
+                await session.rollback()
+                log.error("db_save_failed", type="lead", error=str(e))
+
+    async def _save_candidate(self, data: dict):
+        """Asynchronously save or update a candidate"""
+        async with await self._get_async_session() as session:
+            try:
+                from db.models import Candidate
+                from sqlalchemy import select
+                
+                email = data.get("email", "").lower()
+                if not email:
+                     email = f"ai_{uuid.uuid4()}@dvt.local"
+
+                stmt = select(Candidate).where(Candidate.email == email)
+                res = await session.execute(stmt)
+                candidate = res.scalar_one_or_none()
+                
+                if candidate:
+                    candidate.score = data.get("score", candidate.score)
+                    candidate.title = data.get("title", candidate.title)
+                    log.info("candidate_updated", email=email)
+                else:
+                    candidate = Candidate(
+                        first_name=data.get("first_name", "AI"),
+                        last_name=data.get("last_name", "Candidate"),
+                        email=email,
+                        title=data.get("title", "Software Engineer"),
+                        location=data.get("location", "Remote"),
+                        score=data.get("score", 0),
+                        meta_data=data
+                    )
+                    session.add(candidate)
+                    log.info("candidate_created", email=email)
+                
+                await session.commit()
+            except Exception as e:
+                await session.rollback()
+                log.error("db_save_failed", type="candidate", error=str(e))

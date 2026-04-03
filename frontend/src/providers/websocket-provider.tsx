@@ -34,7 +34,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       // Using standard backend port 8000 for standard dev setup or inferred from environment
       const host = process.env.NEXT_PUBLIC_API_URL?.replace("http://", "").replace("https://", "").split("/api")[0] || "localhost:8000";
-      const wsUrl = `${protocol}//${host}/api/v1/websocket/live?token=${token}`;
+      const wsUrl = `${protocol}//${host}/api/v1/ws/live?token=${token}`;
 
       console.log(`[WS] Syncing with Intelligence Stream at ${wsUrl}`);
       
