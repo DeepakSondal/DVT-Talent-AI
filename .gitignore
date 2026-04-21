@@ -52,6 +52,7 @@ backend/dvt_talent.db
 
 # ChromaDB & Local Vector Stores
 chroma_data/
+chroma_db/
 backend/chroma_data/
 backend/chroma/
 backend/.chroma/
