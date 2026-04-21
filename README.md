@@ -1,103 +1,99 @@
-# 🤖 DVT Talent AI — Omnichannel Autonomous Recruiter
-
-![Tests](https://img.shields.io/badge/tests-passing-emerald)
-![Coverage](https://img.shields.io/badge/coverage-87%25-emerald)
-![Performance](https://img.shields.io/badge/performance-high-blue)
-
-> An enterprise-grade AI recruiting ecosystem that operates as a fully autonomous swarm. It discovers hiring companies via omnichannel signals (Dice, Monster, ZipRecruiter), finds decision makers, sources candidates, and manages the entire pipeline — automatically, 24/7.
-
----
-
-## ✨ Capability Hub
-
-| Capability | Module | Status |
-|---|---|---|
-| 🔍 Omnichannel Signals | Market Intelligence Agent (Web + Job Boards) | **ACTIVE** |
-| 🎯 Lead Discovery | Lead Discovery Agent (LinkedIn + Org Scrapers) | **ACTIVE** |
-| 🫂 Sourcing Swarm | Dice, Monster, ZipRecruiter, GitHub Hubs | **ACTIVE** |
-| 🛡️ Conflict Mediator | Conflict Resolution Agent (Deduplication) | **ACTIVE** |
-| 📄 Analyze Resumes | Resume Analysis Agent (Integrity Scoring) | **ACTIVE** |
-| ✉️ Personalized Outreach | Outreach Agent (Microsites + AI-Voice) | **ACTIVE** |
-| 📊 Executive View | The Nexus (Real-time Swarm Dashboard) | **ACTIVE** |
-| 🧠 Market Pulse | Autonomous Daily Heartbeat Scheduler | **ACTIVE** |
+<div align="center">
+  <img src="https://i.imgur.com/your-logo-here.png" alt="DVT Talent AI" width="200" />
+  <h1>DVT Talent AI</h1>
+  <p><strong>Enterprise-Grade Autonomous Recruitment Swarm & Copilot</strong></p>
+  
+  <p>
+    <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=FastAPI&logoColor=white" />
+    <img src="https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white" />
+    <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" />
+    <img src="https://img.shields.io/badge/Celery-37814A?style=for-the-badge&logo=celery&logoColor=white" />
+  </p>
+</div>
 
 ---
+
+DVT Talent AI is a production-ready, full-stack platform that completely automates the recruitment pipeline using a specialized swarm of 5 asynchronous AI Agents. It features two execution modes: a **Fully Autonomous Swarm** for high-volume outreach, and a **Stateful Copilot** containing human-in-the-loop (HITL) checkpoints to ensure absolute quality and brand safety.
+
+## 🚀 Key Features
+
+* **Multi-Agent Architecture (Lean-SaaS):**
+  * **Market IQ & Discovery:** Analyzes real-time macroeconomic trends and generates optimized, high-converting job descriptions.
+  * **Sourcing Agent:** Globally scrapes and verifies candidates using advanced fallbacks (Source-Hopping) via Web, GitHub, Dice, and internal DBs.
+  * **Logic Critic (Audit):** Evaluates sourcing results to prevent AI hallucinations.
+  * **Screening Agent:** Multi-modal ranking engine that scores resumes, detects propensity to leave, and runs video sentiment analysis.
+  * **Outreach Agent:** Drafts custom micro-sites and personalized emails dynamically linked to the candidate's psychometrics.
+* **Hybrid Execution Mechanics:**
+  * **Autopilot:** "Fire-and-forget" massive autonomous pipelining.
+  * **Copilot (HITL):** Stateful pipeline pauses. Agents enter an `AWAITING_INPUT` state natively via Celery, waiting for a human recruiter to manually approve Job Descriptions and Candidate lists via the dashboard.
+* **Closed-Loop Communications:** 
+  * Direct Gmail/SMTP delivery coupled with dynamic Webhook-intercept architecture to track open/reply metrics directly into the database.
+* **Enterprise Security & Scale:** 
+  * Built-in multi-tenancy at the Vector (Chroma) and Relational (PostgreSQL) layers. AES-256 encryption secures candidate Personally Identifiable Information (PII).
 
 ## 🏗️ Architecture
 
+```mermaid
+graph TD
+    A[Next.js Frontend] -->|REST API| B[FastAPI Gateway]
+    B --> C{Stateful Orchestrator}
+    C -->|Celery Workers| D[Discovery & Market IQ]
+    C -->|Celery Workers| E[Sourcing & Critic]
+    C -->|Celery Workers| F[Screening & Outreach]
+    E --> G[(PostgreSQL DB)]
+    E --> H[(Chroma Vector DB)]
+    F --> I[SMTP/Gmail Delivery]
+    J[Webhook Interceptor] --> G
+    I -.-> J
 ```
-Frontend (Next.js) → Backend API (FastAPI) → Agent Orchestrator
-                                           ↓
-                    10 Autonomous AI Agents (CrewAI/LangGraph)
-                                           ↓
-                    PostgreSQL + ChromaDB + Redis
-                                           ↓
-                    Kimi API / DeepSeek / OpenAI (LLM)
-                    Serper API (Web Search)
-                    Gmail API (Email)
-                    GitHub API (Candidate Sourcing)
-```
-
----
-
-## 🚀 Quick Start
-
-```bash
-# 1. Configure API keys
-cp backend/.env.example backend/.env
-# Edit backend/.env with your keys
-
-# 2. Start infrastructure
-docker compose up postgres redis chromadb -d
-
-# 3. Start backend
-cd backend && pip install -r requirements.txt
-uvicorn main:app --reload
-
-# 4. Start workers  
-celery -A workers.celery_app worker --loglevel=info
-
-# 5. Start frontend
-cd frontend && npm install && npm run dev
-```
-
-→ Dashboard: http://localhost:3000  
-→ API Docs: http://localhost:8000/api/docs
-
-Full instructions: [docs/SETUP.md](docs/SETUP.md)
-
----
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 14, TypeScript, TailwindCSS, ShadCN, Framer Motion |
-| Backend | FastAPI, Python 3.11, Pydantic v2, SQLAlchemy async |
-| Agents | Custom agent framework with LangChain tools |
-| AI Models | Kimi API, DeepSeek, OpenAI (OpenAI-compatible) |
-| Database | PostgreSQL 15 |
-| Vector DB | ChromaDB |
-| Queue | Redis + Celery |
-| Search | Serper API |
-| Email | Gmail API |
-| Deployment | Docker, Docker Compose, Nginx |
+### **Backend**
+* **Framework:** FastAPI (Python)
+* **Asynchronous Engine:** Celery + Redis
+* **Databases:** PostgreSQL (SQLAlchemy Async), ChromaDB (Vector Search)
+* **AI Tooling:** OpenAI (GPT-4o), DeepSeek (Logic Routing), Langchain
+* **Security:** Fernet standard AES-256 encryption.
 
----
+### **Frontend**
+* **Framework:** Next.js (React)
+* **Styling:** Tailwind CSS + Framer Motion
+* **State Management:** TanStack React Query
 
-## 📁 Structure
+## 💻 Getting Started (Local Development)
 
+### 1. Requirements
+* Docker Desktop installed and running
+* Node.js v18+
+* Python 3.10+
+
+### 2. Backend Setup
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Or `venv\Scripts\activate` on Windows
+pip install -r requirements.txt
 ```
-dvt-talent-ai/
-├── backend/          # FastAPI + Agents + Workers
-├── frontend/         # Next.js Dashboard
-├── docker/           # Nginx + Postgres configs
-├── docker-compose.yml
-└── docs/             # Architecture + Setup guides
+*Note: Duplicate `.env.example` to `.env` and fill in your API keys (OpenAI, DeepSeek, Gmail App Passwords, etc).*
+
+### 3. Frontend Setup
+```bash
+cd frontend
+npm install
+# Rename .env.example to .env
+npm run dev
 ```
 
----
+### 4. Booting the Infrastructure (Docker)
+Ensure your backing services (Postgres, Redis) are online.
+```bash
+docker-compose up -d
+```
+The application will safely map to `http://localhost:3000` for the dashboard and `http://localhost:8000` for the API swagger docs.
 
-## 🤝 License
+## 🛡️ Trust & Brand Safety
+Unlike traditional "Black Box" AI tools, DVT Talent AI prioritizes brand safety. The inclusion of the **Critic Agent** minimizes hallucinated sourcing matches, while the **Copilot** architecture puts legal liability back into the hands of the recruiter via hard "Approve" gates before an email is physically dispatched. 
 
-MIT License — Build on it freely.
+## 📄 License
+Proprietary Core. DO NOT redistribute without express permission.
