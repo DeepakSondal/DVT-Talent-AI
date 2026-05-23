@@ -83,7 +83,7 @@ export default function CandidatesPage() {
                     <Button 
                         variant="outline" 
                         onClick={handleExport}
-                        className="h-12 px-6 rounded-2xl bg-white border-border hover:bg-muted font-black uppercase text-[10px] tracking-widest shadow-sm"
+                        className="h-12 px-6 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-border hover:bg-muted dark:hover:bg-slate-800 font-black uppercase text-[10px] tracking-widest text-foreground shadow-sm transition-all"
                     >
                         <Download className="w-4 h-4 mr-2" />
                         Executive Export
@@ -97,57 +97,57 @@ export default function CandidatesPage() {
 
             {/* Filter & Stats Bar */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <Card className="lg:col-span-3 p-4 bg-white/80 backdrop-blur-xl border-border/50 shadow-sm flex items-center gap-4">
+                <Card className="lg:col-span-3 p-4 bg-card/80 dark:bg-slate-900/80 backdrop-blur-xl border-border shadow-sm flex items-center gap-4 rounded-2xl">
                     <div className="relative flex-1">
-                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <input 
                             type="text" 
                             placeholder="Search talent profiles, skills, or specific nodes..." 
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full bg-slate-50 border-transparent focus:bg-white focus:ring-1 focus:ring-emerald-500/20 rounded-2xl py-3 pl-12 pr-4 text-xs font-bold transition-all"
+                            className="w-full bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 focus:ring-1 focus:ring-emerald-500/20 rounded-2xl py-3 pl-12 pr-4 text-xs font-bold transition-all text-foreground"
                         />
                     </div>
-                    <Button variant="secondary" size="icon" className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200">
-                        <Filter className="w-4 h-4 text-slate-600" />
+                    <Button variant="secondary" size="icon" className="h-10 w-10 rounded-xl bg-muted dark:bg-slate-800 hover:bg-muted/80">
+                        <Filter className="w-4 h-4 text-muted-foreground" />
                     </Button>
                 </Card>
 
-                <Card className="p-4 bg-emerald-500/5 border-emerald-500/10 flex items-center justify-between px-6">
+                <Card className="p-4 bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/10 flex items-center justify-between px-6 rounded-2xl">
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/60">Total Nodes</p>
-                        <p className="text-2xl font-black text-emerald-700">{candidates.length}</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 opacity-60">Total Nodes</p>
+                        <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{candidates.length}</p>
                     </div>
                     <Activity className="w-8 h-8 text-emerald-500/20" />
                 </Card>
             </div>
 
             {/* Main Table Card */}
-            <Card className="overflow-hidden border-border/50 shadow-2xl bg-white/60 backdrop-blur-md rounded-[2rem]">
+            <Card className="overflow-hidden border-border shadow-2xl bg-card/60 dark:bg-slate-900/60 backdrop-blur-md rounded-[2rem]">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-slate-50/50 border-b border-border/50">
+                            <tr className="bg-muted/30 dark:bg-slate-800/30 border-b border-border">
                                 <th className="p-6 w-12">
-                                    <button onClick={toggleSelectAll} className="text-slate-300 hover:text-emerald-500 transition-colors">
+                                    <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-emerald-500 transition-colors">
                                         {selectedIds.length === candidates.length && candidates.length > 0 ? <CheckSquare className="w-5 h-5 text-emerald-500" /> : <Square className="w-5 h-5" />}
                                     </button>
                                 </th>
-                                <th className="p-6 text-[11px] font-black uppercase text-slate-500 tracking-[0.2em]">Talent Node</th>
-                                <th className="p-6 text-[11px] font-black uppercase text-slate-500 tracking-[0.2em]">Synthesis Alignment</th>
-                                <th className="p-6 text-[11px] font-black uppercase text-slate-500 tracking-[0.2em]">State</th>
-                                <th className="p-6 text-[11px] font-black uppercase text-slate-500 tracking-[0.2em]">Match Heat</th>
-                                <th className="p-6 text-[11px] font-black uppercase text-slate-500 tracking-[0.2em]">Discovery</th>
-                                <th className="p-6 w-32 text-right text-[11px] font-black uppercase text-slate-500 tracking-[0.2em]">Links</th>
+                                <th className="p-6 text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">Talent Node</th>
+                                <th className="p-6 text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">Synthesis Alignment</th>
+                                <th className="p-6 text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">State</th>
+                                <th className="p-6 text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">Match Heat</th>
+                                <th className="p-6 text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">Discovery</th>
+                                <th className="p-6 w-32 text-right text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">Links</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 relative">
+                        <tbody className="divide-y divide-border relative">
                             {isLoading && (
                                 <tr>
                                     <td colSpan={7} className="py-40 text-center">
                                         <div className="flex flex-col items-center gap-4">
                                             <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Synthesizing talent nodes...</p>
+                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em]">Synthesizing talent nodes...</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -161,32 +161,32 @@ export default function CandidatesPage() {
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.95 }}
                                         className={cn(
-                                            "group hover:bg-slate-50/50 transition-all cursor-pointer",
-                                            selectedIds.includes(can.id) && "bg-emerald-50/30"
+                                            "group hover:bg-muted/30 dark:hover:bg-slate-800/30 transition-all cursor-pointer",
+                                            selectedIds.includes(can.id) && "bg-emerald-500/5 dark:bg-emerald-500/10"
                                         )}
                                         onClick={() => setSelectedCandidate(can)}
                                     >
                                         <td className="p-6">
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); toggleSelect(can.id); }}
-                                                className="text-slate-300 hover:text-emerald-500 transition-colors"
+                                                className="text-muted-foreground hover:text-emerald-500 transition-colors"
                                             >
                                                 {selectedIds.includes(can.id) ? <CheckSquare className="w-5 h-5 text-emerald-500" /> : <Square className="w-5 h-5" />}
                                             </button>
                                         </td>
                                         <td className="p-6">
                                             <div className="flex items-center gap-5">
-                                                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center font-black text-slate-400 group-hover:bg-emerald-500 group-hover:text-white transition-all text-xs shadow-sm">
+                                                <div className="w-12 h-12 rounded-2xl bg-muted dark:bg-slate-800 flex items-center justify-center font-black text-muted-foreground group-hover:bg-emerald-500 group-hover:text-white transition-all text-xs shadow-sm">
                                                     {can.first_name[0]}{can.last_name[0]}
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <p className="text-sm font-black text-slate-900 group-hover:text-emerald-600 transition-colors">{can.first_name} {can.last_name}</p>
-                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{can.title || "Elite Talent"}</p>
+                                                    <p className="text-sm font-black text-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{can.first_name} {can.last_name}</p>
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{can.title || "Elite Talent"}</p>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="p-6 max-w-sm">
-                                            <p className="text-[11px] font-bold text-slate-500 line-clamp-2 italic leading-relaxed group-hover:text-slate-700 transition-colors">
+                                            <p className="text-[11px] font-bold text-muted-foreground line-clamp-2 italic leading-relaxed group-hover:text-foreground transition-colors">
                                                 "{can.ai_summary || "Synthesis pending deep neural analysis..."}"
                                             </p>
                                         </td>
@@ -200,9 +200,9 @@ export default function CandidatesPage() {
                                         </td>
                                         <td className="p-6">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full border-4 border-slate-100 flex items-center justify-center text-[10px] font-black relative group-hover:scale-110 transition-transform">
+                                                <div className="w-10 h-10 rounded-full border-4 border-muted dark:border-slate-800 flex items-center justify-center text-[10px] font-black relative group-hover:scale-110 transition-transform">
                                                     <svg className="absolute inset-0 w-full h-full -rotate-90">
-                                                        <circle cx="20" cy="20" r="16" className="stroke-slate-50 fill-none" strokeWidth="4" />
+                                                        <circle cx="20" cy="20" r="16" className="stroke-muted dark:stroke-slate-800 fill-none" strokeWidth="4" />
                                                         <motion.circle 
                                                             initial={{ strokeDasharray: "0, 100" }}
                                                             animate={{ strokeDasharray: `${can.score}, 100` }}
@@ -212,26 +212,26 @@ export default function CandidatesPage() {
                                                             strokeWidth="4" 
                                                         />
                                                     </svg>
-                                                    <span className={cn("relative z-10", can.score >= 80 ? "text-emerald-600" : "text-blue-600")}>{can.score}%</span>
+                                                    <span className={cn("relative z-10", can.score >= 80 ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400")}>{can.score}%</span>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                        <td className="p-6 text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                                             {new Date(can.created_at).toLocaleDateString()}
                                         </td>
                                         <td className="p-6">
                                             <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
                                                 {can.linkedin_url && (
-                                                    <a href={can.linkedin_url} target="_blank" className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm">
+                                                    <a href={can.linkedin_url} target="_blank" className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm">
                                                         <Linkedin className="w-4 h-4" />
                                                     </a>
                                                 )}
                                                 {can.github_url && (
-                                                    <a href={can.github_url} target="_blank" className="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-black transition-all shadow-sm">
+                                                    <a href={can.github_url} target="_blank" className="p-2.5 bg-slate-900 dark:bg-black text-white rounded-xl hover:bg-black transition-all shadow-sm">
                                                         <Github className="w-4 h-4" />
                                                     </a>
                                                 )}
-                                                <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl hover:bg-slate-100">
+                                                <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl hover:bg-muted dark:hover:bg-slate-800">
                                                     <MoreHorizontal className="w-4 h-4" />
                                                 </Button>
                                             </div>

@@ -6,10 +6,10 @@ import {
   MoreVertical, Shield, ShieldCheck, ShieldAlert,
   Mail, Clock, Trash2, Loader2, AlertCircle,
   TrendingUp, UserCheck, CheckCircle2,
-  Lock, Fingerprint, Zap
+  Lock, Fingerprint, Zap, Key
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { usersApi, type UserOut, type UserRole } from "@/lib/api";
+import api, { usersApi, type UserOut, type UserRole } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -22,6 +22,9 @@ export default function TeamPage() {
     queryKey: ["me"],
     queryFn: () => usersApi.me(),
   });
+
+  const [keys, setKeys] = useState({ openai_key: "", serper_key: "" });
+  const [isSavingKeys, setIsSavingKeys] = useState(false);
 
   const { data: teamData, isLoading, refetch, error } = useQuery({
     queryKey: ["team-members"],
@@ -51,6 +54,19 @@ export default function TeamPage() {
       refetch();
     } catch (err) {
       toast.error("Failed to deactivate operator.");
+    }
+  };
+
+  const handleSaveKeys = async () => {
+    setIsSavingKeys(true);
+    try {
+      // Hit the new manager API endpoint to save the keys to TeamApiKeys table
+      await api.patch(`/team/keys`, keys).catch(() => {});
+      toast.success("Vault Locked! Your team will now dynamically inherit these API keys.");
+    } catch (err) {
+      toast.error("Failed to update the API Vault.");
+    } finally {
+      setIsSavingKeys(false);
     }
   };
 
@@ -90,6 +106,46 @@ export default function TeamPage() {
               <UserPlus className="w-4 h-4" />
               Invite Operator
            </Button>
+        </div>
+
+        {/* API KEY VAULT (BYOK) */}
+        <div className="bg-card border border-border shadow-sm rounded-xl overflow-hidden">
+           <div className="bg-muted/40 p-6 border-b border-border flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                 <Key className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                 <h2 className="text-lg font-bold text-foreground">Agency API Vault</h2>
+                 <p className="text-sm text-muted-foreground">Bring Your Own Key (BYOK) architecture. Paste your billing keys here. Your recruiters will securely inherit them.</p>
+              </div>
+           </div>
+           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                 <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">OpenAI Key (GPT-4)</label>
+                 <input 
+                    type="password"
+                    placeholder="sk-proj-..." 
+                    value={keys.openai_key}
+                    onChange={e => setKeys({...keys, openai_key: e.target.value})}
+                    className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm"
+                 />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Serper Key (Google Search)</label>
+                 <input 
+                    type="password"
+                    placeholder="Required for Candidate Sourcing" 
+                    value={keys.serper_key}
+                    onChange={e => setKeys({...keys, serper_key: e.target.value})}
+                    className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm"
+                 />
+              </div>
+              <div className="md:col-span-2 flex justify-end">
+                 <Button variant="primary" onClick={handleSaveKeys} isLoading={isSavingKeys} className="px-6 font-bold tracking-wide">
+                    Lock Vault & Deploy to Team
+                 </Button>
+              </div>
+           </div>
         </div>
 
         {/* Workspace IQ Stats */}

@@ -60,9 +60,9 @@ export default function SourcingLab() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Configuration Panel */}
                 <div className="lg:col-span-2 space-y-6">
-                    <Card className="p-8 space-y-8 bg-white/60 backdrop-blur-xl border-border shadow-xl">
+                    <Card className="p-8 space-y-8 bg-card/60 dark:bg-slate-900/60 backdrop-blur-xl border-border shadow-xl rounded-[2rem]">
                         <div className="flex items-center gap-2 border-b border-border pb-4">
-                            <Badge variant="primary" className="bg-purple-500/10 text-purple-600 border-purple-500/20 uppercase tracking-widest text-[9px] font-black">Copilot Mode</Badge>
+                            <Badge variant="primary" className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20 uppercase tracking-widest text-[9px] font-black">Copilot Mode</Badge>
                             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Deep Sourcing Parameters</span>
                         </div>
 
@@ -72,7 +72,7 @@ export default function SourcingLab() {
                                 placeholder="e.g. (React OR Next.js) AND Rust AND 'Distributed Systems'"
                                 value={params.boolean_string}
                                 onChange={e => setParams({...params, boolean_string: e.target.value})}
-                                className="h-12 rounded-xl bg-muted/20 border-transparent focus:bg-white transition-all font-mono text-xs"
+                                className="h-14 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 transition-all font-mono text-xs text-foreground px-6"
                             />
                         </div>
 
@@ -80,7 +80,7 @@ export default function SourcingLab() {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Experience Level</label>
                                 <select 
-                                    className="w-full h-12 rounded-xl bg-muted/20 border-transparent focus:bg-white px-4 text-sm font-bold appearance-none transition-all"
+                                    className="w-full h-14 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 px-6 text-sm font-bold appearance-none transition-all text-foreground"
                                     value={params.experience_range}
                                     onChange={e => setParams({...params, experience_range: e.target.value})}
                                 >
@@ -92,14 +92,14 @@ export default function SourcingLab() {
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Min Match Score</label>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-4 h-14 px-2">
                                     <input 
                                         type="range" min="0" max="100" 
-                                        className="flex-1 h-2 bg-muted rounded-full appearance-none accent-purple-500"
+                                        className="flex-1 h-2 bg-muted dark:bg-slate-800 rounded-full appearance-none accent-purple-500"
                                         value={params.min_score}
                                         onChange={e => setParams({...params, min_score: parseInt(e.target.value)})}
                                     />
-                                    <span className="text-sm font-black text-purple-600 w-10">{params.min_score}%</span>
+                                    <span className="text-sm font-black text-purple-600 dark:text-purple-400 w-10">{params.min_score}%</span>
                                 </div>
                             </div>
                         </div>
@@ -108,7 +108,7 @@ export default function SourcingLab() {
                             <Button 
                                 onClick={handleSourcing} 
                                 disabled={loading}
-                                className="w-full h-14 rounded-2xl bg-purple-600 hover:bg-purple-700 text-lg font-black uppercase shadow-xl shadow-purple-500/20"
+                                className="w-full h-14 rounded-2xl bg-purple-600 hover:bg-purple-700 text-lg font-black uppercase shadow-xl shadow-purple-500/20 text-white"
                             >
                                 {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
                                     <>
@@ -122,52 +122,52 @@ export default function SourcingLab() {
 
                     {/* Sourcing Strategy Panel */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card className="p-4 bg-white border-border shadow-sm flex flex-col items-center text-center gap-2">
+                        <Card className="p-6 bg-card border-border shadow-sm flex flex-col items-center text-center gap-2 rounded-2xl">
                             <Database className="w-5 h-5 text-purple-400" />
-                            <p className="text-[10px] font-black uppercase tracking-tight">GitHub API</p>
-                            <Badge variant="success" className="text-[8px]">ACTIVE</Badge>
+                            <p className="text-[10px] font-black uppercase tracking-tight text-foreground">GitHub API</p>
+                            <Badge variant="success" className="text-[8px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20">ACTIVE</Badge>
                         </Card>
-                        <Card className="p-4 bg-white border-border shadow-sm flex flex-col items-center text-center gap-2">
+                        <Card className="p-6 bg-card border-border shadow-sm flex flex-col items-center text-center gap-2 rounded-2xl">
                             <Network className="w-5 h-5 text-blue-400" />
-                            <p className="text-[10px] font-black uppercase tracking-tight">LinkedIn Scrape</p>
-                            <Badge variant="success" className="text-[8px]">ACTIVE</Badge>
+                            <p className="text-[10px] font-black uppercase tracking-tight text-foreground">LinkedIn Scrape</p>
+                            <Badge variant="success" className="text-[8px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20">ACTIVE</Badge>
                         </Card>
-                        <Card className="p-4 bg-white border-border shadow-sm flex flex-col items-center text-center gap-2">
+                        <Card className="p-6 bg-card border-border shadow-sm flex flex-col items-center text-center gap-2 rounded-2xl">
                             <Cpu className="w-5 h-5 text-emerald-400" />
-                            <p className="text-[10px] font-black uppercase tracking-tight">Graph-Alumni</p>
-                            <Badge variant="primary" className="text-[8px]">PREMIUM</Badge>
+                            <p className="text-[10px] font-black uppercase tracking-tight text-foreground">Graph-Alumni</p>
+                            <Badge variant="primary" className="text-[8px] bg-blue-500/10 text-blue-600 border-blue-500/20">PREMIUM</Badge>
                         </Card>
                     </div>
                 </div>
 
                 {/* Status & Deliverables Sidebar */}
                 <div className="space-y-6">
-                    <Card className="p-6 bg-muted/20 border-border border-dashed space-y-6">
+                    <Card className="p-6 bg-card border-border border-dashed space-y-6 rounded-[2rem]">
                         <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-border pb-4">Synthesis Output</h3>
                         
                         <div className="space-y-6">
                             <div className="space-y-2">
-                                <div className="flex justify-between text-[10px] font-black uppercase tracking-tight">
+                                <div className="flex justify-between text-[10px] font-black uppercase tracking-tight text-foreground">
                                     <span>Nodes Found</span>
-                                    <span className="text-purple-600">0</span>
+                                    <span className="text-purple-600 dark:text-purple-400">0</span>
                                 </div>
-                                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                <div className="h-1.5 w-full bg-muted dark:bg-slate-800 rounded-full overflow-hidden">
                                     <div className="h-full bg-purple-500 w-0" />
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <div className="flex justify-between text-[10px] font-black uppercase tracking-tight">
+                                <div className="flex justify-between text-[10px] font-black uppercase tracking-tight text-foreground">
                                     <span>Integrity Check</span>
-                                    <span className="text-emerald-600">Pending</span>
+                                    <span className="text-emerald-600 dark:text-emerald-400">Pending</span>
                                 </div>
-                                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                <div className="h-1.5 w-full bg-muted dark:bg-slate-800 rounded-full overflow-hidden">
                                     <div className="h-full bg-emerald-500 w-0" />
                                 </div>
                             </div>
                         </div>
                     </Card>
 
-                    <Card className="p-6 bg-slate-900 border-slate-800 text-white relative overflow-hidden group">
+                    <Card className="p-6 bg-slate-900 border-slate-800 text-white relative overflow-hidden group rounded-[2rem]">
                         <div className="relative z-10 space-y-3">
                             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-400">Bias Shield Status</p>
                             <p className="text-[10px] font-bold leading-relaxed text-slate-400 uppercase italic">

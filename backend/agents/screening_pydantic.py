@@ -19,6 +19,7 @@ class ScreeningPlan(BaseModel):
 
 screening_agent = Agent(
     get_pydantic_model(),
+    retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
     result_type=ScreeningPlan,
     system_prompt="You are a Technical Screening Agent. Design specialized interview questions for specific candidate profiles."

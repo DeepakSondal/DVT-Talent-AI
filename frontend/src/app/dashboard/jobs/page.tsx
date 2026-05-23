@@ -60,12 +60,12 @@ export default function JobsPage() {
              { label: "Sourcing Depth", value: "84%", icon: Sparkles, color: "text-amber-500" },
              { label: "Synthesis Rate", value: "2.4d", icon: HeartPulse, color: "text-emerald-600" },
            ].map((stat, i) => (
-             <Card key={i} className="flex items-center gap-8 p-8 bg-white/40 border-border/20 group hover:shadow-xl hover:shadow-primary/5 transition-all duration-700">
-                <div className="w-16 h-16 rounded-[1.5rem] bg-white border border-border/50 flex items-center justify-center group-hover:scale-110 transition-all duration-700">
+             <Card key={i} className="flex items-center gap-8 p-8 bg-card/40 dark:bg-slate-900/40 border-border group hover:shadow-xl hover:shadow-primary/5 transition-all duration-700 rounded-[2rem]">
+                <div className="w-16 h-16 rounded-[1.5rem] bg-muted dark:bg-slate-800 border border-border flex items-center justify-center group-hover:scale-110 transition-all duration-700">
                    <stat.icon className={cn("w-8 h-8", stat.color)} />
                 </div>
                 <div className="space-y-1">
-                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-40">{stat.label}</p>
+                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-60">{stat.label}</p>
                    <div className="flex items-end gap-3 font-black">
                       <span className="text-4xl text-foreground tracking-tighter">{stat.value}</span>
                       <TrendingUp className="w-4 h-4 text-emerald-500 mb-2" />
@@ -76,24 +76,24 @@ export default function JobsPage() {
         </div>
 
         {/* Search & Grid Environment */}
-        <Card className="p-6 bg-white/80 backdrop-blur-xl border-border/50">
+        <Card className="p-6 bg-card/80 dark:bg-slate-900/80 backdrop-blur-xl border-border shadow-sm rounded-2xl">
            <div className="flex flex-col md:flex-row gap-6">
               <div className="flex-1 relative group">
-                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/40 group-focus-within:text-primary transition-colors" />
+                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                  <input 
                    type="text" 
                    placeholder="Filter vacancies by title, industry, or infrastructure..." 
                    value={search}
                    onChange={(e) => setSearch(e.target.value)}
-                   className="w-full pl-12 pr-4 py-4 bg-primary/5 border-transparent focus:bg-white focus:border-primary/20 rounded-2xl text-[11px] font-black uppercase tracking-widest text-foreground placeholder:text-muted-foreground/40 placeholder:lowercase placeholder:tracking-normal transition-all"
+                   className="w-full pl-12 pr-4 py-4 bg-muted dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 focus:border-primary/20 rounded-2xl text-[11px] font-black uppercase tracking-widest text-foreground placeholder:text-muted-foreground/40 placeholder:lowercase placeholder:tracking-normal transition-all"
                  />
               </div>
               <div className="flex items-center gap-4">
-                 <Button variant="outline" className="h-14 px-8 bg-white gap-3 text-[10px] uppercase font-black tracking-widest">
-                    <Filter className="w-4 h-4 text-primary/40" />
+                 <Button variant="outline" className="h-14 px-8 bg-card dark:bg-slate-800 border-border gap-3 text-[10px] uppercase font-black tracking-widest text-foreground hover:bg-muted">
+                    <Filter className="w-4 h-4 text-muted-foreground" />
                     Filters
                  </Button>
-                 <Button variant="secondary" size="icon" className="w-14 h-14 rounded-2xl bg-white border border-border/50">
+                 <Button variant="secondary" size="icon" className="w-14 h-14 rounded-2xl bg-card dark:bg-slate-800 border border-border hover:bg-muted">
                     <BarChart3 className="w-5 h-5 text-muted-foreground" />
                  </Button>
               </div>
@@ -105,7 +105,7 @@ export default function JobsPage() {
            <AnimatePresence mode="popLayout">
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i: number) => (
-                   <Card key={i} className="h-64 bg-white/40 animate-pulse border-border/20" />
+                   <Card key={i} className="h-64 bg-card/40 dark:bg-slate-900/40 animate-pulse border-border/20 rounded-2xl" />
                 ))
               ) : jobs.length > 0 ? (
                 jobs.map((job: Job, i: number) => (
@@ -115,7 +115,7 @@ export default function JobsPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
                   >
-                    <Card className="p-10 group hover:border-primary/20 transition-all duration-700 relative overflow-hidden h-full flex flex-col justify-between shadow-xl shadow-primary/5 hover:shadow-2xl hover:shadow-primary/10">
+                    <Card className="p-10 group bg-card dark:bg-slate-900 border-border hover:border-primary/40 transition-all duration-700 relative overflow-hidden h-full flex flex-col justify-between shadow-xl shadow-primary/5 hover:shadow-2xl hover:shadow-primary/10 rounded-[2rem]">
                        {/* Context Icon */}
                        <div className="absolute top-10 right-10 opacity-0 group-hover:opacity-100 transition-all duration-700 translate-x-2 group-hover:translate-x-0">
                           <ArrowUpRight className="w-6 h-6 text-primary" />
@@ -126,7 +126,7 @@ export default function JobsPage() {
                              <div className="space-y-3">
                                 <h3 className="text-2xl font-black text-foreground tracking-tighter italic leading-none">{job.title}</h3>
                                 <div className="flex items-center gap-4">
-                                   <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-40">
+                                   <div className="flex items-center gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest opacity-60">
                                       <MapPin className="w-3.5 h-3.5" />
                                       {job.location || (job.remote ? "Remote" : "Global")}
                                    </div>
@@ -134,27 +134,27 @@ export default function JobsPage() {
                                    <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em] italic">{job.job_type || "Full-time Synthesis"}</span>
                                 </div>
                              </div>
-                             <Badge variant="primary" className="bg-primary/5 text-primary border-primary/10 h-7 px-4">Active Node</Badge>
+                             <Badge variant="primary" className="bg-primary/10 text-primary border-primary/20 h-7 px-4 uppercase text-[9px] font-black">Active Node</Badge>
                           </div>
 
                           <div className="flex flex-wrap gap-2.5">
                              {job.skills_required?.slice(0, 4).map((skill: string) => (
-                                <Badge key={skill} variant="secondary" className="px-3 py-1 text-[9px] font-black uppercase bg-secondary/5 border-border/40 text-muted-foreground group-hover:border-primary/20 group-hover:text-primary transition-all">
+                                <Badge key={skill} variant="secondary" className="px-3 py-1 text-[9px] font-black uppercase bg-muted dark:bg-slate-800 border-border text-muted-foreground group-hover:border-primary/20 group-hover:text-primary transition-all">
                                    {skill}
                                 </Badge>
                              ))}
                              {job.skills_required && job.skills_required.length > 4 && (
-                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest pl-2 opacity-40">+{job.skills_required.length - 4} Infrastructure</span>
+                                <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest pl-2 opacity-60">+{job.skills_required.length - 4} Infrastructure</span>
                              )}
                           </div>
                        </div>
 
-                       <div className="mt-12 pt-10 border-t border-border/20 flex flex-col gap-8">
+                       <div className="mt-12 pt-10 border-t border-border flex flex-col gap-8">
                           <div className="flex items-center justify-between">
                              <div className="flex items-center gap-4">
                                 <div className="flex -space-x-3">
                                    {[...Array(3)].map((_, i) => (
-                                      <div key={i} className="w-8 h-8 rounded-full bg-white border-2 border-background flex items-center justify-center text-[10px] font-black text-primary shadow-sm">
+                                      <div key={i} className="w-8 h-8 rounded-full bg-muted dark:bg-slate-800 border-2 border-card flex items-center justify-center text-[10px] font-black text-primary shadow-sm">
                                          JD
                                       </div>
                                    ))}
@@ -166,18 +166,18 @@ export default function JobsPage() {
                              
                              <div className="flex items-center gap-3">
                                 <Zap className="w-4 h-4 text-amber-500 animate-pulse fill-amber-500/20" />
-                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-600 italic">Sourcing Stream</span>
+                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-600 dark:text-amber-400 italic">Sourcing Stream</span>
                              </div>
                           </div>
 
                           <div className="flex items-center gap-4 w-full">
                              <Link href={`/dashboard/jobs/${job.id}`} className="flex-1">
-                                <Button variant="primary" className="w-full rounded-2xl h-14 bg-white text-primary border-primary/20 hover:bg-primary hover:text-white shadow-none hover:shadow-lg hover:shadow-primary/20 transition-all duration-500">
+                                <Button variant="primary" className="w-full rounded-2xl h-14 bg-muted dark:bg-slate-800 text-foreground border-border hover:bg-primary hover:text-white shadow-none hover:shadow-lg hover:shadow-primary/20 transition-all duration-500 uppercase text-[10px] font-black tracking-widest">
                                    Manage Pipeline
                                 </Button>
                              </Link>
-                             <Button variant="ghost" size="icon" className="w-14 h-14 rounded-2xl bg-primary/5 hover:bg-primary/10">
-                                <MoreVertical className="w-5 h-5 text-primary" />
+                             <Button variant="ghost" size="icon" className="w-14 h-14 rounded-2xl bg-muted dark:bg-slate-800 hover:bg-primary/10 text-muted-foreground hover:text-primary border border-border">
+                                <MoreVertical className="w-5 h-5" />
                              </Button>
                           </div>
                        </div>
@@ -185,16 +185,16 @@ export default function JobsPage() {
                   </motion.div>
                 ))
               ) : (
-                <div className="col-span-full py-40 text-center space-y-8 h-full border-2 border-dashed border-border/40 rounded-[3rem] bg-white/20">
-                   <div className="w-24 h-24 rounded-[3rem] bg-primary/5 flex items-center justify-center mx-auto">
-                      <Target className="w-10 h-10 text-primary/20" />
+                <div className="col-span-full py-40 text-center space-y-8 h-full border-2 border-dashed border-border rounded-[3rem] bg-muted/20 dark:bg-slate-900/20">
+                   <div className="w-24 h-24 rounded-[3rem] bg-muted dark:bg-slate-800 flex items-center justify-center mx-auto border border-border">
+                      <Target className="w-10 h-10 text-muted-foreground opacity-40" />
                    </div>
                    <div className="space-y-3">
                       <h3 className="text-2xl font-black text-foreground uppercase tracking-tight italic">No Vacancy Nodes Detected</h3>
                       <p className="text-muted-foreground font-black text-[10px] uppercase tracking-widest opacity-60">Deploy an autonomous sourcing engine by initializing a new vacancy.</p>
                    </div>
                    <Link href="/dashboard/jobs/create">
-                     <Button variant="primary" className="h-14 px-10">Initialize New Role</Button>
+                     <Button variant="primary" className="h-14 px-10 rounded-2xl">Initialize New Role</Button>
                    </Link>
                 </div>
               )}

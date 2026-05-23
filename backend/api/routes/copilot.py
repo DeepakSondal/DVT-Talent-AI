@@ -11,6 +11,7 @@ from typing import List, Dict, Any, Optional
 from db.models import AgentTask, AgentTaskStatus, get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from agents.orchestrator import AgentOrchestrator
+from workers.tasks import copilot_discovery_task, copilot_sourcing_task, copilot_outreach_task
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/copilot", tags=["copilot"])
@@ -32,6 +33,7 @@ class OutreachRequest(BaseModel):
     approved_candidates: List[Dict[str, Any]]
     job_context: Dict[str, Any]
     tenant_id: str
+    enable_screening: bool = False
 
 # ── Background Task Wrappers ─────────────────────────────────────────────────
 async def execute_discovery_bg(task_id: uuid.UUID, req: DiscoveryRequest, db: AsyncSession):
@@ -110,7 +112,8 @@ async def start_copilot_discovery(req: DiscoveryRequest, bg_tasks: BackgroundTas
     db.add(new_task)
     await db.commit()
     
-    bg_tasks.add_task(execute_discovery_bg, task_id, req, db)
+    # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
+    copilot_discovery_task.delay(str(task_id), req.industry, req.location, req.tenant_id)
     return {"status": "accepted", "task_id": str(task_id), "phase": "discovery"}
 
 @router.post("/sourcing")
@@ -129,7 +132,8 @@ async def start_copilot_sourcing(req: SourcingRequest, bg_tasks: BackgroundTasks
     task.current_checkpoint = "starting_sourcing"
     await db.commit()
 
-    bg_tasks.add_task(execute_sourcing_bg, task_uuid, req, db)
+    # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
+    copilot_sourcing_task.delay(str(task_uuid), req.approved_jd, req.location, req.tenant_id)
     return {"status": "accepted", "task_id": str(task_uuid), "phase": "sourcing"}
 
 @router.post("/outreach")
@@ -148,5 +152,6 @@ async def start_copilot_outreach(req: OutreachRequest, bg_tasks: BackgroundTasks
     task.current_checkpoint = "starting_outreach"
     await db.commit()
 
-    bg_tasks.add_task(execute_outreach_bg, task_uuid, req, db)
+    # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
+    copilot_outreach_task.delay(str(task_uuid), req.approved_candidates, req.job_context, req.tenant_id, req.enable_screening)
     return {"status": "accepted", "task_id": str(task_uuid), "phase": "outreach"}

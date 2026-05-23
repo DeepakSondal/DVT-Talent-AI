@@ -43,19 +43,77 @@ class SourcingSynthesis(BaseModel):
 
 sourcing_agent = Agent(
     get_pydantic_model(),
+    retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
     result_type=SourcingSynthesis,
     system_prompt=(
         "You are an Elite Sourcing & Integrity Agent for DVT Talent AI. "
         "Your mission is to synthesize the best talent nodes for a specific job description. "
-        "1. DISCOVER: Use tools to find candidates on GitHub and the Web. "
-        "2. ANALYZE: Evaluate technical depth and JD alignment. "
-        "3. AUDIT: Perform deep integrity scoring to detect fraudulent or low-quality profiles. "
+        "1. PROPRIETARY FIRST: Always search the internal ATS (Workday/Greenhouse) for silver-medalist candidates before doing external web searches. "
+        "2. DISCOVER: Use tools to find candidates on GitHub and the Web if ATS yields no results. "
+        "3. ANALYZE: Evaluate technical depth and JD alignment. "
+        "4. AUDIT: Perform deep integrity scoring to detect fraudulent or low-quality profiles. "
         "Always provide a data-driven reasoning trail for your match scores."
     ),
 )
 
 # ── Tools ─────────────────────────────────────────────────────────────────
+
+@sourcing_agent.tool
+async def search_internal_ats(ctx: RunContext[AgentDeps], query: str) -> str:
+    """
+    Searches the proprietary internal ATS (Workday/Greenhouse) database.
+    VC FIX: Eliminates platform risk by querying the agency's owned data lake of resumes.
+    """
+    # In production, this hits the Postgres/Vector DB of past applicants
+    import httpx
+    from openai import AsyncOpenAI
+    from backend.config import settings
+    
+    PINECONE_API_KEY = getattr(settings, 'pinecone_api_key', 'mock_pinecone_key')
+    PINECONE_HOST = getattr(settings, 'pinecone_host', 'https://dvt-memory-tree.pinecone.io')
+    
+    try:
+        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        emb_response = await client.embeddings.create(
+            input=query,
+            model="text-embedding-3-small"
+        )
+        query_vector = emb_response.data[0].embedding
+        
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                f"{PINECONE_HOST}/query",
+                headers={"Api-Key": PINECONE_API_KEY},
+                json={
+                    "vector": query_vector,
+                    "topK": 3,
+                    "includeMetadata": True,
+                    "filter": {
+                        "tenant_id": ctx.deps.tenant_id,
+                        "source": "ats_data_lake"
+                    }
+                }
+            )
+            
+            matches = resp.json().get("matches", [])
+            if not matches:
+                return "No proprietary candidates found in the ATS Data Lake."
+                
+            results = []
+            for m in matches:
+                meta = m.get("metadata", {})
+                results.append({
+                    "name": meta.get("full_name"),
+                    "title": meta.get("current_title"),
+                    "status": "silver_medalist" if "REJECTED" in meta.get("status", "") or "DECLINED" in meta.get("status", "") else meta.get("status"),
+                    "source": meta.get("ats_provider", "ATS"),
+                    "resume_snippet": meta.get("semantic_text", "")[:200]
+                })
+                
+            return json.dumps(results)
+    except Exception as e:
+        return f"ATS Vector Search Failed: {str(e)}"
 
 @sourcing_agent.tool
 async def search_github_talent(ctx: RunContext[AgentDeps], keywords: str) -> str:

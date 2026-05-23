@@ -24,7 +24,7 @@ from backend.agents.market_iq_pydantic import market_iq_agent
 
 log = structlog.get_logger(__name__)
 
-def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: str = "default"):
+def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: str = "default", payload: Any = None):
     """Publish a signal to Redis for the WebSocket relay to pick up"""
     try:
         r = redis.from_url(settings.redis_url)
@@ -34,7 +34,8 @@ def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: s
             "type": signal_type,
             "message": message,
             "timestamp": datetime.utcnow().isoformat(),
-            "tenant_id": tenant_id
+            "tenant_id": tenant_id,
+            "payload": payload
         }))
     except Exception as e:
         log.error("broadcast_failed", error=str(e))
@@ -175,8 +176,95 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
             
         return {"candidate_id": candidate_id, "status": "scored"}
     except Exception as exc:
-        log.error("score_candidate_failed", error=str(exc))
-        raise self.retry(exc=exc, countdown=30)
+        log.error("ats_sync_failed", error=str(exc))
+        raise self.retry(exc=exc, countdown=300)
+
+# ── Copilot Celery Tasks (High Concurrency 1000+ Users) ──────────────────────
+
+@celery_app.task(bind=True, name="workers.tasks.copilot_discovery_task", max_retries=5)
+def copilot_discovery_task(self, task_id: str, industry: str, location: str, tenant_id: str):
+    from backend.db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    async def _run():
+        orchestrator = AgentOrchestrator(tenant_id=tenant_id)
+        try:
+            results = await orchestrator.run_discovery_phase(industry, location)
+            async with AsyncSessionLocal() as db:
+                task = await db.get(AgentTask, task_id)
+                if task:
+                    task.output_data = results
+                    task.status = AgentTaskStatus.AWAITING_INPUT
+                    task.current_checkpoint = "discovery_complete"
+                    await db.commit()
+            broadcast_signal("Discovery phase completed.", "agent_success", tenant_id)
+        except Exception as e:
+            async with AsyncSessionLocal() as db:
+                task = await db.get(AgentTask, task_id)
+                if task:
+                    task.status = AgentTaskStatus.FAILED
+                    task.error_message = str(e)
+                    await db.commit()
+            raise
+    try:
+        asyncio.run(_run())
+    except Exception as exc:
+        # Rate Limit Backoff: 4, 8, 16, 32, 64 seconds
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2))
+
+@celery_app.task(bind=True, name="workers.tasks.copilot_sourcing_task", max_retries=5)
+def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, tenant_id: str):
+    from backend.db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    async def _run():
+        orchestrator = AgentOrchestrator(tenant_id=tenant_id)
+        try:
+            results = await orchestrator.run_sourcing_phase(approved_jd, location)
+            async with AsyncSessionLocal() as db:
+                task = await db.get(AgentTask, task_id)
+                if task:
+                    task.output_data = results
+                    task.status = AgentTaskStatus.AWAITING_INPUT
+                    task.current_checkpoint = "sourcing_complete"
+                    await db.commit()
+            broadcast_signal("Sourcing phase completed.", "agent_success", tenant_id)
+        except Exception as e:
+            async with AsyncSessionLocal() as db:
+                task = await db.get(AgentTask, task_id)
+                if task:
+                    task.status = AgentTaskStatus.FAILED
+                    task.error_message = str(e)
+                    await db.commit()
+            raise
+    try:
+        asyncio.run(_run())
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2))
+
+@celery_app.task(bind=True, name="workers.tasks.copilot_outreach_task", max_retries=5)
+def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_context: dict, tenant_id: str, enable_screening: bool = False):
+    from backend.db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    async def _run():
+        orchestrator = AgentOrchestrator(tenant_id=tenant_id)
+        try:
+            results = await orchestrator.run_outreach_phase(approved_candidates, job_context, enable_screening=enable_screening)
+            async with AsyncSessionLocal() as db:
+                task = await db.get(AgentTask, task_id)
+                if task:
+                    task.output_data = {"outreach_results": results}
+                    task.status = AgentTaskStatus.COMPLETED
+                    task.current_checkpoint = "pipeline_complete"
+                    await db.commit()
+            broadcast_signal("Outreach pipeline completed.", "agent_success", tenant_id)
+        except Exception as e:
+            async with AsyncSessionLocal() as db:
+                task = await db.get(AgentTask, task_id)
+                if task:
+                    task.status = AgentTaskStatus.FAILED
+                    task.error_message = str(e)
+                    await db.commit()
+            raise
+    try:
+        asyncio.run(_run())
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2))
 
 # ── DB Helpers (Synchronous) ───────────────────────────────────────────────
 

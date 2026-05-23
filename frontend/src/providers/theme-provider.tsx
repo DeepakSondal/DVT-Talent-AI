@@ -18,21 +18,29 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     // Initial mount check to handle hydration mismatch
     const stored = localStorage.getItem("dvt_theme") as Theme | null;
-    if (stored) {
-      setTheme(stored);
-      document.documentElement.classList.toggle("dark", stored === "dark");
+    const root = window.document.documentElement;
+    
+    if (stored === "light") {
+      setTheme("light");
+      root.classList.remove("dark");
     } else {
-      // Default to dark as per premium requirements
-      document.documentElement.classList.add("dark");
+      setTheme("dark");
+      root.classList.add("dark");
     }
     setMounted(true);
   }, []);
 
   const toggleTheme = () => {
-    const newTheme = theme === "dark" ? "light" : "dark";
-    setTheme(newTheme);
-    localStorage.setItem("dvt_theme", newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
+    const root = window.document.documentElement;
+    if (theme === "dark") {
+      setTheme("light");
+      root.classList.remove("dark");
+      localStorage.setItem("dvt_theme", "light");
+    } else {
+      setTheme("dark");
+      root.classList.add("dark");
+      localStorage.setItem("dvt_theme", "dark");
+    }
   };
 
   return (

@@ -60,9 +60,9 @@ export default function OutreachLab() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Configuration Panel */}
                 <div className="lg:col-span-2 space-y-6">
-                    <Card className="p-8 space-y-8 bg-white/60 backdrop-blur-xl border-border shadow-xl">
+                    <Card className="p-8 space-y-8 bg-card/60 dark:bg-slate-900/60 backdrop-blur-xl border-border shadow-xl rounded-[2rem]">
                         <div className="flex items-center gap-2 border-b border-border pb-4">
-                            <Badge variant="primary" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 uppercase tracking-widest text-[9px] font-black">Copilot Mode</Badge>
+                            <Badge variant="primary" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 uppercase tracking-widest text-[9px] font-black">Copilot Mode</Badge>
                             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Campaign Orchestration</span>
                         </div>
 
@@ -72,7 +72,7 @@ export default function OutreachLab() {
                                 placeholder="e.g. Senior Backend Engineers Q2"
                                 value={params.campaign_name}
                                 onChange={e => setParams({...params, campaign_name: e.target.value})}
-                                className="h-12 rounded-xl bg-muted/20 border-transparent focus:bg-white transition-all"
+                                className="h-14 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 transition-all text-sm font-bold px-6 text-foreground"
                             />
                         </div>
 
@@ -80,7 +80,7 @@ export default function OutreachLab() {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Sequence Protocol</label>
                                 <select 
-                                    className="w-full h-12 rounded-xl bg-muted/20 border-transparent focus:bg-white px-4 text-sm font-bold appearance-none transition-all"
+                                    className="w-full h-14 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 px-6 text-sm font-bold appearance-none transition-all text-foreground"
                                     value={params.sequence_type}
                                     onChange={e => setParams({...params, sequence_type: e.target.value})}
                                 >
@@ -95,7 +95,7 @@ export default function OutreachLab() {
                                     type="number"
                                     value={params.delay_hours}
                                     onChange={e => setParams({...params, delay_hours: parseInt(e.target.value)})}
-                                    className="h-12 rounded-xl bg-muted/20 border-transparent focus:bg-white transition-all"
+                                    className="h-14 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 transition-all text-sm font-bold px-6 text-foreground"
                                 />
                             </div>
                         </div>
@@ -104,7 +104,7 @@ export default function OutreachLab() {
                             <Button 
                                 onClick={handleOutreach} 
                                 disabled={loading}
-                                className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-lg font-black uppercase shadow-xl shadow-emerald-500/20"
+                                className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-lg font-black uppercase shadow-xl shadow-emerald-500/20 text-white"
                             >
                                 {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
                                     <>
@@ -135,33 +135,33 @@ export default function OutreachLab() {
 
                 {/* Engagement Sidebar */}
                 <div className="space-y-6">
-                    <Card className="p-6 bg-muted/20 border-border border-dashed space-y-6">
+                    <Card className="p-6 bg-card border-border border-dashed space-y-6 rounded-[2rem]">
                         <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-border pb-4">Real-time Signals</h3>
                         
                         <div className="space-y-6">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <AtSign className="w-4 h-4 text-emerald-500" />
-                                    <span className="text-[10px] font-black uppercase tracking-tight">Active Signals</span>
+                                    <span className="text-[10px] font-black uppercase tracking-tight text-foreground">Active Signals</span>
                                 </div>
-                                <span className="text-xs font-black">0</span>
+                                <span className="text-xs font-black text-foreground">0</span>
                             </div>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <MessageSquare className="w-4 h-4 text-blue-500" />
-                                    <span className="text-[10px] font-black uppercase tracking-tight">Replies Detected</span>
+                                    <span className="text-[10px] font-black uppercase tracking-tight text-foreground">Replies Detected</span>
                                 </div>
-                                <span className="text-xs font-black">0</span>
+                                <span className="text-xs font-black text-foreground">0</span>
                             </div>
                         </div>
                     </Card>
 
-                    <Card className="p-6 bg-emerald-500/5 border-emerald-500/10 space-y-4">
+                    <Card className="p-6 bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/10 space-y-4 rounded-[2rem]">
                         <div className="flex items-center gap-2">
                             <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Secure Outreach</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Secure Outreach</span>
                         </div>
-                        <p className="text-[10px] font-bold text-emerald-800/60 leading-relaxed uppercase">
+                        <p className="text-[10px] font-bold text-muted-foreground leading-relaxed uppercase">
                             Outreach Agent handles all unsubscribes and data privacy requests automatically.
                         </p>
                     </Card>

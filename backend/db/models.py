@@ -60,6 +60,7 @@ class Base(DeclarativeBase):
 # ── Enums ────────────────────────────────────────────────────────────────────
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
+    MANAGER = "manager"
     RECRUITER = "recruiter"
     VIEWER = "viewer"
 
@@ -155,11 +156,34 @@ class Tenant(Base, TimestampMixin):
     logo_url = Column(String(500), nullable=True)               # Company branding
 
 
+class Team(Base, TimestampMixin):
+    __tablename__ = "teams"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    default_credit_limit = Column(Integer, default=1000)
+    shared_pool_enabled = Column(Boolean, default=False)
+
+    tenant = relationship("Tenant")
+
+class TeamApiKeys(Base, TimestampMixin):
+    __tablename__ = "team_api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"), nullable=False, index=True)
+    openai_key = Column(String(500), nullable=True)
+    serper_key = Column(String(500), nullable=True)
+    anthropic_key = Column(String(500), nullable=True)
+
 class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     full_name = Column(String(255), nullable=False)
     hashed_password = Column(String(255), nullable=False)
@@ -217,6 +241,7 @@ class Lead(Base, TimestampMixin):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    recruiter_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     company_id = Column(UUID(as_uuid=True), ForeignKey("companies.id"), index=True)
     contact_id = Column(UUID(as_uuid=True), ForeignKey("contacts.id"))
     status = Column(Enum(LeadStatus), default=LeadStatus.NEW, index=True)
@@ -292,6 +317,7 @@ class Candidate(Base, TimestampMixin):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
+    recruiter_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, index=True)
@@ -389,6 +415,7 @@ class EmailSent(Base, TimestampMixin):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("email_campaigns.id"), index=True)
+    recruiter_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     candidate_id = Column(UUID(as_uuid=True), ForeignKey("candidates.id"))
     contact_id = Column(UUID(as_uuid=True), ForeignKey("contacts.id"))
     to_email = Column(String(255), nullable=False)

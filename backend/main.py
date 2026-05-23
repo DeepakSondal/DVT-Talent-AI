@@ -44,7 +44,7 @@ if _sentry_dsn:
 
 from config import settings
 from db.models import Base, engine, get_db
-from api.routes import auth, auth_social, auth_sso, webhooks, monitoring, users, companies, leads, candidates, jobs, campaigns, analytics, agents, websocket, tenants, copilot, billing, integrations, email_sender
+from api.routes import auth, auth_social, auth_sso, webhooks, monitoring, users, companies, leads, candidates, jobs, campaigns, analytics, agents, websocket, tenants, copilot, billing, integrations, email_sender, team, plg
 from api.routes import health as health_routes
 
 log = structlog.get_logger()
@@ -123,6 +123,8 @@ app.include_router(copilot.router,    prefix=f"{PREFIX}/copilot",    tags=["Copi
 app.include_router(billing.router,        prefix=f"{PREFIX}/billing",        tags=["Billing"])
 app.include_router(integrations.router,   prefix=f"{PREFIX}/integrations",   tags=["ATS Integrations"])
 app.include_router(email_sender.router,    prefix=PREFIX,                     tags=["Email Sender"])
+app.include_router(team.router,              prefix=PREFIX,                     tags=["Team Management"])
+app.include_router(plg.router,               prefix=PREFIX,                     tags=["PLG Trojan Horse"])
 app.include_router(health_routes.router, tags=["Health"])
 
 # ── Email Open Tracking (no auth — called by email clients) ──────────────

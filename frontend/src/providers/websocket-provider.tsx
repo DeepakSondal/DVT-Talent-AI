@@ -55,6 +55,14 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          
+          // TASK 4 FIX: Payload Filtering
+          // Prevent 100 recruiters on the same server from seeing each other's agent pulses.
+          const localTenantId = localStorage.getItem("tenant_id");
+          if (data.tenant_id && localTenantId && data.tenant_id !== localTenantId) {
+             return; // Silent drop
+          }
+          
           setLastMessage(data);
 
           // Critical global event toasting

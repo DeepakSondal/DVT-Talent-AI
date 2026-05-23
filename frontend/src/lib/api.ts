@@ -46,7 +46,7 @@ api.interceptors.response.use(
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface LoginCredentials { email: string; password: string; }
-export type UserRole = "admin" | "recruiter" | "viewer";
+export type UserRole = "admin" | "manager" | "recruiter" | "viewer";
 
 export interface UserOut {
   id: string; email: string; full_name: string; role: UserRole;
@@ -275,7 +275,7 @@ export const monitoringApi = {
 // ── Agents API ────────────────────────────────────────────────────────────
 export const agentsApi = {
   trigger: (agent: string, params: any = {}) => api.post("/agents/trigger", { agent, params }).then((r) => r.data),
-  runSwarm: (config: { industry: string; location: string; mock_mode?: boolean }) =>
+  runSwarm: (config: { industry: string; location: string; mock_mode?: boolean; require_approval?: boolean }) =>
     api.post("/agents/swarm/run", config).then((r) => r.data),
   runPhase: (phase: string, mode: string, params: any) =>
     api.post("/agents/swarm/phase", params, { params: { phase, mode } }).then((r) => r.data),

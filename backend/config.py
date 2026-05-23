@@ -28,8 +28,10 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
 
-    # Database
+    # Database (PostgreSQL Connection Pooling)
     database_url: str = ""
+    db_pool_size: int = 100
+    db_max_overflow: int = 200
     database_sync_url: str = ""
     postgres_db: str = ""
     postgres_user: str = ""
@@ -46,6 +48,10 @@ class Settings(BaseSettings):
     chroma_collection_resumes: str = "dvt_resumes"
     chroma_collection_jobs: str = "dvt_jobs"
     chroma_collection_companies: str = "dvt_companies"
+
+    # Pinecone Vector Database
+    pinecone_api_key: str = ""
+    pinecone_host: str = ""
 
     # AI — Anthropic (High Intelligence)
     anthropic_api_key: str = ""

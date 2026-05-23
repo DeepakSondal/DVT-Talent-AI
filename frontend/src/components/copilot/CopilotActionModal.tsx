@@ -383,6 +383,7 @@ export function CopilotActionModal({ task: initialTask, onClose, onComplete }: C
   const [editedJd, setEditedJd] = useState("");
   const [approvedCandidates, setApprovedCandidates] = useState<Candidate[]>([]);
   const [locationOverride, setLocationOverride] = useState("United States");
+  const [enableScreening, setEnableScreening] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derive state
@@ -456,7 +457,8 @@ export function CopilotActionModal({ task: initialTask, onClose, onComplete }: C
           task_id: task.id,
           approved_candidates: approvedCandidates,
           job_context: { title: editedJd.split("\n")[0] || "Open Role", company_name: "Hiring" },
-          tenant_id
+          tenant_id,
+          enable_screening: enableScreening
         }),
         {
           loading: `Approving ${approvedCandidates.length} candidates & launching Outreach…`,
@@ -707,6 +709,18 @@ export function CopilotActionModal({ task: initialTask, onClose, onComplete }: C
 
                 {checkpoint === "sourcing_complete" && (
                   <>
+                    <div className="flex items-center gap-2 mr-4">
+                      <input 
+                        type="checkbox" 
+                        id="deepScreening" 
+                        checked={enableScreening}
+                        onChange={(e) => setEnableScreening(e.target.checked)}
+                        className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                      />
+                      <label htmlFor="deepScreening" className="text-xs font-bold text-muted-foreground flex items-center gap-1 cursor-pointer">
+                        <Sparkles className="w-3 h-3" /> Deep Screen (Uses More Tokens)
+                      </label>
+                    </div>
                     <span className="text-xs text-muted-foreground hidden sm:block">
                       {approvedCandidates.length} candidate{approvedCandidates.length !== 1 ? "s" : ""} selected
                     </span>

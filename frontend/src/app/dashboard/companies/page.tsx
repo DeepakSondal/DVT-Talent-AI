@@ -55,20 +55,20 @@ export default function CompaniesPage() {
         </div>
 
         {/* Search & Environment Controls */}
-        <Card className="p-6 bg-white/80 backdrop-blur-xl border-border/50">
+        <Card className="p-6 bg-card/80 dark:bg-slate-900/80 backdrop-blur-xl border-border shadow-sm rounded-2xl">
            <div className="flex flex-col md:flex-row gap-6">
               <div className="flex-1 relative group">
-                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/40 group-focus-within:text-primary transition-colors" />
+                 <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                  <input 
                    type="text"
                    placeholder="Search domains by name, industry, or infrastructure..."
                    value={search}
                    onChange={(e) => setSearch(e.target.value)}
-                   className="w-full pl-12 pr-4 py-4 bg-primary/5 border-transparent focus:bg-white focus:border-primary/20 rounded-2xl text-[11px] font-black uppercase tracking-widest text-foreground placeholder:text-muted-foreground/40 placeholder:lowercase placeholder:tracking-normal transition-all"
+                   className="w-full pl-12 pr-4 py-4 bg-muted dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 focus:border-primary/20 rounded-2xl text-[11px] font-black uppercase tracking-widest text-foreground placeholder:text-muted-foreground/40 placeholder:lowercase placeholder:tracking-normal transition-all"
                  />
               </div>
-              <Button variant="outline" className="h-14 px-8 bg-white gap-3 text-[10px] uppercase font-black tracking-widest">
-                 <Filter className="w-4 h-4 text-primary/40" />
+              <Button variant="outline" className="h-14 px-8 bg-card dark:bg-slate-800 border-border gap-3 text-[10px] uppercase font-black tracking-widest text-foreground hover:bg-muted">
+                 <Filter className="w-4 h-4 text-muted-foreground" />
                  Sector Synthesis
               </Button>
            </div>
@@ -79,7 +79,7 @@ export default function CompaniesPage() {
            <AnimatePresence mode="popLayout">
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                   <Card key={i} className="h-80 bg-white/40 animate-pulse border-border/20" />
+                   <Card key={i} className="h-80 bg-card/40 dark:bg-slate-900/40 animate-pulse border-border/20 rounded-2xl" />
                 ))
               ) : filtered.length > 0 ? (
                 filtered.map((company, i) => (
@@ -89,13 +89,13 @@ export default function CompaniesPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
                   >
-                    <Card className="group relative bg-white border-border/40 hover:border-primary/20 p-8 transition-all duration-700 shadow-xl shadow-primary/5 hover:shadow-2xl hover:shadow-primary/10">
+                    <Card className="group relative bg-card dark:bg-slate-900 border-border hover:border-primary/40 p-8 transition-all duration-700 shadow-xl shadow-primary/5 hover:shadow-2xl hover:shadow-primary/10 rounded-2xl">
                        {/* Performance Score */}
                        <div className="absolute top-8 right-8 flex flex-col items-end">
-                          <span className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-widest mb-1.5">IQ VELOCITY</span>
+                          <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 opacity-60">IQ VELOCITY</span>
                           <div className={cn(
                              "px-3 py-1 rounded-full border text-[10px] font-black flex items-center gap-2",
-                             company.score > 90 ? "text-emerald-600 border-emerald-500/20 bg-emerald-500/5" : "text-primary border-primary/20 bg-primary/5"
+                             company.score > 90 ? "text-emerald-600 dark:text-emerald-400 border-emerald-500/20 bg-emerald-500/5" : "text-primary border-primary/20 bg-primary/5"
                           )}>
                              <HeartPulse className="w-3.5 h-3.5" />
                              {company.score}%
@@ -103,7 +103,7 @@ export default function CompaniesPage() {
                        </div>
 
                        <div className="flex gap-6 mb-8">
-                          <div className="w-16 h-16 rounded-[1.5rem] bg-primary/5 border border-primary/5 flex items-center justify-center text-primary font-black text-2xl group-hover:bg-primary group-hover:text-white transition-all duration-700">
+                          <div className="w-16 h-16 rounded-[1.5rem] bg-muted dark:bg-slate-800 border border-border flex items-center justify-center text-primary font-black text-2xl group-hover:bg-primary group-hover:text-white transition-all duration-700">
                              {company.name[0]}
                           </div>
                           <div className="pt-2 flex-1 min-w-0">
@@ -114,21 +114,21 @@ export default function CompaniesPage() {
                           </div>
                        </div>
 
-                       <p className="text-xs font-bold text-muted-foreground/80 leading-relaxed line-clamp-2 h-8 mb-8 italic">
+                       <p className="text-xs font-bold text-muted-foreground leading-relaxed line-clamp-2 h-8 mb-8 italic">
                           {company.description || "Synthesizing market positioning data for this domain node..."}
                        </p>
 
                        <div className="space-y-6">
                           <div className="flex flex-wrap gap-2">
                              {company.tech_stack?.slice(0, 4).map(tech => (
-                                <Badge key={tech} variant="secondary" className="px-3 py-0.5 text-[8px] font-black uppercase bg-secondary/5 border-border/50 text-muted-foreground group-hover:border-primary/20 group-hover:text-primary transition-all">
+                                <Badge key={tech} variant="secondary" className="px-3 py-0.5 text-[8px] font-black uppercase bg-muted dark:bg-slate-800 border-border text-muted-foreground group-hover:border-primary/20 group-hover:text-primary transition-all">
                                    {tech}
                                 </Badge>
                              ))}
                           </div>
 
                           <div className="flex items-center justify-between pt-2">
-                             <div className="flex items-center gap-4 text-muted-foreground/60">
+                             <div className="flex items-center gap-4 text-muted-foreground">
                                 <div className="flex items-center gap-2">
                                    <Users className="w-3.5 h-3.5" />
                                    <span className="text-[9px] font-black uppercase">{company.open_roles_count} Roles</span>
@@ -145,12 +145,12 @@ export default function CompaniesPage() {
                                      href={company.website} 
                                      target="_blank" 
                                      rel="noopener noreferrer"
-                                     className="w-10 h-10 rounded-xl bg-primary/5 border border-primary/5 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all duration-500"
+                                     className="w-10 h-10 rounded-xl bg-muted dark:bg-slate-800 border border-border flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all duration-500"
                                    >
                                       <Globe className="w-4 h-4" />
                                    </a>
                                 )}
-                                <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl hover:bg-primary/5">
+                                <Button variant="ghost" size="icon" className="w-10 h-10 rounded-xl hover:bg-muted dark:hover:bg-slate-800 text-muted-foreground hover:text-foreground">
                                    <ArrowUpRight className="w-5 h-5" />
                                 </Button>
                              </div>
@@ -161,14 +161,14 @@ export default function CompaniesPage() {
                 ))
               ) : (
                 <div className="col-span-full py-40 text-center space-y-8">
-                   <div className="w-24 h-24 rounded-[3rem] bg-primary/5 flex items-center justify-center mx-auto">
-                      <Target className="w-10 h-10 text-primary/20" />
+                   <div className="w-24 h-24 rounded-[3rem] bg-muted dark:bg-slate-800 flex items-center justify-center mx-auto border border-border">
+                      <Target className="w-10 h-10 text-muted-foreground opacity-40" />
                    </div>
                    <div className="space-y-3">
                       <h3 className="text-2xl font-black text-foreground uppercase tracking-tight italic">Domain Pulse Terminated</h3>
                       <p className="text-muted-foreground font-black text-[10px] uppercase tracking-widest opacity-60">Expanding search synthesis to discover more market intel nodes.</p>
                    </div>
-                   <Button variant="outline" onClick={() => setSearch("")}>Reset Search Grid</Button>
+                   <Button variant="outline" className="text-foreground border-border" onClick={() => setSearch("")}>Reset Search Grid</Button>
                 </div>
               )}
            </AnimatePresence>

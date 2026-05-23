@@ -5,12 +5,14 @@ import { motion } from "framer-motion";
 import { 
     Search, Sparkles, Briefcase, MapPin, 
     Globe, ShieldCheck, Play, Loader2, 
-    Zap, FileText, BarChart3
+    Zap, FileText, BarChart3, ExternalLink,
+    Mail, Phone, User
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { agentsApi, copilotApi } from "@/lib/api";
 
@@ -20,27 +22,63 @@ export default function DiscoveryLab() {
         industry: "Technology",
         location: "Remote / USA",
         job_title: "",
-        skills: ""
+        skills: "",
+        work_mode: "remote",
+        target_company: ""
     });
+
+    const [marketIq, setMarketIq] = useState<any>(null);
+    const [discoveryData, setDiscoveryData] = useState<any>(null);
+    const [logs, setLogs] = useState<string[]>(["Neural link stable. Standing by for discovery parameters..."]);
 
     const handleDiscovery = async () => {
         if (!params.job_title) return toast.error("Job Title is required");
         setLoading(true);
+        setLogs(prev => [...prev, `🚀 INITIATING HYPER-SOURCING FOR: ${params.job_title}...`]);
         try {
-            await agentsApi.runPhase("discovery", "copilot", {
+            const res = await agentsApi.runPhase("discovery", "copilot", {
                 industry: params.industry,
                 location: params.location,
-                job_title: params.job_title
+                job_title: params.job_title,
+                work_mode: params.work_mode,
+                target_company: params.target_company,
+                skills: params.skills
             });
-            toast.success("Discovery Sequence Initiated", { 
-                description: "Market Intelligence scan is running in the background." 
-            });
+            
+            // If the response is immediate (synchronous fallback)
+            if (res.market_iq) setMarketIq(res.market_iq);
+            if (res.discovery) setDiscoveryData(res.discovery);
+
+            toast.success("Hyper-Sourcing Sequence Initiated");
         } catch {
             toast.error("Discovery failed to initialize");
         } finally {
             setLoading(false);
         }
     };
+
+    React.useEffect(() => {
+        const token = localStorage.getItem("dvt_token");
+        if (!token) return;
+
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+        const wsHost = API_URL.replace(/^http/, 'ws');
+        const wsUrl = `${wsHost}/ws/pipeline-events?token=${token}`;
+        
+        const ws = new WebSocket(wsUrl);
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            setLogs(prev => [...prev.slice(-10), `> ${data.message}`]);
+            
+            // If the signal contains payload data
+            if (data.payload) {
+                if (data.payload.market_iq) setMarketIq(data.payload.market_iq);
+                if (data.payload.discovery) setDiscoveryData(data.payload.discovery);
+            }
+        };
+
+        return () => ws.close();
+    }, []);
 
     return (
         <div className="space-y-10 pb-20 max-w-5xl mx-auto">
@@ -52,7 +90,7 @@ export default function DiscoveryLab() {
                     </div>
                     <div>
                         <h1 className="text-4xl font-black tracking-tight uppercase">Discovery <span className="text-blue-500 italic">Lab</span></h1>
-                        <p className="text-xs text-muted-foreground font-black uppercase tracking-widest">Phase 1: Market Intelligence & JD Synthesis</p>
+                        <p className="text-xs text-muted-foreground font-black uppercase tracking-widest">Phase 1: Hyper-Sourcing & Market Intelligence</p>
                     </div>
                 </div>
             </div>
@@ -60,127 +98,184 @@ export default function DiscoveryLab() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Configuration Panel */}
                 <div className="lg:col-span-2 space-y-6">
-                    <Card className="p-8 space-y-8 bg-white/60 backdrop-blur-xl border-border shadow-xl">
-                        <div className="flex items-center gap-2 border-b border-border pb-4">
-                            <Badge variant="primary" className="bg-blue-500/10 text-blue-600 border-blue-500/20 uppercase tracking-widest text-[9px] font-black">Copilot Mode</Badge>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Manual Parameter Control</span>
+                    <Card className="p-8 space-y-8 bg-card/60 dark:bg-slate-900/60 backdrop-blur-xl border-border shadow-xl rounded-[2rem]">
+                        <div className="flex items-center justify-between border-b border-border pb-4">
+                            <div className="flex items-center gap-2">
+                                <Badge variant="primary" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 uppercase tracking-widest text-[9px] font-black">Hyper-Sourcing</Badge>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Multi-Vector Parameter Control</span>
+                            </div>
+                            <div className="flex bg-muted dark:bg-slate-800 p-1 rounded-xl">
+                                {["remote", "onsite", "hybrid"].map((mode) => (
+                                    <button
+                                        key={mode}
+                                        onClick={() => setParams({...params, work_mode: mode})}
+                                        className={cn(
+                                            "px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
+                                            params.work_mode === mode 
+                                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" 
+                                                : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        {mode}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Target Job Title</label>
-                                    <Badge variant="outline" className="text-[8px] opacity-40 uppercase font-black">AI Required</Badge>
-                                </div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Target Job Title</label>
                                 <Input 
                                     placeholder="e.g. Senior Staff Engineer"
                                     value={params.job_title}
                                     onChange={e => setParams({...params, job_title: e.target.value})}
-                                    className="h-14 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500/10 transition-all text-sm font-bold px-6"
+                                    className="h-14 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500/10 transition-all text-sm font-bold px-6 text-foreground"
                                 />
-                                <p className="text-[9px] text-muted-foreground font-medium px-2 italic">
-                                    "Agents use this as the primary anchor for market salary and skill mapping."
-                                </p>
                             </div>
                             <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Location Preference</label>
-                                    <Badge variant="outline" className="text-[8px] opacity-40 uppercase font-black">Flexible</Badge>
-                                </div>
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Target Country / Region</label>
                                 <Input 
-                                    placeholder="e.g. New York or Remote"
+                                    placeholder="e.g. USA, India, UK, or Germany"
                                     value={params.location}
                                     onChange={e => setParams({...params, location: e.target.value})}
-                                    className="h-14 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500/10 transition-all text-sm font-bold px-6"
+                                    className="h-14 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500/10 transition-all text-sm font-bold px-6 text-foreground"
                                 />
-                                <p className="text-[9px] text-muted-foreground font-medium px-2 italic">
-                                    "Leave as 'Global' to maximize pool depth across decentralized nodes."
-                                </p>
                             </div>
                         </div>
 
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Core Industry / Keywords</label>
-                                <Badge variant="outline" className="text-[8px] opacity-40 uppercase font-black">Highly Recommended</Badge>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Target Company (Optional)</label>
+                                <Input 
+                                    placeholder="e.g. Google, Stripe, SpaceX"
+                                    value={params.target_company}
+                                    onChange={e => setParams({...params, target_company: e.target.value})}
+                                    className="h-14 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500/10 transition-all text-sm font-bold px-6 text-foreground"
+                                />
                             </div>
-                            <Input 
-                                placeholder="e.g. FinTech, Rust, High-Frequency Trading"
-                                value={params.industry}
-                                onChange={e => setParams({...params, industry: e.target.value})}
-                                className="h-14 rounded-2xl bg-slate-50 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500/10 transition-all text-sm font-bold px-6"
-                            />
-                             <p className="text-[9px] text-muted-foreground font-medium px-2 italic">
-                                    "Comma-separated skills help the agent filter out noisy profiles early."
-                                </p>
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Keywords / Core Skills</label>
+                                <Input 
+                                    placeholder="e.g. Rust, Distributed Systems, Low-Latency"
+                                    value={params.skills}
+                                    onChange={e => setParams({...params, skills: e.target.value})}
+                                    className="h-14 rounded-2xl bg-muted/50 dark:bg-slate-800/50 border-transparent focus:bg-card dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500/10 transition-all text-sm font-bold px-6 text-foreground"
+                                />
+                            </div>
                         </div>
 
-                        <div className="pt-4">
-                            <Button 
-                                onClick={handleDiscovery} 
-                                disabled={loading}
-                                className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-lg font-black uppercase shadow-xl shadow-blue-500/20"
-                            >
-                                {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-                                    <>
-                                        <Play className="w-5 h-5 mr-3 fill-current" />
-                                        Initiate Discovery Sequence
-                                    </>
-                                )}
-                            </Button>
-                        </div>
-                    </Card>
-
-                    {/* AI Insights Card */}
-                    <Card className="p-6 bg-slate-900 border-slate-800 text-white relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Sparkles className="w-16 h-16" />
-                        </div>
-                        <div className="relative z-10 space-y-3">
-                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">Agent Insight</p>
-                            <p className="text-sm font-bold leading-relaxed italic">
-                                "The market for '{params.job_title || 'Software Engineers'}' in {params.location} is currently high-demand. I recommend emphasizing 'System Design' in the JD to attract top 5% talent."
-                            </p>
-                        </div>
+                        <Button 
+                            onClick={handleDiscovery} 
+                            disabled={loading}
+                            className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-lg font-black uppercase shadow-xl shadow-blue-500/20 text-white group"
+                        >
+                            {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+                                <div className="flex items-center gap-3">
+                                    <Sparkles className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                                    Initiate Hyper-Sourcing
+                                </div>
+                            )}
+                        </Button>
                     </Card>
                 </div>
 
                 {/* Status & Deliverables Sidebar */}
                 <div className="space-y-6">
-                    <Card className="p-6 bg-muted/20 border-border border-dashed space-y-6">
-                        <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b border-border pb-4">Lab Deliverables</h3>
-                        
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-4 group cursor-pointer opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all">
-                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
+                    {marketIq && (
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                            <Card className="p-6 bg-card border-blue-500/20 shadow-xl rounded-[2rem] space-y-4">
+                                <div className="flex items-center gap-3">
                                     <BarChart3 className="w-5 h-5 text-blue-500" />
+                                    <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Market IQ</h3>
                                 </div>
-                                <div>
-                                    <p className="text-[10px] font-black uppercase tracking-tight">Market IQ Report</p>
-                                    <p className="text-[9px] text-muted-foreground">Awaiting synthesis...</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4 group cursor-pointer opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all">
-                                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                    <FileText className="w-5 h-5 text-emerald-500" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black uppercase tracking-tight">Optimized JD</p>
-                                    <p className="text-[9px] text-muted-foreground">Awaiting synthesis...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </Card>
+                                <div className="space-y-3">
+                                    <div className="p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Market Salary Band</p>
+                                            <span className="text-[10px] font-bold text-foreground bg-muted px-2 py-0.5 rounded-md">{marketIq.currency || "$"}</span>
+                                        </div>
+                                        <p className="text-lg font-black text-foreground">{marketIq.salary_range || marketIq.salary_band_local}</p>
+                                    </div>
+                                    {marketIq.active_postings?.length > 0 && (
+                                        <div className="space-y-3 pt-4 border-t border-blue-500/10">
+                                            <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Live Market Signals</p>
+                                            <div className="space-y-2 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-blue-500/20">
+                                                {marketIq.active_postings.map((job: any, idx: number) => (
+                                                    <div key={idx} className="p-3 bg-muted/30 dark:bg-slate-800/30 rounded-xl border border-border group hover:border-blue-500/30 transition-all">
+                                                        <div className="flex justify-between items-start gap-2">
+                                                            <div>
+                                                                <p className="text-[10px] font-black text-foreground leading-tight">{job.title}</p>
+                                                                <p className="text-[9px] font-bold text-muted-foreground uppercase">{job.company} • {job.location}</p>
+                                                            </div>
+                                                            <Badge variant="outline" className="text-[7px] py-0 px-1 border-blue-500/20 text-blue-500">{job.portal}</Badge>
+                                                        </div>
+                                                        <a 
+                                                            href={job.link} target="_blank" rel="noopener noreferrer"
+                                                            className="mt-2 flex items-center gap-1 text-[8px] font-black uppercase text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            View Protocol <ExternalLink className="w-2 h-2" />
+                                                        </a>
+                                                        {(job.hiring_manager_name || job.hiring_manager_email) && (
+                                                            <div className="mt-3 pt-2 border-t border-border/50 space-y-1">
+                                                                <p className="text-[8px] font-black uppercase tracking-widest text-emerald-500 mb-1">BizDev Target Acquired</p>
+                                                                {job.hiring_manager_name && (
+                                                                    <div className="flex items-center gap-1.5 text-[9px] text-foreground">
+                                                                        <User className="w-3 h-3 text-muted-foreground" /> <span className="font-bold">{job.hiring_manager_name}</span>
+                                                                    </div>
+                                                                )}
+                                                                {job.hiring_manager_email && (
+                                                                    <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+                                                                        <Mail className="w-3 h-3 text-emerald-400" /> {job.hiring_manager_email}
+                                                                    </div>
+                                                                )}
+                                                                {job.hiring_manager_phone && (
+                                                                    <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+                                                                        <Phone className="w-3 h-3 text-emerald-400" /> {job.hiring_manager_phone}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
-                    <Card className="p-6 bg-blue-500/5 border-blue-500/10 space-y-4">
-                        <div className="flex items-center gap-2">
-                            <ShieldCheck className="w-4 h-4 text-blue-500" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Compliance Check</span>
-                        </div>
-                        <p className="text-[10px] font-bold text-blue-800/60 leading-relaxed">
-                            Discovery Agent is operating within EEO guidelines and has biased-language filtering enabled.
-                        </p>
-                    </Card>
+                                    <div className="flex flex-wrap gap-2">
+                                        {marketIq.trending_skills?.map((skill: string) => (
+                                            <Badge key={skill} variant="outline" className="bg-background text-[8px] font-bold uppercase">{skill}</Badge>
+                                        ))}
+                                    </div>
+                                </div>
+                            </Card>
+                        </motion.div>
+                    )}
+
+                    {discoveryData && (
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                            <Card className="p-6 bg-card border-emerald-500/20 shadow-xl rounded-[2rem] space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <FileText className="w-5 h-5 text-emerald-500" />
+                                    <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Optimized JD</h3>
+                                </div>
+                                <div className="space-y-3">
+                                    <p className="text-[10px] font-bold text-muted-foreground leading-relaxed italic">
+                                        "{discoveryData.optimized_jd?.market_positioning}"
+                                    </p>
+                                    <Button variant="outline" className="w-full rounded-xl text-[9px] font-black uppercase tracking-widest h-10 border-emerald-500/20 hover:bg-emerald-500/5">
+                                        Review Synthesis
+                                    </Button>
+                                </div>
+                            </Card>
+                        </motion.div>
+                    )}
+
+                    {!marketIq && !discoveryData && !loading && (
+                        <Card className="p-10 border-dashed border-2 flex flex-col items-center justify-center text-center space-y-4 rounded-[2rem] opacity-40">
+                            <Zap className="w-10 h-10 text-muted-foreground" />
+                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Standing by for scan...</p>
+                        </Card>
+                    )}
                 </div>
             </div>
         </div>

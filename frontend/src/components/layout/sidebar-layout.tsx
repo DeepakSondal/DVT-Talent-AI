@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [streamOpen, setStreamOpen] = useState(false);
   const [user, setUser] = useState<UserOut | null>(null);
   const [events, setEvents] = useState<any[]>([]);
@@ -60,6 +60,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         { label: "Talent Grid", icon: Users, href: "/dashboard/candidates" },
         { label: "Analytics", icon: Zap, href: "/dashboard/monitoring" },
         { label: "Billing", icon: CreditCard, href: "/dashboard/billing" },
+        // Render Team tab ONLY for Managers
+        ...(user?.role === "manager" || user?.role === "MANAGER" ? [{ label: "Team & Vault", icon: ShieldCheck, href: "/dashboard/team" }] : []),
       ]
     }
   ];
@@ -69,6 +71,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       {/* Sidebar: Enterprise Design */}
       <motion.aside 
         animate={{ width: collapsed ? 80 : 260 }}
+        onMouseEnter={() => setCollapsed(false)}
+        onMouseLeave={() => setCollapsed(true)}
         className="relative z-30 h-full bg-card border-r border-border flex flex-col transition-all shadow-sm"
       >
         {/* Header/Logo */}
@@ -156,13 +160,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                  <LogOut className="w-5 h-5" />
                  {!collapsed && <span className="text-sm font-medium">Logout</span>}
               </button>
-              <button 
-                  onClick={() => setCollapsed(!collapsed)} 
-                  className="p-2 hover:bg-muted rounded-md text-muted-foreground transition-colors"
-                  title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              >
-                 {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-              </button>
            </div>
         </div>
       </motion.aside>
@@ -172,11 +169,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         {/* Universal Header */}
         <header className="h-16 bg-card border-b border-border flex items-center justify-between px-8 z-20">
            <div className="flex items-center gap-6">
-              {collapsed && (
-                <button onClick={() => setCollapsed(false)} className="p-2 hover:bg-muted rounded-md text-muted-foreground transition-colors">
-                  <Menu className="w-5 h-5" />
-                </button>
-              )}
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted border border-border">
                  <div className={cn(
                    "w-2 h-2 rounded-full",

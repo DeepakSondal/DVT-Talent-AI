@@ -15,11 +15,19 @@ from backend.config import settings
 
 # 2. Unified Model Routing
 # We use the existing settings to decide which model to use for Pydantic AI
-def get_pydantic_model():
+def get_pydantic_model(dynamic_api_key: str = None):
     """
-    Returns the appropriate Pydantic AI model based on app settings.
-    Priority: Groq > OpenAI > DeepSeek
+    Returns the appropriate Pydantic AI model based on app settings or dynamic keys.
+    Priority: Dynamic Key > Groq > OpenAI > DeepSeek
     """
+    if dynamic_api_key:
+        model = OpenAIModel(
+            model_name=settings.openai_model,
+            api_key=dynamic_api_key
+        )
+        model.provider = "openai"
+        return model
+
     if settings.groq_api_key:
         model = OpenAIModel(
             model_name=settings.groq_model,

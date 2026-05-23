@@ -103,19 +103,19 @@ export default function DashboardHome() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.1 }}
                     >
-                        <Card className="p-8 bg-white/60 backdrop-blur-xl border-border shadow-xl relative overflow-hidden group hover:shadow-2xl transition-all h-full">
+                        <Card className="p-8 bg-card/60 dark:bg-slate-900/60 backdrop-blur-xl border-border shadow-xl relative overflow-hidden group hover:shadow-2xl transition-all h-full rounded-[2rem]">
                             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                                 <s.icon className="w-12 h-12" />
                             </div>
                             <div className="flex justify-between items-start mb-6">
-                                <div className={cn("p-3 rounded-2xl bg-slate-50", s.color)}>
+                                <div className={cn("p-3 rounded-2xl bg-muted dark:bg-slate-800", s.color)}>
                                     <s.icon className="w-5 h-5" />
                                 </div>
                                 <Badge variant="success" className="text-[9px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{s.trend}</Badge>
                             </div>
                             <div>
                                 <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{s.label}</p>
-                                <p className="text-4xl font-black mt-1 tracking-tight">{s.val}</p>
+                                <p className="text-4xl font-black mt-1 tracking-tight text-foreground">{s.val}</p>
                             </div>
                         </Card>
                     </motion.div>
@@ -139,7 +139,7 @@ export default function DashboardHome() {
                             whileHover={{ y: -8 }}
                         >
                             <Link href={lab.href} className="block h-full">
-                                <Card className="p-8 h-full bg-white border-border hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all cursor-pointer group flex flex-col justify-between rounded-[2rem]">
+                                <Card className="p-8 h-full bg-card dark:bg-slate-900 border-border hover:border-blue-500/50 hover:shadow-2xl hover:shadow-blue-500/10 transition-all cursor-pointer group flex flex-col justify-between rounded-[2rem]">
                                     <div className="space-y-6">
                                         <div className={cn(
                                             "w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg",
@@ -149,11 +149,11 @@ export default function DashboardHome() {
                                             <lab.icon className="w-7 h-7" />
                                         </div>
                                         <div className="space-y-2">
-                                            <h3 className="text-2xl font-black uppercase tracking-tight">{lab.title}</h3>
+                                            <h3 className="text-2xl font-black uppercase tracking-tight text-foreground">{lab.title}</h3>
                                             <p className="text-sm text-muted-foreground font-medium leading-relaxed">{lab.desc}</p>
                                         </div>
                                     </div>
-                                    <div className="mt-10 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-600 opacity-0 group-hover:opacity-100 transition-all translate-x-[-10px] group-hover:translate-x-0">
+                                    <div className="mt-10 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-all translate-x-[-10px] group-hover:translate-x-0">
                                         Enter Protocol <ArrowRight className="w-3 h-3" />
                                     </div>
                                 </Card>
@@ -203,16 +203,16 @@ export default function DashboardHome() {
                     animate={{ opacity: 1, x: 0 }}
                     className="lg:col-span-5"
                 >
-                    <Card className="p-10 bg-white border-border shadow-xl rounded-[2.5rem] h-full flex flex-col justify-between">
+                    <Card className="p-10 bg-card border-border shadow-xl rounded-[2.5rem] h-full flex flex-col justify-between">
                         <div className="space-y-8">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600">
+                                    <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-600 dark:text-blue-400">
                                         <BarChart3 className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-800">Efficiency Index</h3>
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-foreground">Efficiency Index</h3>
                                 </div>
-                                <Badge variant="outline" className="text-[9px] uppercase tracking-widest font-black text-blue-600 bg-blue-50 border-blue-100">Live Telemetry</Badge>
+                                <Badge variant="outline" className="text-[9px] uppercase tracking-widest font-black text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/10">Live Telemetry</Badge>
                             </div>
                             
                             <div className="space-y-8">
@@ -223,10 +223,10 @@ export default function DashboardHome() {
                                 ].map((item, i) => (
                                     <div key={i} className="space-y-3">
                                         <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-                                            <span className="text-slate-500">{item.label}</span>
-                                            <span className="text-slate-900">{item.val}%</span>
+                                            <span className="text-muted-foreground">{item.label}</span>
+                                            <span className="text-foreground">{item.val}%</span>
                                         </div>
-                                        <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div className="h-2 w-full bg-muted dark:bg-slate-800 rounded-full overflow-hidden">
                                             <motion.div 
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${item.val}%` }}
@@ -239,15 +239,15 @@ export default function DashboardHome() {
                             </div>
                         </div>
 
-                        <div className="pt-8 border-t border-slate-50">
+                        <div className="pt-8 border-t border-border">
                             <div className="flex items-center gap-4">
                                 <div className="flex -space-x-3">
                                     {[1, 2, 3].map(i => (
-                                        <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200" />
+                                        <div key={i} className="w-8 h-8 rounded-full border-2 border-background bg-muted dark:bg-slate-800" />
                                     ))}
-                                    <div className="w-8 h-8 rounded-full border-2 border-white bg-blue-600 flex items-center justify-center text-[10px] font-black text-white">+8</div>
+                                    <div className="w-8 h-8 rounded-full border-2 border-background bg-blue-600 flex items-center justify-center text-[10px] font-black text-white">+8</div>
                                 </div>
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Active Team Members Online</p>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">Active Team Members Online</p>
                             </div>
                         </div>
                     </Card>
