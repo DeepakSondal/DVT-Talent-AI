@@ -33,6 +33,7 @@ services:
       dockerfile: Dockerfile
       target: api
     container_name: dvt_api
+    env_file: ./backend/.env
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     restart: always
     environment:
@@ -67,6 +68,7 @@ services:
       dockerfile: Dockerfile
       target: worker
     container_name: dvt_worker
+    env_file: ./backend/.env
     command: celery -A workers.celery_app worker --loglevel=info --concurrency=4
     restart: always
     environment:
@@ -99,6 +101,7 @@ services:
       dockerfile: Dockerfile
       target: scheduler
     container_name: dvt_scheduler
+    env_file: ./backend/.env
     command: celery -A workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
     restart: always
     environment:

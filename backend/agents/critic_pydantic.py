@@ -1,17 +1,19 @@
 """
 DVT Talent AI — Critic Agent (Pydantic AI Version)
 """
-from typing import List
-from pydantic import BaseModel, Field
+from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
 from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
 from backend.agents.swarm_memory import query_memory_tree
 
 class AuditResult(BaseModel):
-    passed: bool
-    issues: List[str]
-    hallucination_score: int = Field(ge=0, le=100)
-    recommendation: str
+    model_config = ConfigDict(extra="allow")
+    passed: bool = Field(default=True)
+    issues: List[str] = Field(default_factory=list)
+    hallucination_score: int = Field(default=0, ge=0, le=100)
+    recommendation: str = Field(default="Approved")
+    feedback: Optional[str] = None
 
 critic_agent = Agent(
     get_pydantic_model(),
@@ -21,9 +23,10 @@ critic_agent = Agent(
     system_prompt=(
         "You are the Swarm's Logic Auditor and Quality Control Firewall. "
         "Your mission is to evaluate sourced candidates with zero-trust. "
-        "1. Check the Sourcing Agent's claims against raw data for hallucinations. "
-        "2. Ensure the candidate strictly meets the Optimized JD. "
-        "3. YOU MUST USE the 'consult_swarm_memory' tool to actively query the Negative Vector Database for this specific candidate to see if they violate any historical human rejection rules."
+        "1. Check the candidate details against requirement expectations. "
+        "2. Ensure the candidate strictly meets the JD. "
+        "3. You can use consult_swarm_memory to check historical rejection rules. "
+        "4. YOU MUST output your result by invoking the final_result tool with the AuditResult arguments."
     )
 )
 

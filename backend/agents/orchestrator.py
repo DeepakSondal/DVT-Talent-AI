@@ -196,8 +196,7 @@ class AgentOrchestrator:
                 audit_res = await critic_agent.run(
                     f"Audit these trimmed candidates: {sanitized_candidates}", 
                     deps=deps, 
-                    model=dynamic_model,
-                    model_settings={"max_tokens": 150} # STRATEGY 4: Hard Cap
+                    model=dynamic_model
                 )
                 broadcast_signal("Agent 'critic' audit complete: Trust verified.", "agent_success", self.tenant_id)
                 

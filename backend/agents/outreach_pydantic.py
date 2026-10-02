@@ -3,20 +3,23 @@ DVT Talent AI — Outreach Agent (Pydantic AI Version)
 Handles hyper-personalized communication across LinkedIn and Email.
 """
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
 from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
 
 class OutreachDraft(BaseModel):
+    model_config = ConfigDict(extra="allow")
     subject: str
     body: str
-    platform: str = Field(description="LinkedIn, Email, or SMS")
-    personalization_score: int = Field(ge=0, le=100)
+    platform: str = Field(default="Email", description="LinkedIn, Email, or SMS")
+    personalization_score: int = Field(default=90, ge=0, le=100)
+    candidate_email: Optional[str] = None
 
 class OutreachSynthesis(BaseModel):
-    status: str = Field(description="drafted, pending_approval, or sent")
+    model_config = ConfigDict(extra="allow")
+    status: str = Field(default="drafted", description="drafted, pending_approval, or sent")
     drafts: List[OutreachDraft]
-    next_follow_up_days: int
+    next_follow_up_days: int = Field(default=3)
 
 outreach_agent = Agent(
     get_pydantic_model(),
@@ -27,7 +30,7 @@ outreach_agent = Agent(
         "You are an Elite Outreach Agent for DVT Talent AI. "
         "Your goal is to draft hyper-personalized outreach sequences that don't sound like AI. "
         "Use candidate details to build rapport and explain 'Why them' and 'Why now'. "
-        "CRITICAL: Once the drafts are finalized, you MUST push them to the Smartlead webhook to ensure safe multi-domain rotation. Do not attempt direct SMTP sends."
+        "YOU MUST output your result by invoking the final_result tool with the OutreachSynthesis arguments."
     ),
 )
 

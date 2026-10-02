@@ -2,18 +2,24 @@
 DVT Talent AI — Screening Agent (Pydantic AI Version)
 Conducts initial technical and cultural screening assessments.
 """
-from typing import List
-from pydantic import BaseModel, Field
+from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
 from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
 from backend.agents.tools.voice_tools import trigger_vapi_outbound_call
 
 class ScreeningQuestion(BaseModel):
+    model_config = ConfigDict(extra="allow")
     question: str
-    expected_answer_signals: List[str]
-    competency: str
+    competency: str = Field(default="Technical Ability")
+    expected_answer_signals: List[str] = Field(default_factory=list)
+    category: Optional[str] = None
+    difficulty: Optional[str] = None
+    focus: Optional[List[str]] = None
+    type: Optional[str] = None
 
 class ScreeningPlan(BaseModel):
+    model_config = ConfigDict(extra="allow")
     candidate_name: str
     questions: List[ScreeningQuestion]
     estimated_duration_minutes: int

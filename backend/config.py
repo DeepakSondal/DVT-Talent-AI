@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # AI — Groq (High Speed)
     groq_api_key: str = ""
     groq_api_base: str = "https://api.groq.com/openai/v1"
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-120b"
 
     # Search
     serper_api_key: str = ""
