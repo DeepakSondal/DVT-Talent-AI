@@ -3,9 +3,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import List, Optional, Dict, Any
 import uuid
+from pydantic import BaseModel
 
-from backend.db.models import get_db, User, UserRole, Team, Candidate, EmailSent
+from backend.db.models import get_db, User, UserRole, Team, Candidate, EmailSent, TeamApiKeys
 from backend.api.routes.auth import get_current_user # Assuming a dependency exists
+from services.security_service import encrypt_pii, decrypt_pii
 
 router = APIRouter(prefix="/api/v1/team", tags=["team"])
 
@@ -79,3 +81,84 @@ async def get_team_candidates(recruiter_id: Optional[str] = None, db: AsyncSessi
     result = await db.execute(stmt)
     cands = result.scalars().all()
     return {"candidates": [{"id": c.id, "name": f"{c.first_name} {c.last_name}"} for c in cands]}
+
+# ── Team API Keys Configuration (BYOK Encrypted at Rest) ─────────────────────
+
+class TeamApiKeysConfig(BaseModel):
+    openai_key: Optional[str] = None
+    serper_key: Optional[str] = None
+    anthropic_key: Optional[str] = None
+
+class TeamApiKeysOut(BaseModel):
+    openai_key_hint: Optional[str] = None
+    serper_key_hint: Optional[str] = None
+    anthropic_key_hint: Optional[str] = None
+    configured: bool
+
+def _mask_api_key(encrypted: Optional[str]) -> Optional[str]:
+    if not encrypted:
+        return None
+    try:
+        plain = decrypt_pii(encrypted)
+        if len(plain) > 8:
+            return f"{plain[:4]}{'•' * (len(plain) - 8)}{plain[-4:]}"
+        return "••••"
+    except Exception:
+        return "••••"
+
+@router.get("/keys", response_model=TeamApiKeysOut)
+async def get_team_api_keys(
+    db: AsyncSession = Depends(get_db),
+    manager: User = Depends(require_manager)
+):
+    """Fetch masked team API keys."""
+    # Find team
+    stmt = select(Team).where(Team.manager_id == manager.id)
+    result = await db.execute(stmt)
+    team = result.scalar_one_or_none()
+    if not team:
+        raise HTTPException(status_code=404, detail="No team found for this manager")
+        
+    stmt_keys = select(TeamApiKeys).where(TeamApiKeys.team_id == team.id)
+    res_keys = await db.execute(stmt_keys)
+    keys = res_keys.scalar_one_or_none()
+    
+    configured = bool(keys and (keys.openai_key or keys.serper_key or keys.anthropic_key))
+    return TeamApiKeysOut(
+        openai_key_hint=_mask_api_key(keys.openai_key) if keys else None,
+        serper_key_hint=_mask_api_key(keys.serper_key) if keys else None,
+        anthropic_key_hint=_mask_api_key(keys.anthropic_key) if keys else None,
+        configured=configured
+    )
+
+@router.post("/keys")
+async def save_team_api_keys(
+    payload: TeamApiKeysConfig,
+    db: AsyncSession = Depends(get_db),
+    manager: User = Depends(require_manager)
+):
+    """Save encrypted team API keys."""
+    stmt = select(Team).where(Team.manager_id == manager.id)
+    result = await db.execute(stmt)
+    team = result.scalar_one_or_none()
+    if not team:
+        raise HTTPException(status_code=404, detail="No team found for this manager")
+        
+    stmt_keys = select(TeamApiKeys).where(TeamApiKeys.team_id == team.id)
+    res_keys = await db.execute(stmt_keys)
+    keys = res_keys.scalar_one_or_none()
+    
+    if not keys:
+        keys = TeamApiKeys(team_id=team.id)
+        db.add(keys)
+        
+    if payload.openai_key is not None:
+        keys.openai_key = encrypt_pii(payload.openai_key) if payload.openai_key.strip() else None
+    if payload.serper_key is not None:
+        keys.serper_key = encrypt_pii(payload.serper_key) if payload.serper_key.strip() else None
+    if payload.anthropic_key is not None:
+        keys.anthropic_key = encrypt_pii(payload.anthropic_key) if payload.anthropic_key.strip() else None
+        
+    await db.commit()
+    return {"status": "saved", "message": "Team API keys saved and encrypted successfully"}
+

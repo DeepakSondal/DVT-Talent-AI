@@ -35,7 +35,7 @@ market_iq_agent = Agent(
     get_pydantic_model(),
     retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
-    result_type=MarketIQReport,
+    output_type=MarketIQReport,
     system_prompt=(
         "You are a Senior Global Market Intelligence Analyst and Elite BizDev Researcher. "
         "Your mission is to provide high-fidelity hiring intelligence AND extract client acquisition targets. "

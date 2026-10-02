@@ -1,5 +1,4 @@
-// DVT Talent AI — Billing API client additions
-// Add these to your existing api.ts exports
+import api from "./api";
 
 export const billingApi = {
   getPlans: () => api.get("/billing/plans").then(r => r.data),

@@ -69,7 +69,7 @@ def run_agent_task(self, agent_name: str, params: Dict[str, Any] = None, tenant_
                 deps = AgentDeps(http_client=client, tenant_id=tenant_id)
                 # Run the Pydantic AI agent
                 result = await agent.run(f"Process task with params: {json.dumps(params)}", deps=deps)
-                return result.data.model_dump()
+                return result.output.model_dump()
 
         import httpx
         result = asyncio.run(_run())
@@ -119,17 +119,21 @@ def analyze_resume_task(
     """Parse and analyze a resume using SourcingAgent"""
     log.info("celery_task_started", task="analyze_resume", resume_id=resume_id)
     try:
-        agent = SourcingAgent()
         file_bytes = base64.b64decode(file_content_b64)
         
         # In a real impl, we'd use a PDF/Docx parser here. 
         # For now, passing placeholder or extracted text if available.
         raw_text = file_bytes.decode("utf-8", errors="ignore")
         
-        result = asyncio.run(agent.run_async(
-            job_description=job_description or "Software Engineer",
-            limit=1
-        ))
+        async def _run():
+            import httpx
+            async with httpx.AsyncClient() as client:
+                deps = AgentDeps(http_client=client, tenant_id="default")
+                prompt = f"Analyze this resume against the JD: {job_description or 'Software Engineer'}. Resume text: {raw_text}"
+                res = await sourcing_agent.run(prompt, deps=deps)
+                return res.output.model_dump()
+                
+        result = asyncio.run(_run())
         
         # Persist results
         _update_resume_in_db(resume_id, result, raw_text)
@@ -161,15 +165,24 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
                 ).fetchone()
                 if jd_row: jd_text = jd_row[0]
 
-        agent = SourcingAgent()
-        result = asyncio.run(agent.run_async(job_description=jd_text, limit=1))
+        async def _run():
+            import httpx
+            async with httpx.AsyncClient() as client:
+                deps = AgentDeps(http_client=client, tenant_id="default")
+                prompt = f"Score this candidate against JD: {jd_text}. Candidate info: {row[0]}"
+                res = await sourcing_agent.run(prompt, deps=deps)
+                return res.output.model_dump()
+
+        result = asyncio.run(_run())
         
         with engine.connect() as conn:
+            candidates = result.get("candidates", [])
+            cand_data = candidates[0] if candidates else {}
             conn.execute(
                 text("UPDATE candidates SET score = :score, title = :title, ai_summary = :summary WHERE id = :cid"),
-                {"score": result.get("candidates", [{}])[0].get("score", 0), 
+                {"score": cand_data.get("match_score", 0), 
                  "title": jd_text,
-                 "summary": result.get("candidates", [{}])[0].get("analysis", ""), 
+                 "summary": cand_data.get("ai_reasoning", {}).get("alignment", ""), 
                  "cid": candidate_id}
             )
             conn.commit()

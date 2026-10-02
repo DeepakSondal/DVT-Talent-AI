@@ -17,7 +17,7 @@ critic_agent = Agent(
     get_pydantic_model(),
     retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
-    result_type=AuditResult,
+    output_type=AuditResult,
     system_prompt=(
         "You are the Swarm's Logic Auditor and Quality Control Firewall. "
         "Your mission is to evaluate sourced candidates with zero-trust. "

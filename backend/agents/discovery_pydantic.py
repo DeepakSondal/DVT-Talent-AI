@@ -45,7 +45,7 @@ discovery_agent = Agent(
     get_pydantic_model(),
     retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
-    result_type=DiscoveryResult,
+    output_type=DiscoveryResult,
     system_prompt=(
         "You are the DVT Discovery Agent, an elite technical recruiter and JD Analyst. "
         "Your mission is to analyze real-world job descriptions scraped by the Market IQ Agent. "
@@ -66,7 +66,7 @@ async def search_market_signals(ctx: RunContext[AgentDeps], query: str) -> str:
     Example: 'recent Series A funding tech startups New York'
     """
     if not ctx.deps.serper_key:
-        return "ERROR: Serper API key missing. Use internal knowledge or mock data."
+        raise RuntimeError("ERROR: Serper API key missing. Please configure it in Settings.")
     
     url = "https://google.serper.dev/search"
     headers = {"X-API-KEY": ctx.deps.serper_key, "Content-Type": "application/json"}
@@ -74,9 +74,17 @@ async def search_market_signals(ctx: RunContext[AgentDeps], query: str) -> str:
     
     try:
         resp = await ctx.deps.http_client.post(url, headers=headers, json=data)
-        return resp.text
+        resp.raise_for_status()
+        resp_data = resp.json()
+        
+        results = []
+        for res in resp_data.get('organic', [])[:5]:
+            results.append(f"Title: {res.get('title')}\nSnippet: {res.get('snippet')}")
+            
+        return "\n\n".join(results) if results else "No significant market signals found."
     except Exception as e:
-        return f"Market Signal Search Failed: {str(e)}"
+        log.error("serper_api_error", error=str(e))
+        raise RuntimeError(f"Market Signal Search Failed: {str(e)}")
 
 @discovery_agent.tool
 async def research_company_deep_dive(ctx: RunContext[AgentDeps], research_goal: str) -> str:

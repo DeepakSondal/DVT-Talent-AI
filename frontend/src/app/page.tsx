@@ -34,7 +34,7 @@ const Nav = () => (
                 <Link href="/auth/login">
                     <Button variant="ghost" className="text-white/60 hover:text-white font-black uppercase text-[10px] tracking-widest">Login</Button>
                 </Link>
-                <Link href="/auth/signup">
+                <Link href="/auth/register">
                     <Button className="bg-blue-600 hover:bg-blue-700 text-white font-black uppercase text-[10px] tracking-widest h-11 px-6 rounded-xl shadow-xl shadow-blue-600/20">Initiate Pilot</Button>
                 </Link>
             </div>
@@ -108,7 +108,7 @@ export default function LandingPage() {
                         transition={{ delay: 0.3 }}
                         className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-6"
                     >
-                        <Link href="/auth/signup">
+                        <Link href="/auth/register">
                             <Button size="lg" className="h-16 px-10 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black uppercase tracking-widest text-xs shadow-2xl shadow-blue-500/20 group">
                                 Initiate Swarm Sequence <ArrowRight className="w-4 h-4 ml-3 group-hover:translate-x-1 transition-transform" />
                             </Button>
@@ -297,7 +297,7 @@ export default function LandingPage() {
                             Join 40+ elite engineering teams using DVT Talent to reclaim thousands of hours.
                         </p>
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
-                            <Link href="/auth/signup">
+                            <Link href="/auth/register">
                                 <Button size="lg" className="h-16 px-12 rounded-2xl bg-white text-blue-600 hover:bg-slate-100 font-black uppercase tracking-widest text-xs shadow-xl">Start Free Pilot</Button>
                             </Link>
                             <Button variant="ghost" className="text-white hover:bg-white/10 font-black uppercase tracking-widest text-xs">Request Technical Demo</Button>

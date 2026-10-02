@@ -9,7 +9,8 @@ import structlog
 import httpx
 
 from backend.config import settings
-from backend.agents.pydantic_config import AgentDeps
+from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
+
 from backend.agents.discovery_pydantic import discovery_agent
 from backend.agents.sourcing_pydantic import sourcing_agent
 from backend.agents.outreach_pydantic import outreach_agent
@@ -40,6 +41,49 @@ class AgentOrchestrator:
         self.tenant_id = tenant_id
         self.job_id = job_id
         self.context = {"tenant_id": tenant_id, "job_id": job_id}
+
+    async def _resolve_tenant_keys(self) -> Dict[str, Optional[str]]:
+        """Query the database to load and decrypt Team API Keys for this tenant."""
+        from sqlalchemy import select
+        from backend.db.models import AsyncSessionLocal, Team, TeamApiKeys
+        from services.security_service import decrypt_pii
+        
+        keys_dict = {
+            "openai_key": None,
+            "serper_key": None,
+            "anthropic_key": None,
+        }
+        
+        if not self.tenant_id or self.tenant_id == "default":
+            return keys_dict
+            
+        try:
+            async with AsyncSessionLocal() as session:
+                # Find a team belonging to this tenant
+                import uuid
+                tenant_uuid = uuid.UUID(self.tenant_id) if isinstance(self.tenant_id, str) else self.tenant_id
+                
+                stmt_team = select(Team).where(Team.tenant_id == tenant_uuid)
+                res_team = await session.execute(stmt_team)
+                team = res_team.scalar_one_or_none()
+                
+                if team:
+                    stmt_keys = select(TeamApiKeys).where(TeamApiKeys.team_id == team.id)
+                    res_keys = await session.execute(stmt_keys)
+                    keys = res_keys.scalar_one_or_none()
+                    
+                    if keys:
+                        if keys.openai_key:
+                            keys_dict["openai_key"] = decrypt_pii(keys.openai_key)
+                        if keys.serper_key:
+                            keys_dict["serper_key"] = decrypt_pii(keys.serper_key)
+                        if keys.anthropic_key:
+                            keys_dict["anthropic_key"] = decrypt_pii(keys.anthropic_key)
+        except Exception as e:
+            log.warning("failed_to_resolve_tenant_keys", error=str(e), tenant_id=self.tenant_id)
+            
+        return keys_dict
+
 
     async def run_full_swarm(
         self,
@@ -72,13 +116,24 @@ class AgentOrchestrator:
         results = {"stages": {}}
 
         async with httpx.AsyncClient() as client:
-            deps = AgentDeps(http_client=client, tenant_id=self.tenant_id or "default")
+            # Load and decrypt tenant keys
+            t_keys = await self._resolve_tenant_keys()
+            
+            deps = AgentDeps(
+                http_client=client, 
+                tenant_id=self.tenant_id or "default",
+                serper_key=t_keys.get("serper_key") or settings.serper_api_key,
+                openai_key=t_keys.get("openai_key"),
+                anthropic_key=t_keys.get("anthropic_key")
+            )
+            
+            dynamic_model = get_pydantic_model(deps=deps)
             
             try:
                 # 1. Market IQ
                 broadcast_signal("Agent 'market_iq' initiating market analysis...", "agent_start", self.tenant_id)
                 market_iq_res = await market_iq_agent.run(
-                    f"Analyze {industry} market in {location}", deps=deps, model_settings={"max_tokens": 250}
+                    f"Analyze {industry} market in {location}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 250}
                 )
                 broadcast_signal("Agent 'market_iq' completed analysis.", "agent_success", self.tenant_id)
                 results["stages"]["market_iq"] = market_iq_res.data.model_dump()
@@ -86,7 +141,7 @@ class AgentOrchestrator:
                 # 2. Discovery
                 broadcast_signal("Agent 'discovery' extracting JD constraints...", "agent_start", self.tenant_id)
                 discovery_res = await discovery_agent.run(
-                    f"Identify leads and extract JD for {industry} in {location}", deps=deps
+                    f"Identify leads and extract JD for {industry} in {location}", deps=deps, model=dynamic_model
                 )
                 broadcast_signal("Agent 'discovery' completed JD extraction.", "agent_success", self.tenant_id)
                 
@@ -101,7 +156,7 @@ class AgentOrchestrator:
                     extracted_jd_data = discovery_res.data.optimized_jd.model_dump_json()
 
                 sourcing_res = await sourcing_agent.run(
-                    f"Find candidates for {industry} roles in {location} matching constraints: {extracted_jd_data}", deps=deps
+                    f"Find candidates for {industry} roles in {location} matching constraints: {extracted_jd_data}", deps=deps, model=dynamic_model
                 )
                 
                 # THE FALLBACK PROTOCOL
@@ -110,7 +165,7 @@ class AgentOrchestrator:
                     
                     # Bounce back to Discovery to loosen constraints
                     discovery_res = await discovery_agent.run(
-                        f"Extract JD for {industry} in {location}. PREVIOUS EXTRACTION YIELDED NO CANDIDATES. LOOSEN THE 'MUST-HAVE' CONSTRAINTS IMMEDIATELY.", deps=deps
+                        f"Extract JD for {industry} in {location}. PREVIOUS EXTRACTION YIELDED NO CANDIDATES. LOOSEN THE 'MUST-HAVE' CONSTRAINTS IMMEDIATELY.", deps=deps, model=dynamic_model
                     )
                     
                     if hasattr(discovery_res.data, 'extracted_jd') and discovery_res.data.extracted_jd:
@@ -120,7 +175,7 @@ class AgentOrchestrator:
                         
                     broadcast_signal("Agent 'sourcing' re-initiating hunt with loosened market constraints...", "agent_start", self.tenant_id)
                     sourcing_res = await sourcing_agent.run(
-                        f"Find candidates for {industry} roles in {location} matching loosened constraints: {extracted_jd_data}", deps=deps
+                        f"Find candidates for {industry} roles in {location} matching loosened constraints: {extracted_jd_data}", deps=deps, model=dynamic_model
                     )
 
                 broadcast_signal("Agent 'sourcing' completed node discovery.", "agent_success", self.tenant_id)
@@ -141,6 +196,7 @@ class AgentOrchestrator:
                 audit_res = await critic_agent.run(
                     f"Audit these trimmed candidates: {sanitized_candidates}", 
                     deps=deps, 
+                    model=dynamic_model,
                     model_settings={"max_tokens": 150} # STRATEGY 4: Hard Cap
                 )
                 broadcast_signal("Agent 'critic' audit complete: Trust verified.", "agent_success", self.tenant_id)
@@ -159,6 +215,7 @@ class AgentOrchestrator:
                 out_res = await outreach_agent.run(
                     f"Draft personalized outreach for these candidates: {candidate_names} for role {discovery_res.data.job_description}",
                     deps=deps,
+                    model=dynamic_model,
                     model_settings={"max_tokens": 800} # STRATEGY 4: Hard Cap
                 )
                 
@@ -167,7 +224,7 @@ class AgentOrchestrator:
                 
                 # 5. Analytics
                 broadcast_signal("Agent 'analytics' generating run report...", "agent_start", self.tenant_id)
-                analytics_res = await analytics_agent.run("Generate report for this run", deps=deps)
+                analytics_res = await analytics_agent.run("Generate report for this run", deps=deps, model=dynamic_model)
                 broadcast_signal("Agent 'analytics' report generated.", "agent_success", self.tenant_id)
                 results["stages"]["analytics"] = analytics_res.data.model_dump()
                 
@@ -177,7 +234,8 @@ class AgentOrchestrator:
                     for cand in candidates[:3]:
                         scr_res = await screening_agent.run(
                             f"Screen {cand.full_name} for {discovery_res.data.job_description}",
-                            deps=deps
+                            deps=deps,
+                            model=dynamic_model
                         )
                         screening_results.append(scr_res.data.model_dump())
                     results["stages"]["screening"] = screening_results
@@ -189,13 +247,22 @@ class AgentOrchestrator:
         results["duration_seconds"] = (datetime.utcnow() - pipeline_start).total_seconds()
         return results
 
+
     # ── SWARM COMMAND CENTER: 3-Phase Execution ──────────────────────────────
     async def run_swarm_phase(self, phase: str, mode: str = "copilot", **kwargs) -> Dict[str, Any]:
         """Unified entry point for the 3-phase Swarm Command Center."""
         log.info("swarm_phase_initiated", phase=phase, mode=mode, tenant_id=self.tenant_id)
         
         async with httpx.AsyncClient() as client:
-            deps = AgentDeps(http_client=client, tenant_id=self.tenant_id or "default")
+            t_keys = await self._resolve_tenant_keys()
+            
+            deps = AgentDeps(
+                http_client=client, 
+                tenant_id=self.tenant_id or "default",
+                serper_key=t_keys.get("serper_key") or settings.serper_api_key,
+                openai_key=t_keys.get("openai_key"),
+                anthropic_key=t_keys.get("anthropic_key")
+            )
             
             if phase == "discovery":
                 return await self.run_discovery_phase(
@@ -228,6 +295,7 @@ class AgentOrchestrator:
     ) -> Dict[str, Any]:
         """Phase 1: Leads & Discovery with Hyper-Sourcing."""
         results = {}
+        dynamic_model = get_pydantic_model(deps=deps)
         
         # Build a rich context string
         context_parts = []
@@ -243,13 +311,13 @@ class AgentOrchestrator:
         broadcast_signal(f"Discovery Agent scanning {full_context}...", "agent_start", self.tenant_id)
         
         # 1. Market IQ with rich context
-        res_iq = await market_iq_agent.run(f"Analyze market trends {full_context}", deps=deps)
+        res_iq = await market_iq_agent.run(f"Analyze market trends {full_context}", deps=deps, model=dynamic_model)
         results["market_iq"] = res_iq.data.model_dump()
         broadcast_signal("Market IQ Analysis Complete: Strategic vectors identified.", "agent_info", self.tenant_id, payload={"market_iq": results["market_iq"]})
         
         # 2. Discovery with rich context
         broadcast_signal(f"Synthesizing Hyper-Sourcing results {full_context}...", "agent_start", self.tenant_id)
-        res_disc = await discovery_agent.run(f"Identify leads and optimize JD {full_context}", deps=deps)
+        res_disc = await discovery_agent.run(f"Identify leads and optimize JD {full_context}", deps=deps, model=dynamic_model)
         results["discovery"] = res_disc.data.model_dump()
         broadcast_signal("Hyper-Sourcing Complete: Market positioning and target nodes synthesized.", "agent_success", self.tenant_id, payload={"discovery": results["discovery"]})
         
@@ -265,11 +333,12 @@ class AgentOrchestrator:
 
     async def run_sourcing_phase(self, deps: AgentDeps, job_description: str, location: str, mode: str = "copilot") -> Dict[str, Any]:
         """Phase 2: Talent Sourcing."""
-        res = await sourcing_agent.run(f"Find candidates for: {job_description}", deps=deps)
+        dynamic_model = get_pydantic_model(deps=deps)
+        res = await sourcing_agent.run(f"Find candidates for: {job_description}", deps=deps, model=dynamic_model)
         sourcing_res = res.data.model_dump()
         
         # Audit
-        audit = await critic_agent.run(f"Audit: {res.data.model_dump_json()}", deps=deps)
+        audit = await critic_agent.run(f"Audit: {res.data.model_dump_json()}", deps=deps, model=dynamic_model)
         sourcing_res["audit"] = audit.data.model_dump()
         
         if mode == "copilot":
@@ -284,6 +353,7 @@ class AgentOrchestrator:
     async def run_outreach_phase(self, deps: AgentDeps, approved_candidates: List[Dict[str, Any]], job: Dict[str, Any], mode: str = "copilot", enable_screening: bool = False) -> List[Dict[str, Any]]:
         """Phase 3: Signal Outreach with Batching and Opt-In Screening."""
         results = []
+        dynamic_model = get_pydantic_model(deps=deps)
         
         # ISSUE 1 FIX: Deliverability Collapse (Spam Blacklist Prevention)
         # Enforce a hard volume limit to protect the agency's primary email domain.
@@ -297,7 +367,7 @@ class AgentOrchestrator:
         candidate_names = [c.get("full_name") for c in approved_candidates]
         
         # Draft all outreach in one shot
-        out = await outreach_agent.run(f"Draft outreach for {candidate_names} for role {job.get('title')}", deps=deps, model_settings={"max_tokens": 800})
+        out = await outreach_agent.run(f"Draft outreach for {candidate_names} for role {job.get('title')}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 800})
         outreach_data = out.data.model_dump()
         
         for cand in approved_candidates:
@@ -305,9 +375,10 @@ class AgentOrchestrator:
             
             # STRATEGY 3: Only screen if explicitly requested
             if enable_screening:
-                scr = await screening_agent.run(f"Screen {cand.get('full_name')} for {job.get('title')}", deps=deps, model_settings={"max_tokens": 400})
+                scr = await screening_agent.run(f"Screen {cand.get('full_name')} for {job.get('title')}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 400})
                 res_item["screening"] = scr.data.model_dump()
                 
             results.append(res_item)
             
         return results
+

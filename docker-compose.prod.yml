@@ -18,21 +18,21 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=https://dvttalent.com/api/v1
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://dvttalent.com/api/v1}
     container_name: dvt_frontend
     restart: always
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=https://dvttalent.com/api/v1
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://dvttalent.com/api/v1}
     networks:
       - dvt_network
 
-  backend:
+  api:
     build:
       context: ./backend
       dockerfile: Dockerfile
       target: api
-    container_name: dvt_backend
+    container_name: dvt_api
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     restart: always
     environment:
@@ -40,10 +40,10 @@ services:
       - DATABASE_URL=postgresql+asyncpg://dvt_user:${DB_PASSWORD}@db:5432/dvt_talent
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
-      - APP_BASE_URL=https://dvttalent.com
-      - ALLOWED_ORIGINS=https://dvttalent.com
+      - APP_BASE_URL=${APP_BASE_URL:-https://dvttalent.com}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://dvttalent.com}
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - GMAIL_SENDER_EMAIL=Deepak@dvttalent.com
+      - GMAIL_SENDER_EMAIL=${GMAIL_SENDER_EMAIL:-Deepak@dvttalent.com}
       - SECRET_KEY=${SECRET_KEY}
       - SERPER_API_KEY=${SERPER_API_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
@@ -52,11 +52,14 @@ services:
       - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
       - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
       - KIMI_API_KEY=${KIMI_API_KEY}
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
     networks:
       - dvt_network
     depends_on:
       - redis
       - db
+      - chromadb
 
   worker:
     build:
@@ -72,7 +75,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - GMAIL_SENDER_EMAIL=Deepak@dvttalent.com
+      - GMAIL_SENDER_EMAIL=${GMAIL_SENDER_EMAIL:-Deepak@dvttalent.com}
       - SECRET_KEY=${SECRET_KEY}
       - SERPER_API_KEY=${SERPER_API_KEY}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
@@ -81,21 +84,71 @@ services:
       - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
       - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
       - KIMI_API_KEY=${KIMI_API_KEY}
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
     networks:
       - dvt_network
     depends_on:
       - redis
       - db
+      - chromadb
+
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: scheduler
+    container_name: dvt_scheduler
+    command: celery -A workers.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    restart: always
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql+asyncpg://dvt_user:${DB_PASSWORD}@db:5432/dvt_talent
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GMAIL_SENDER_EMAIL=${GMAIL_SENDER_EMAIL:-Deepak@dvttalent.com}
+      - SECRET_KEY=${SECRET_KEY}
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GMAIL_CLIENT_ID=${GMAIL_CLIENT_ID}
+      - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
+      - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
+      - KIMI_API_KEY=${KIMI_API_KEY}
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    networks:
+      - dvt_network
+    depends_on:
+      - redis
+      - db
+      - chromadb
+
+  chromadb:
+    image: chromadb/chroma:0.4.24
+    container_name: dvt_chromadb
+    restart: always
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - dvt_network
 
   redis:
     image: redis:7-alpine
     container_name: dvt_redis
+    restart: always
     networks:
       - dvt_network
 
   db:
     image: postgres:16-alpine
     container_name: dvt_db
+    restart: always
     environment:
       - POSTGRES_USER=dvt_user
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -111,5 +164,6 @@ networks:
 
 volumes:
   postgres_data:
+  chroma_data:
   caddy_data:
   caddy_config:

@@ -31,14 +31,14 @@ function LoginContent() {
     setIsLoading(true);
     try {
       await authApi.login({ email, password });
-      toast.success("Identity Verified", {
+      toast.success("Login Successful", {
         description: "Welcome back to DVT Talent.",
         icon: <Shield className="w-4 h-4 text-indigo-600" />
       });
       router.push(from);
     } catch (err: any) {
       const msg = err.response?.data?.detail || "Invalid credentials provided.";
-      toast.error("Verification Failed", {
+      toast.error("Login Failed", {
          description: typeof msg === 'string' ? msg : "Please check your credentials.",
       });
     } finally {

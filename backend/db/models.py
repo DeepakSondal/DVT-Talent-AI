@@ -198,7 +198,7 @@ class User(Base, TimestampMixin):
 
     # Relationships
     tenant = relationship("Tenant")
-    leads = relationship("Lead", back_populates="owner")
+    leads = relationship("Lead", back_populates="owner", foreign_keys="[Lead.owner_id]")
     campaigns = relationship("EmailCampaign", back_populates="owner")
 
 
@@ -254,7 +254,7 @@ class Lead(Base, TimestampMixin):
     meta_data = Column("metadata", JSON, default=dict)
 
     # Relationships
-    owner = relationship("User", back_populates="leads")
+    owner = relationship("User", back_populates="leads", foreign_keys=[owner_id])
     company = relationship("Company", back_populates="leads")
     contact = relationship("Contact")
     activities = relationship("Activity", back_populates="lead")

@@ -61,7 +61,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         { label: "Analytics", icon: Zap, href: "/dashboard/monitoring" },
         { label: "Billing", icon: CreditCard, href: "/dashboard/billing" },
         // Render Team tab ONLY for Managers
-        ...(user?.role === "manager" || user?.role === "MANAGER" ? [{ label: "Team & Vault", icon: ShieldCheck, href: "/dashboard/team" }] : []),
+        ...(user?.role === "manager" || (user?.role as string) === "MANAGER" ? [{ label: "Team & Vault", icon: ShieldCheck, href: "/dashboard/team" }] : []),
       ]
     }
   ];

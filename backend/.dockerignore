@@ -1,0 +1,14 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+dvt_talent.db
+.env
+.pytest_cache/
+*.sqlite
+*.sqlite3
+chroma_data/
+chroma_db/
+tests/
+demos/
+backend

@@ -1,46 +1,63 @@
 {
     email admin@dvttalent.com
+    # Automatic HTTPS via Let's Encrypt
 }
 
+# Snippet: shared config for frontend + API routing
 (frontend_config) {
-    # Next.js Frontend
-    reverse_proxy frontend:3000
-
-    # API Routes (Do NOT strip /api prefix - backend expects it)
+    # API Routes — must come before the catch-all frontend
     handle /api/* {
         reverse_proxy api:8000
     }
 
+    # WebSocket
+    handle /api/v1/ws/* {
+        reverse_proxy api:8000
+    }
+
+    # Next.js Frontend — catch-all
+    handle {
+        reverse_proxy frontend:3000
+    }
+
     # Security Headers
     header {
-        # Enable HSTS
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        # Clickjacking protection
-        X-Frame-Options "DENY"
-        # XSS protection
+        X-Frame-Options "SAMEORIGIN"
         X-XSS-Protection "1; mode=block"
-        # Mime type sniffing protection
         X-Content-Type-Options "nosniff"
-        # Referrer policy
         Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
     }
 
     # Compression
     encode zstd gzip
 }
 
-localhost {
-    import frontend_config
+# Redirect www → apex domain
+www.dvttalent.com {
+    redir https://dvttalent.com{uri} permanent
 }
 
-127.0.0.1 {
-    import frontend_config
-}
-
+# Main app — Caddy auto-issues Let's Encrypt cert
 dvttalent.com {
     import frontend_config
 }
 
+# Dedicated API subdomain (optional — for direct API access / mobile apps)
 api.dvttalent.com {
     reverse_proxy api:8000
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        -Server
+    }
+
+    encode zstd gzip
+}
+
+# Local development fallback (does NOT get HTTPS cert)
+localhost {
+    import frontend_config
 }

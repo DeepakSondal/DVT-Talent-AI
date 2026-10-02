@@ -7,7 +7,7 @@ import httpx
 try:
     import logfire
     # Configure Logfire for beautiful console traces
-    logfire.configure(pds_enabled=False)
+    logfire.configure(send_to_logfire=False)
 except (ImportError, TypeError):
     logfire = None
 import sys
@@ -50,7 +50,7 @@ async def run_browser_demo():
             
             # 3. Display Results
             print("\n--- [ RESEARCH RESULTS ] ---")
-            for cand in result.data.candidates:
+            for cand in result.output.candidates:
                 print(f"👤 Name: {cand.full_name}")
                 print(f"🏢 Current Focus: {cand.ai_reasoning.alignment}")
                 print(f"📊 Match Score: {cand.match_score}/100")
@@ -58,7 +58,7 @@ async def run_browser_demo():
                 print(f"🔗 Source: {cand.source_platform}")
             
             print("\n🌍 Market Context from Agent:")
-            print(result.data.market_context)
+            print(result.output.market_context)
 
         except Exception as e:
             print(f"❌ Demo Failed: {str(e)}")

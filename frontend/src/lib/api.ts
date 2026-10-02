@@ -35,7 +35,6 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       if (typeof window !== "undefined") {
         localStorage.removeItem("dvt_token");
-        localStorage.removeItem("dvt_refresh_token");
         document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Lax";
         window.location.href = "/auth/login";
       }
@@ -56,7 +55,6 @@ export interface UserOut {
 
 export interface AuthResponse {
   access_token: string;
-  refresh_token: string;
   token_type: string;
   user_id: string;
   email: string;
@@ -155,7 +153,6 @@ export const authApi = {
     });
     if (typeof window !== "undefined") {
       localStorage.setItem("dvt_token", res.data.access_token);
-      localStorage.setItem("dvt_refresh_token", res.data.refresh_token);
       document.cookie = `dvt_token=${res.data.access_token}; path=/; max-age=86400; SameSite=Lax`;
     }
     return res.data;
@@ -164,7 +161,6 @@ export const authApi = {
     const res = await api.post<AuthResponse>("/auth/register", data);
     if (typeof window !== "undefined") {
       localStorage.setItem("dvt_token", res.data.access_token);
-      localStorage.setItem("dvt_refresh_token", res.data.refresh_token);
       document.cookie = `dvt_token=${res.data.access_token}; path=/; max-age=86400; SameSite=Lax`;
     }
     return res.data;
@@ -173,7 +169,6 @@ export const authApi = {
   logout: () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("dvt_token");
-      localStorage.removeItem("dvt_refresh_token");
       document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Lax";
     }
   },
@@ -291,7 +286,7 @@ export const copilotApi = {
   startSourcing: (data: { task_id: string; approved_jd: string; location: string; tenant_id: string }) => 
     api.post("/copilot/sourcing", data).then((r) => r.data),
     
-  startOutreach: (data: { task_id: string; approved_candidates: any[]; job_context: any; tenant_id: string }) => 
+  startOutreach: (data: { task_id: string; approved_candidates: any[]; job_context: any; tenant_id: string; enable_screening?: boolean }) => 
     api.post("/copilot/outreach", data).then((r) => r.data),
 };
 
@@ -338,4 +333,26 @@ export const emailSenderApi = {
     api.delete("/email-sender").then((r) => r.data),
 };
 
+// ── Team API Keys Configuration (BYOK) ──────────────────────────────────────
+export interface TeamApiKeysConfig {
+  openai_key: string;
+  serper_key: string;
+  anthropic_key: string;
+}
+
+export interface TeamApiKeysOut {
+  openai_key_hint: string | null;
+  serper_key_hint: string | null;
+  anthropic_key_hint: string | null;
+  configured: boolean;
+}
+
+export const teamApi = {
+  getKeys: (): Promise<TeamApiKeysOut> =>
+    api.get("/team/keys").then((r) => r.data),
+  saveKeys: (data: TeamApiKeysConfig): Promise<{ status: string; message: string }> =>
+    api.post("/team/keys", data).then((r) => r.data),
+};
+
 export default api;
+

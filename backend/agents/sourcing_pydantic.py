@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
 from backend.agents.tools.browser_tools import browser_tool
+from backend.agents.tools.memory_tools import fetch_recruiter_preferences
 
 # ── Models ──────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ sourcing_agent = Agent(
     get_pydantic_model(),
     retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
-    result_type=SourcingSynthesis,
+    output_type=SourcingSynthesis,
     system_prompt=(
         "You are an Elite Sourcing & Integrity Agent for DVT Talent AI. "
         "Your mission is to synthesize the best talent nodes for a specific job description. "
@@ -56,6 +57,16 @@ sourcing_agent = Agent(
         "Always provide a data-driven reasoning trail for your match scores."
     ),
 )
+
+@sourcing_agent.system_prompt
+async def apply_recruiter_memory(ctx: RunContext[AgentDeps]) -> str:
+    """
+    Dynamically injects the recruiter's long-term memory (learned preferences) 
+    into the agent's instructions before every run.
+    """
+    recruiter_id = getattr(ctx.deps, 'user_id', 'default_recruiter')
+    prefs = fetch_recruiter_preferences(ctx.deps.tenant_id, recruiter_id)
+    return f"\n\n--- [LONG-TERM MEMORY: RECRUITER PREFERENCES] ---\n{prefs}\nYou MUST apply these preferences when scoring and synthesizing candidates."
 
 # ── Tools ─────────────────────────────────────────────────────────────────
 
@@ -169,4 +180,4 @@ async def synthesize_talent(jd: str, tenant_id: str) -> SourcingSynthesis:
             f"Source and synthesize top talent for this role: {jd}",
             deps=deps
         )
-        return result.data
+        return result.output

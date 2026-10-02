@@ -25,10 +25,18 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create non-root user
+# Create symlink so that 'backend' absolute imports resolve correctly inside the container
+RUN ln -sfn . /app/backend
+
+
+# Create non-root user with a writable home directory
+# (browser-use writes config files to $HOME at import time)
 RUN addgroup --gid 1001 appgroup \
-    && adduser --uid 1001 --gid 1001 --no-create-home --disabled-password appuser \
-    && chown -R appuser:appgroup /app
+    && adduser --uid 1001 --gid 1001 --home /home/appuser --disabled-password appuser \
+    && mkdir -p /home/appuser \
+    && chown -R appuser:appgroup /app /home/appuser
+
+ENV HOME=/home/appuser
 
 USER appuser
 
@@ -37,7 +45,7 @@ FROM base AS api
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--loop", "uvloop"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # ── Celery Worker ─────────────────────────────────────────────────
 FROM base AS worker

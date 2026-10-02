@@ -2,6 +2,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import uuid
+
 
 from backend.main import app
 from backend.db.models import User, UserRole, Team, TeamApiKeys
@@ -64,3 +66,41 @@ async def test_invite_recruiter_and_inherit_keys(db_session: AsyncSession):
 
     assert inherited_keys.openai_key == "sk-mock-manager-key"
     assert recruiter.manager_id == team.manager_id
+
+@pytest.mark.asyncio
+async def test_team_api_keys_encryption(db_session: AsyncSession):
+    from services.security_service import encrypt_pii, decrypt_pii
+    
+    # 1. Create a dummy team
+    team = Team(
+        name="Security Test Team",
+        manager_id=uuid.uuid4(), # mock ID
+        default_credit_limit=1000
+    )
+    db_session.add(team)
+    await db_session.commit()
+
+    # 2. Encrypt & Save Keys
+    raw_openai_key = "sk-proj-super-secret-openai-key-value-12345"
+    raw_serper_key = "serper-secret-api-key-9999"
+    
+    encrypted_keys = TeamApiKeys(
+        team_id=team.id,
+        openai_key=encrypt_pii(raw_openai_key),
+        serper_key=encrypt_pii(raw_serper_key)
+    )
+    db_session.add(encrypted_keys)
+    await db_session.commit()
+
+    # 3. Retrieve keys and verify they are encrypted in the database
+    stmt = select(TeamApiKeys).where(TeamApiKeys.team_id == team.id)
+    db_keys = (await db_session.execute(stmt)).scalar_one()
+
+    assert db_keys.openai_key != raw_openai_key
+    assert db_keys.serper_key != raw_serper_key
+    assert "sk-proj" not in db_keys.openai_key  # Must be encrypted/gibberish
+
+    # 4. Decrypt and verify they match raw values
+    assert decrypt_pii(db_keys.openai_key) == raw_openai_key
+    assert decrypt_pii(db_keys.serper_key) == raw_serper_key
+

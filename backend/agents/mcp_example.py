@@ -18,7 +18,7 @@ class CandidateStatus(BaseModel):
 # 2. Define the Agent with MCP Context
 agent = Agent(
     'openai:gpt-4o',
-    result_type=CandidateStatus,
+    output_type=CandidateStatus,
     system_prompt="You are an ATS Intelligence Agent. Use the Greenhouse MCP server to check candidate status."
 )
 
@@ -54,4 +54,4 @@ async def main():
     # 4. The server returns normalized data.
     # 5. The agent converts that into your structured 'CandidateStatus' model.
     result = await agent.run("What is the status of john.doe@example.com in our Greenhouse?")
-    print(result.data)
+    print(result.output)
