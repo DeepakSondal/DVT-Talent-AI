@@ -28,7 +28,7 @@ async def create_admin():
         user = User(
             email="admin@dvt.com",
             full_name="System Admin",
-            hashed_password=hash_password("admin123"),
+            hashed_password=await hash_password("admin123"),
             role=UserRole.ADMIN,
         )
         session.add(user)
