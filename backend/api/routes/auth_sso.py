@@ -1,12 +1,18 @@
 import os
+import uuid
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse
-from onelogin.saml2.auth import OneLogin_Saml2_Auth
+try:
+    from onelogin.saml2.auth import OneLogin_Saml2_Auth
+    SAML_AVAILABLE = True
+except ImportError:
+    OneLogin_Saml2_Auth = None
+    SAML_AVAILABLE = False
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from config import settings
-from db.models import User, get_db
+from db.models import User, Tenant, get_db
 from api.routes.auth import create_access_token
 
 router = APIRouter()
@@ -47,6 +53,8 @@ def get_saml_settings():
 @router.get("/login")
 async def sso_login(request: Request):
     """ Initiate SAML Login redirect to Identity Provider (Okta/Azure) """
+    if not SAML_AVAILABLE:
+        raise HTTPException(status_code=501, detail="SAML SSO library (python3-saml) is not installed.")
     req = prepare_saml_request(request)
     auth = OneLogin_Saml2_Auth(req, get_saml_settings())
     return RedirectResponse(auth.login())
@@ -54,6 +62,8 @@ async def sso_login(request: Request):
 @router.post("/acs")
 async def sso_acs(request: Request, db: AsyncSession = Depends(get_db)):
     """ Assertion Consumer Service — processes the SAML response from IDP """
+    if not SAML_AVAILABLE:
+        raise HTTPException(status_code=501, detail="SAML SSO library (python3-saml) is not installed.")
     form_data = await request.form()
     req = prepare_saml_request(request)
     req['post_data'] = dict(form_data)
@@ -75,10 +85,25 @@ async def sso_acs(request: Request, db: AsyncSession = Depends(get_db)):
             user = result.scalars().first()
             
             if not user:
+                email_domain = email.split("@")[-1].lower()
+                common_domains = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "example.com", "test.com", "proton.me", "protonmail.com"}
+                existing_tenant = (await db.execute(select(Tenant).where(Tenant.domain == email_domain))).scalar_one_or_none()
+                tenant_domain = f"{email_domain}-{uuid.uuid4().hex[:6]}" if (email_domain in common_domains or existing_tenant) else email_domain
+
+                full_name = attributes.get('name', [email.split('@')[0]])[0]
+                tenant = Tenant(
+                    name=f"{full_name}'s Workspace",
+                    domain=tenant_domain,
+                    is_active=True
+                )
+                db.add(tenant)
+                await db.flush()
+
                 user = User(
                     email=email,
-                    full_name=attributes.get('name', [email.split('@')[0]])[0],
+                    full_name=full_name,
                     is_active=True,
+                    tenant_id=tenant.id,
                     provider="saml",
                 )
                 db.add(user)
@@ -102,6 +127,8 @@ async def sso_acs(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/metadata")
 async def sso_metadata():
     """ Provides the Service Provider metadata XML for the Identity Provider """
+    if not SAML_AVAILABLE:
+        raise HTTPException(status_code=501, detail="SAML SSO library (python3-saml) is not installed.")
     auth = OneLogin_Saml2_Auth({'https': 'on'}, get_saml_settings())
     metadata = auth.get_settings().get_sp_metadata()
     return JSONResponse(content={"xml": metadata}, media_type="application/xml")

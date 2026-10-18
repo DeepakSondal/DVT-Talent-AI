@@ -14,6 +14,12 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
+    broker_connection_retry_on_startup=False,
+    broker_connection_max_retries=1,
+    broker_connection_retry=False,
+    broker_connection_timeout=0.5,
+    task_publish_retry=False,
+    broker_transport_options={"max_retries": 1, "socket_timeout": 0.5, "socket_connect_timeout": 0.5},
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",

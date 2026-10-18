@@ -11,32 +11,9 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import api from "@/lib/api";
 import { toast } from "sonner";
-
-interface Plan {
-  id: string;
-  name: string;
-  stripe_price_id: string;
-  credits_per_month: number;
-  features: string[];
-  price_usd_cents: number;
-  is_one_time: boolean;
-}
-
-interface CreditStatus {
-  credits_balance: number;
-  credits_last_reset_at: string | null;
-  plan: string;
-  stripe_customer_id: string | null;
-  transactions: Array<{
-    id: string;
-    amount: number;
-    type: "credit" | "debit" | "refund";
-    description: string;
-    created_at: string;
-  }>;
-}
+import { SubscriptionPlan, CreditStatus } from "@/types/billing";
+import { billingService } from "@/services/billing.service";
 
 const PLAN_ICONS: Record<string, any> = {
   Starter: Zap,
@@ -45,7 +22,7 @@ const PLAN_ICONS: Record<string, any> = {
 };
 
 export default function BillingPage() {
-  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [status, setStatus] = useState<CreditStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState<string | null>(null);
@@ -54,12 +31,12 @@ export default function BillingPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [plansRes, statusRes] = await Promise.all([
-          api.get("/billing/plans"),
-          api.get("/billing/credits"),
+        const [plansData, statusData] = await Promise.all([
+          billingService.getPlans(),
+          billingService.getCredits(),
         ]);
-        setPlans(plansRes.data);
-        setStatus(statusRes.data);
+        setPlans(plansData);
+        setStatus(statusData);
       } catch (err) {
         console.error("Billing fetch failed:", err);
       } finally {
@@ -72,12 +49,8 @@ export default function BillingPage() {
   const handleUpgrade = async (planId: string) => {
     setCheckingOut(planId);
     try {
-      const res = await api.post("/billing/create-checkout", {
-        plan_id: planId,
-        success_url: `${window.location.origin}/dashboard/billing?success=1`,
-        cancel_url: `${window.location.origin}/dashboard/billing`,
-      });
-      window.location.href = res.data.checkout_url;
+      const res = await billingService.createCheckout(planId);
+      window.location.href = res.checkout_url;
     } catch (err) {
       toast.error("Checkout failed to initialize");
       setCheckingOut(null);
@@ -87,10 +60,8 @@ export default function BillingPage() {
   const handlePortal = async () => {
     setOpeningPortal(true);
     try {
-      const res = await api.post("/billing/portal", {
-        return_url: `${window.location.origin}/dashboard/billing`,
-      });
-      window.location.href = res.data.portal_url;
+      const res = await billingService.openPortal();
+      window.location.href = res.portal_url;
     } catch (err) {
       toast.error("Billing portal error");
       setOpeningPortal(false);
@@ -149,10 +120,10 @@ export default function BillingPage() {
                       <div className="space-y-2">
                           <h2 className="text-5xl font-black tracking-tight leading-none uppercase">
                               {(status?.credits_balance || 0).toLocaleString()} <br />
-                              <span className="text-blue-500 italic text-3xl">Swarm Credits</span>
+                              <span className="text-blue-500 italic text-3xl">AI Recruiting Credits</span>
                           </h2>
                           <p className="text-slate-400 font-medium max-w-sm">
-                              Remaining capacity for autonomous discovery, sourcing, and outreach signals.
+                              Remaining balance for job discovery, candidate sourcing, and automated outreach campaigns.
                           </p>
                       </div>
                   </div>

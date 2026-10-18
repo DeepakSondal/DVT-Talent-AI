@@ -12,10 +12,16 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 import structlog
 
-from db.models import AsyncSessionLocal, EmailSent, EmailStatus, Tenant
 from sqlalchemy import select
-from config import settings
-from services.security_service import encrypt_pii, decrypt_pii
+
+try:
+    from backend.db.models import AsyncSessionLocal, EmailSent, EmailStatus, Tenant
+    from backend.config import settings
+    from backend.services.security_service import encrypt_pii, decrypt_pii
+except ImportError:
+    from db.models import AsyncSessionLocal, EmailSent, EmailStatus, Tenant
+    from config import settings
+    from services.security_service import encrypt_pii, decrypt_pii
 
 log = structlog.get_logger()
 

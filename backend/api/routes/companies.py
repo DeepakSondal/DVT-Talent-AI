@@ -79,8 +79,8 @@ async def list_companies(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = select(Company)
-    count_query = select(func.count(Company.id))
+    query = select(Company).where(Company.tenant_id == current_user.tenant_id)
+    count_query = select(func.count(Company.id)).where(Company.tenant_id == current_user.tenant_id)
 
     if search:
         query = query.where(Company.name.ilike(f"%{search}%"))
@@ -96,7 +96,7 @@ async def list_companies(
         count_query = count_query.where(Company.is_client == is_client)
 
     total_result = await db.execute(count_query)
-    total = total_result.scalar()
+    total = total_result.scalar() or 0
 
     query = query.order_by(desc(Company.score)).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
@@ -112,7 +112,7 @@ async def create_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    company = Company(**data.model_dump(exclude_none=True))
+    company = Company(**data.model_dump(exclude_none=True), tenant_id=current_user.tenant_id)
     db.add(company)
     await db.commit()
     await db.refresh(company)
@@ -128,7 +128,9 @@ async def get_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Company).where(Company.id == company_id))
+    result = await db.execute(
+        select(Company).where(Company.id == company_id, Company.tenant_id == current_user.tenant_id)
+    )
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -142,7 +144,9 @@ async def update_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Company).where(Company.id == company_id))
+    result = await db.execute(
+        select(Company).where(Company.id == company_id, Company.tenant_id == current_user.tenant_id)
+    )
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -161,7 +165,9 @@ async def delete_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Company).where(Company.id == company_id))
+    result = await db.execute(
+        select(Company).where(Company.id == company_id, Company.tenant_id == current_user.tenant_id)
+    )
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -177,7 +183,9 @@ async def enrich_company(
     current_user: User = Depends(get_current_user),
 ):
     """Trigger AI enrichment for a company"""
-    result = await db.execute(select(Company).where(Company.id == company_id))
+    result = await db.execute(
+        select(Company).where(Company.id == company_id, Company.tenant_id == current_user.tenant_id)
+    )
     company = result.scalar_one_or_none()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -188,5 +196,9 @@ async def enrich_company(
 
 async def enrich_company_background(company_id: str):
     """Background task to AI-enrich company data"""
-    from workers.tasks import run_company_research
-    run_company_research.delay(company_id)
+    try:
+        from workers.tasks import run_company_research, safe_dispatch_task
+        safe_dispatch_task(run_company_research, company_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Could not enqueue run_company_research task: {e}")

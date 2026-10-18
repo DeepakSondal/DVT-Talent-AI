@@ -7,8 +7,12 @@ import structlog
 from typing import Optional, List
 from jinja2 import Template
 
-from services.email_service import email_service
-from db.models import AsyncSessionLocal, User, Tenant, Candidate
+try:
+    from backend.services.email_service import email_service
+    from backend.db.models import AsyncSessionLocal, User, Tenant, Candidate
+except ImportError:
+    from services.email_service import email_service
+    from db.models import AsyncSessionLocal, User, Tenant, Candidate
 from sqlalchemy import select
 
 log = structlog.get_logger(__name__)
@@ -70,6 +74,7 @@ class NotificationService:
                 try:
                     await email_service.send_email(
                         tenant_id=tenant_id,
+                        # pyrefly: ignore [unexpected-keyword]
                         to_email=recruiter.email,
                         subject=f"⚠️ Action Required: {action_type}",
                         body=html_content

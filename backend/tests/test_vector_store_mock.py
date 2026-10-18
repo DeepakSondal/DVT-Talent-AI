@@ -29,6 +29,7 @@ def test_singleton_pattern():
     vs2 = VectorStore()
     assert vs1 is vs2
 
+@pytest.mark.skipif(not CHROMA_AVAILABLE, reason="ChromaDB not installed")
 @patch('chromadb.PersistentClient', return_value=MockClient())
 @patch('chromadb.HttpClient', side_effect=ConnectionError("Mocked Connection Error"))
 def test_vector_store_upsert_mock(mock_http, mock_persist):
@@ -39,7 +40,7 @@ def test_vector_store_upsert_mock(mock_http, mock_persist):
     vs.resumes = MockCollection()
     
     # Should not raise any errors
-    vs.upsert_resume("id_123", "Resume text content", {"job_id": "job_1"})
+    vs.upsert_resume("tenant_test_123", "id_123", "Resume text content", {"job_id": "job_1"})
     
     # Verify collection state (conceptual check)
     assert vs.resumes is not None
@@ -52,7 +53,7 @@ def test_vector_store_query_mock(mock_http, mock_persist):
     vs = VectorStore()
     vs.resumes = MockCollection()
     
-    results = vs.search_resumes("Looking for Python Expert", limit=1)
+    results = vs.search_resumes("tenant_test_123", "Looking for Python Expert", limit=1)
     
     assert len(results) == 1
     assert results[0]["id"] == "id_123"

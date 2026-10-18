@@ -16,7 +16,10 @@ from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
 import enum
 
-from config import settings
+try:
+    from backend.config import settings
+except ImportError:
+    from config import settings
 
 
 # ── Engine & Session ────────────────────────────────────────────────────────
@@ -63,6 +66,7 @@ class UserRole(str, enum.Enum):
     MANAGER = "manager"
     RECRUITER = "recruiter"
     VIEWER = "viewer"
+    CANDIDATE = "candidate"
 
 
 class LeadStatus(str, enum.Enum):
@@ -77,6 +81,7 @@ class LeadStatus(str, enum.Enum):
 
 class CandidateStatus(str, enum.Enum):
     SOURCED = "sourced"
+    APPLIED = "applied"
     SCREENED = "screened"
     CONTACTED = "contacted"
     INTERESTED = "interested"
@@ -162,7 +167,7 @@ class Team(Base, TimestampMixin):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
-    manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id", use_alter=True, name="fk_teams_manager_id"), nullable=False)
     default_credit_limit = Column(Integer, default=1000)
     shared_pool_enabled = Column(Boolean, default=False)
 
@@ -181,7 +186,7 @@ class User(Base, TimestampMixin):
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True, index=True)
     manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
@@ -303,6 +308,7 @@ class Job(Base, TimestampMixin):
     job_type = Column(String(50))
     source_url = Column(String(500))
     is_active = Column(Boolean, default=True)
+    is_published = Column(Boolean, default=True, nullable=False)  # Visible to candidate portal
     posted_at = Column(DateTime(timezone=True))
     embedding_id = Column(String(255))  # ChromaDB reference
 
@@ -316,8 +322,9 @@ class Candidate(Base, TimestampMixin):
     __tablename__ = "candidates"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
-    recruiter_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True, nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    recruiter_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), index=True, nullable=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, index=True)
@@ -340,6 +347,9 @@ class Candidate(Base, TimestampMixin):
     ai_summary = Column(Text)
     do_not_contact = Column(Boolean, default=False)
     meta_data = Column("metadata", JSON, default=dict)
+    # Candidate Portal & Privacy
+    is_searchable = Column(Boolean, default=True, nullable=False)
+    hide_from_companies = Column(JSON, default=list)  # List of company domains or names
     # GDPR Right-to-Erasure
     pii_erased = Column(Boolean, default=False, nullable=False)
     pii_erased_at = Column(DateTime(timezone=True), nullable=True)
@@ -348,6 +358,7 @@ class Candidate(Base, TimestampMixin):
     scoring_reasoning = Column(JSON, default=dict)    # Why the match score?
     integrity_reasoning = Column(JSON, default=dict)  # Why the integrity score?
 
+    user = relationship("User", foreign_keys=[user_id])
     resumes = relationship("Resume", back_populates="candidate")
     job_applications = relationship("JobCandidate", back_populates="candidate")
     emails_received = relationship("EmailSent", back_populates="candidate")
@@ -358,7 +369,7 @@ class Resume(Base, TimestampMixin):
     __tablename__ = "resumes"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True, nullable=True)
     candidate_id = Column(UUID(as_uuid=True), ForeignKey("candidates.id"), index=True)
     file_name = Column(String(255))
     file_url = Column(String(500))
@@ -375,11 +386,13 @@ class JobCandidate(Base, TimestampMixin):
     __tablename__ = "job_candidates"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True, nullable=True)
     job_id = Column(UUID(as_uuid=True), ForeignKey("jobs.id"), index=True)
     candidate_id = Column(UUID(as_uuid=True), ForeignKey("candidates.id"), index=True)
     match_score = Column(Float, default=0.0)
     status = Column(Enum(CandidateStatus), default=CandidateStatus.SOURCED)
+    applied_by_candidate = Column(Boolean, default=False, nullable=False)
+    career_ops_scoring = Column(JSON, default=dict)  # 5 dimensions + ghost job check
     notes = Column(Text)
     ai_reasoning = Column(Text)
 
@@ -602,6 +615,45 @@ class ATSExportLog(Base):
 
     __table_args__ = (
         Index("ix_ats_export_logs_tenant_provider", "tenant_id", "provider"),
+    )
+
+
+class AIDecisionLedger(Base):
+    """
+    Immutable AI Decision Ledger for EEOC, GDPR Article 22, and EU AI Act Annex III compliance.
+    Records input data hashes, model version, prompt version, confidence scores, and human override actions.
+    """
+    __tablename__ = "ai_decision_ledger"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    job_id = Column(UUID(as_uuid=True), ForeignKey("jobs.id"), nullable=True)
+    candidate_id = Column(UUID(as_uuid=True), ForeignKey("candidates.id"), nullable=True)
+    decision_type = Column(String(100), nullable=False, default="candidate_evaluation")
+    
+    # Audit details
+    model_provider = Column(String(50), nullable=False, default="Groq")
+    model_name = Column(String(100), nullable=False, default="openai/gpt-oss-20b")
+    prompt_version = Column(String(50), nullable=False, default="v1.0")
+    input_data_hash = Column(String(255), nullable=True)
+    
+    # AI Results
+    qualification_score = Column(Integer, nullable=True)
+    confidence_level = Column(String(50), default="HIGH")
+    evidence_signals = Column(JSON, default=dict)
+    reasoning_summary = Column(Text(), nullable=True)
+    
+    # Human-in-the-loop audit
+    reviewer_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    human_action = Column(String(50), default="PENDING_REVIEW") # PENDING_REVIEW, APPROVED, REJECTED
+    is_override = Column(Boolean, default=False, nullable=False)
+    override_reason = Column(Text(), nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_ai_decision_ledger_tenant", "tenant_id"),
+        Index("ix_ai_decision_ledger_job_cand", "job_id", "candidate_id"),
     )
 
 

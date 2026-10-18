@@ -25,52 +25,85 @@ async def get_dashboard_kpis(
 ):
     """Main dashboard KPIs"""
     since = datetime.utcnow() - timedelta(days=days)
+    tenant_id = current_user.tenant_id
 
     # Companies discovered
-    companies_total = (await db.execute(select(func.count(Company.id)))).scalar()
+    companies_total = (await db.execute(
+        select(func.count(Company.id)).where(Company.tenant_id == tenant_id)
+    )).scalar() or 0
     companies_new = (await db.execute(
-        select(func.count(Company.id)).where(Company.created_at >= since)
-    )).scalar()
+        select(func.count(Company.id)).where(
+            and_(Company.tenant_id == tenant_id, Company.created_at >= since)
+        )
+    )).scalar() or 0
 
     # Leads
-    leads_total = (await db.execute(select(func.count(Lead.id)))).scalar()
+    leads_total = (await db.execute(
+        select(func.count(Lead.id)).where(Lead.tenant_id == tenant_id)
+    )).scalar() or 0
     leads_new = (await db.execute(
-        select(func.count(Lead.id)).where(Lead.created_at >= since)
-    )).scalar()
+        select(func.count(Lead.id)).where(
+            and_(Lead.tenant_id == tenant_id, Lead.created_at >= since)
+        )
+    )).scalar() or 0
     leads_won = (await db.execute(
-        select(func.count(Lead.id)).where(Lead.status == LeadStatus.WON)
-    )).scalar()
+        select(func.count(Lead.id)).where(
+            and_(Lead.tenant_id == tenant_id, Lead.status == LeadStatus.WON)
+        )
+    )).scalar() or 0
 
     # Candidates
-    candidates_total = (await db.execute(select(func.count(Candidate.id)))).scalar()
+    candidates_total = (await db.execute(
+        select(func.count(Candidate.id)).where(Candidate.tenant_id == tenant_id)
+    )).scalar() or 0
     candidates_new = (await db.execute(
-        select(func.count(Candidate.id)).where(Candidate.created_at >= since)
-    )).scalar()
+        select(func.count(Candidate.id)).where(
+            and_(Candidate.tenant_id == tenant_id, Candidate.created_at >= since)
+        )
+    )).scalar() or 0
     candidates_placed = (await db.execute(
-        select(func.count(Candidate.id)).where(Candidate.status == CandidateStatus.PLACED)
-    )).scalar()
+        select(func.count(Candidate.id)).where(
+            and_(Candidate.tenant_id == tenant_id, Candidate.status == CandidateStatus.PLACED)
+        )
+    )).scalar() or 0
 
     # Emails
     emails_sent = (await db.execute(
         select(func.count(EmailSent.id)).where(
-            and_(EmailSent.created_at >= since, EmailSent.status != EmailStatus.DRAFT)
+            and_(
+                EmailSent.tenant_id == tenant_id,
+                EmailSent.created_at >= since,
+                EmailSent.status != EmailStatus.DRAFT
+            )
         )
-    )).scalar()
+    )).scalar() or 0
     emails_opened = (await db.execute(
         select(func.count(EmailSent.id)).where(
-            and_(EmailSent.created_at >= since, EmailSent.status == EmailStatus.OPENED)
+            and_(
+                EmailSent.tenant_id == tenant_id,
+                EmailSent.created_at >= since,
+                EmailSent.status == EmailStatus.OPENED
+            )
         )
-    )).scalar()
+    )).scalar() or 0
     emails_replied = (await db.execute(
         select(func.count(EmailSent.id)).where(
-            and_(EmailSent.created_at >= since, EmailSent.status == EmailStatus.REPLIED)
+            and_(
+                EmailSent.tenant_id == tenant_id,
+                EmailSent.created_at >= since,
+                EmailSent.status == EmailStatus.REPLIED
+            )
         )
-    )).scalar()
+    )).scalar() or 0
 
     # Interviews
     interviews_scheduled = (await db.execute(
-        select(func.count(Interview.id)).where(Interview.created_at >= since)
-    )).scalar()
+        select(func.count(Interview.id))
+        .join(Candidate, Interview.candidate_id == Candidate.id)
+        .where(
+            and_(Candidate.tenant_id == tenant_id, Interview.created_at >= since)
+        )
+    )).scalar() or 0
 
     open_rate = round((emails_opened / emails_sent * 100) if emails_sent > 0 else 0, 1)
     reply_rate = round((emails_replied / emails_sent * 100) if emails_sent > 0 else 0, 1)
@@ -118,8 +151,10 @@ async def get_lead_funnel(
     funnel = []
     for stage in stages:
         count = (await db.execute(
-            select(func.count(Lead.id)).where(Lead.status == stage)
-        )).scalar()
+            select(func.count(Lead.id)).where(
+                and_(Lead.tenant_id == current_user.tenant_id, Lead.status == stage)
+            )
+        )).scalar() or 0
         funnel.append({"stage": stage, "count": count})
     return {"funnel": funnel}
 
@@ -134,8 +169,10 @@ async def get_candidate_funnel(
     funnel = []
     for stage in stages:
         count = (await db.execute(
-            select(func.count(Candidate.id)).where(Candidate.status == stage)
-        )).scalar()
+            select(func.count(Candidate.id)).where(
+                and_(Candidate.tenant_id == current_user.tenant_id, Candidate.status == stage)
+            )
+        )).scalar() or 0
         funnel.append({"stage": stage, "count": count})
     return {"funnel": funnel}
 
@@ -156,7 +193,12 @@ async def get_email_performance(
             func.count(EmailSent.opened_at).label("opened"),
             func.count(EmailSent.replied_at).label("replied"),
         )
-        .where(EmailSent.sent_at >= since)
+        .where(
+            and_(
+                EmailSent.tenant_id == current_user.tenant_id,
+                EmailSent.sent_at >= since
+            )
+        )
         .group_by(func.date(EmailSent.sent_at))
         .order_by(func.date(EmailSent.sent_at))
     )
@@ -184,7 +226,12 @@ async def get_top_industries(
     """Top industries by company count"""
     result = await db.execute(
         select(Company.industry, func.count(Company.id).label("count"))
-        .where(Company.industry.isnot(None))
+        .where(
+            and_(
+                Company.tenant_id == current_user.tenant_id,
+                Company.industry.isnot(None)
+            )
+        )
         .group_by(Company.industry)
         .order_by(func.count(Company.id).desc())
         .limit(limit)

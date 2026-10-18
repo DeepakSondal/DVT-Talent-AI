@@ -1,57 +1,107 @@
-# DVT Talent AI — API Quickstart (v1.1)
+# DVT Talent AI — API Quickstart Guide
+**Version:** 2.0.0 (October 2026)  
 
-Integrate the power of the recruiter swarm into your custom workflows.
+Integrate the dual-sided AI recruitment platform into your custom workflows.
 
-## 🔑 Authentication
-All requests require a Bearer Token in the `Authorization` header.
+---
+
+## 🔑 1. Authentication
+
+### Recruiter Login
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
-     -d "username=admin@dvttalent.com&password=your_password"
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "username=recruiter@agency.com&password=your_secure_password"
 ```
 
-## 🛰️ Triggering a Pipeline (Native Swarm)
-Initiate a full autonomous pipeline (Autopilot) for a specific role and location using high-performance background tasks.
+### Candidate Registration
 ```bash
-POST /api/v1/agents/swarm/run
-Content-Type: application/json
-Authorization: Bearer <TOKEN>
-
-{
-    "industry": "technology",
-    "location": "United States",
-    "send_emails": false,
-    "mock_mode": false
-}
+curl -X POST http://127.0.0.1:8000/api/v1/auth/register \
+     -H "Content-Type: application/json" \
+     -d '{
+       "email": "engineer@talent.io",
+       "password": "SecurePassword123!",
+       "full_name": "Alex Chen",
+       "role": "candidate"
+     }'
 ```
 
-## 👥 Starting a Copilot Workflow (HITL)
-Launch a stateful discovery phase that will pause for human review of the Job Description.
+---
+
+## 🎯 2. Candidate Portal API (Career-Ops)
+
+### Fetch Candidate Profile & Privacy Settings
 ```bash
-POST /api/v1/copilot/discovery
-Content-Type: application/json
-
-{
-    "industry": "Sales Director",
-    "location": "New York",
-    "tenant_id": "your-uuid-here"
-}
+curl -X GET http://127.0.0.1:8000/api/v1/candidate-portal/profile \
+     -H "Authorization: Bearer <CANDIDATE_TOKEN>"
 ```
 
-## 📊 Monitoring Progress
-Check the real-time status of a running agent task.
+### Update Privacy Shield (Domain Blacklist)
 ```bash
-GET /api/v1/agents/status/{task_id}
+curl -X PUT http://127.0.0.1:8000/api/v1/candidate-portal/profile \
+     -H "Authorization: Bearer <CANDIDATE_TOKEN>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "title": "Senior AI Systems Engineer",
+       "is_searchable": true,
+       "hide_from_companies": ["currentemployer.com", "competitor.io"]
+     }'
 ```
 
-## 📡 Live Telemetry (WebSockets)
-Connect to the real-time event stream to receive agent check-ins and progress logs.
+### Browse Verified Jobs with 5-Dimension Match Scores
+```bash
+curl -X GET http://127.0.0.1:8000/api/v1/candidate-portal/jobs \
+     -H "Authorization: Bearer <CANDIDATE_TOKEN>"
+```
+
+### Generate STAR Behavioral Interview Flashcards
+```bash
+curl -X GET http://127.0.0.1:8000/api/v1/candidate-portal/interview-prep/<JOB_ID> \
+     -H "Authorization: Bearer <CANDIDATE_TOKEN>"
+```
+
+---
+
+## 💼 3. Recruiter API & Swarm Operations
+
+### Trigger Autonomous Talent Sourcing Swarm
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/agents/swarm/trigger \
+     -H "Authorization: Bearer <RECRUITER_TOKEN>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "job_id": "<JOB_ID>",
+       "seniority": "Senior",
+       "target_sources": ["github", "linkedin"]
+     }'
+```
+
+### Inspect Copilot Checkpoint
+```bash
+curl -X GET http://127.0.0.1:8000/api/v1/copilot/tasks/<TASK_ID>/checkpoint \
+     -H "Authorization: Bearer <RECRUITER_TOKEN>"
+```
+
+### Approve Candidate Curation Checkpoint
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/copilot/tasks/<TASK_ID>/approve-sourcing \
+     -H "Authorization: Bearer <RECRUITER_TOKEN>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "approved_candidate_ids": ["<CANDIDATE_UUID_1>", "<CANDIDATE_UUID_2>"]
+     }'
+```
+
+---
+
+## 📡 4. Real-Time Telemetry (WebSocket)
+
+Connect to the live agent stream to receive real-time updates and checkpoint alerts:
 ```javascript
-const ws = new WebSocket("ws://127.0.0.1:8000/api/v1/ws/pipeline-events?token=<TOKEN>");
-ws.onmessage = (event) => console.log("Swarm Signal:", JSON.parse(event.data));
-```
+const socket = new WebSocket("ws://127.0.0.1:8000/api/v1/ws/live?token=" + token);
 
-## 📈 Fetching Leads
-Get grouped leads for the Kanban pipeline view.
-```bash
-GET /api/v1/leads/pipeline
+socket.onmessage = (event) => {
+  const signal = JSON.parse(event.data);
+  console.log("Agent Telemetry:", signal.agent, signal.message);
+};
 ```

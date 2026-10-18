@@ -10,6 +10,9 @@ from typing import Any, Dict, Optional
 from datetime import datetime
 
 import redis
+import socket
+import time
+import urllib.parse
 from sqlalchemy import create_engine, text
 from workers.celery_app import celery_app
 from backend.config import settings
@@ -23,6 +26,40 @@ from backend.agents.screening_pydantic import screening_agent
 from backend.agents.market_iq_pydantic import market_iq_agent
 
 log = structlog.get_logger(__name__)
+
+_broker_status_cache = {"available": None, "last_checked": 0.0}
+
+def is_celery_broker_available(timeout: float = 0.1) -> bool:
+    """Fast socket check with 10s caching to detect if Redis broker is reachable"""
+    now = time.time()
+    if _broker_status_cache["available"] is not None and (now - _broker_status_cache["last_checked"]) < 10.0:
+        return _broker_status_cache["available"]
+
+    try:
+        parsed = urllib.parse.urlparse(settings.celery_broker_url)
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 6379
+        with socket.create_connection((host, port), timeout=timeout):
+            _broker_status_cache["available"] = True
+            _broker_status_cache["last_checked"] = now
+            return True
+    except Exception:
+        _broker_status_cache["available"] = False
+        _broker_status_cache["last_checked"] = now
+        return False
+
+def safe_dispatch_task(task, *args, **kwargs):
+    """
+    Safely enqueues a Celery task without hanging or throwing if broker is unavailable.
+    """
+    if not is_celery_broker_available():
+        log.warning("celery_broker_unavailable_skipping_task", task=getattr(task, "name", str(task)))
+        return None
+    try:
+        return task.apply_async(args=args, kwargs=kwargs, retry=False)
+    except Exception as e:
+        log.warning("celery_dispatch_failed", task=getattr(task, "name", str(task)), error=str(e))
+        return None
 
 def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: str = "default", payload: Any = None):
     """Publish a signal to Redis for the WebSocket relay to pick up"""
@@ -191,6 +228,80 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
     except Exception as exc:
         log.error("ats_sync_failed", error=str(exc))
         raise self.retry(exc=exc, countdown=300)
+
+@celery_app.task(bind=True, name="workers.tasks.run_company_research", max_retries=3)
+def run_company_research(self, company_id: str, tenant_id: str = "default") -> Dict[str, Any]:
+    """Research and enrich company profile using DiscoveryAgent"""
+    log.info("celery_task_started", task="run_company_research", company_id=company_id, tenant_id=tenant_id)
+    try:
+        engine = create_engine(settings.database_sync_url)
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT name, domain, industry, tenant_id FROM companies WHERE id = :cid LIMIT 1"),
+                {"cid": company_id}
+            ).fetchone()
+            if not row:
+                return {"company_id": company_id, "status": "not_found"}
+            comp_name, comp_domain, comp_industry, comp_tenant = row[0], row[1], row[2], row[3]
+
+        async def _run():
+            import httpx
+            async with httpx.AsyncClient() as client:
+                deps = AgentDeps(http_client=client, tenant_id=comp_tenant or tenant_id)
+                prompt = f"Research and enrich this company: Name: {comp_name}, Domain: {comp_domain}, Industry: {comp_industry}."
+                res = await discovery_agent.run(prompt, deps=deps)
+                return res.output.model_dump()
+
+        result = asyncio.run(_run())
+        _update_company_in_db(company_id, result)
+        return {"company_id": company_id, "status": "enriched", "data": result}
+    except Exception as exc:
+        log.error("company_research_failed", error=str(exc))
+        try:
+            raise self.retry(exc=exc, countdown=60)
+        except Exception:
+            return {"company_id": company_id, "status": "failed", "error": str(exc)}
+
+@celery_app.task(bind=True, name="workers.tasks.source_candidates_for_job", max_retries=3)
+def source_candidates_for_job(self, job_id: str, skills: list, location: Optional[str] = None, tenant_id: str = "default") -> Dict[str, Any]:
+    """Automated candidate sourcing for a newly requisitioned job"""
+    log.info("celery_task_started", task="source_candidates_for_job", job_id=job_id)
+    try:
+        async def _run():
+            import httpx
+            async with httpx.AsyncClient() as client:
+                deps = AgentDeps(http_client=client, tenant_id=tenant_id)
+                prompt = f"Source qualified talent for Job ID {job_id}. Required skills: {', '.join(skills or [])}. Location: {location or 'Remote'}."
+                res = await sourcing_agent.run(prompt, deps=deps)
+                return res.output.model_dump()
+
+        result = asyncio.run(_run())
+        log.info("sourcing_candidates_completed", job_id=job_id)
+        return {"job_id": job_id, "status": "sourced", "candidates": result.get("candidates", [])}
+    except Exception as exc:
+        log.error("sourcing_candidates_failed", error=str(exc))
+        try:
+            raise self.retry(exc=exc, countdown=60)
+        except Exception:
+            return {"job_id": job_id, "status": "failed", "error": str(exc)}
+
+@celery_app.task(bind=True, name="workers.tasks.send_campaign_emails", max_retries=3)
+def send_campaign_emails(self, campaign_id: str, tenant_id: str = "default") -> Dict[str, Any]:
+    """Execute queued outbound campaign email outreach"""
+    log.info("celery_task_started", task="send_campaign_emails", campaign_id=campaign_id)
+    try:
+        from services.email_service import EmailService
+        email_service = EmailService()
+        async def _run():
+            return await email_service.send_campaign(campaign_id=campaign_id)
+        result = asyncio.run(_run())
+        return {"campaign_id": campaign_id, "result": result}
+    except Exception as exc:
+        log.error("send_campaign_emails_failed", error=str(exc))
+        try:
+            raise self.retry(exc=exc, countdown=60)
+        except Exception:
+            return {"campaign_id": campaign_id, "status": "failed", "error": str(exc)}
 
 # ── Copilot Celery Tasks (High Concurrency 1000+ Users) ──────────────────────
 

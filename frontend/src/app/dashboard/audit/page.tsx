@@ -40,12 +40,12 @@ export default function AuditPage() {
                     </div>
                     <div>
                         <h1 className="text-3xl font-black uppercase tracking-tighter italic text-naturalist-charcoal">Governance Audit</h1>
-                        <p className="text-[10px] text-naturalist-charcoal/40 font-black uppercase tracking-[0.4em]">Verifiable Swarm Mutation History</p>
+                        <p className="text-[10px] text-naturalist-charcoal/40 font-black uppercase tracking-[0.4em]">Verifiable AI Action & Compliance History</p>
                     </div>
                 </div>
                 <Link href="/dashboard">
                     <Button variant="outline" className="h-10 px-6 rounded-2xl border-naturalist-sage/20 bg-white font-black text-[10px] uppercase gap-2 hover:bg-naturalist-sage/5 transition-all">
-                        <ArrowLeft className="w-3 h-3" /> Return to Nexus
+                        <ArrowLeft className="w-3 h-3" /> Return to Dashboard
                     </Button>
                 </Link>
             </header>

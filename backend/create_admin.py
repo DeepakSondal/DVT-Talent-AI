@@ -30,7 +30,11 @@ async def create_admin():
         existing = result.scalar_one_or_none()
         
         if existing:
-            print("User admin@dvt.com already exists!")
+            print("User admin@dvt.com already exists! Resetting password to admin123...")
+            existing.hashed_password = await hash_password("admin123")
+            existing.is_active = True
+            await session.commit()
+            print("Password for admin@dvt.com has been reset to: admin123")
             return
             
         print("Creating admin@dvt.com ...")

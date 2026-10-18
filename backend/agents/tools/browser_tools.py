@@ -2,10 +2,14 @@
 DVT Talent AI — Autonomous Browser Tools
 Uses Browser-Use + Playwright to perform deep candidate research and market analysis.
 """
-from browser_use import Agent as BrowserAgent
+try:
+    from browser_use import Agent as BrowserAgent
+except ImportError:
+    BrowserAgent = None
+
 from pydantic import BaseModel
 from typing import Optional
-from agents.pydantic_config import get_pydantic_model
+from backend.agents.pydantic_config import get_pydantic_model
 
 class BrowserSearchQuery(BaseModel):
     goal: str
@@ -18,24 +22,23 @@ class DeepSearchTool:
     """
     
     def __init__(self):
-        # We use the same global model config for the browser agent
-        self.model = get_pydantic_model()
+        pass
 
     async def execute_goal(self, goal: str) -> str:
         """
         Executes a browsing goal (e.g. 'Find the CTO of Stripe on LinkedIn')
         and returns the summarized findings.
         """
-        # Create a Browser-Use Agent
-        # Note: In a real environment, this spins up a Playwright instance
-        agent = BrowserAgent(
-            task=goal,
-            llm=self.model,
-        )
-        
+        if BrowserAgent is None:
+            return f"Autonomous browser tool unavailable (browser_use package not installed). Goal skipped: {goal}"
+
         try:
+            model = get_pydantic_model()
+            agent = BrowserAgent(
+                task=goal,
+                llm=model,
+            )
             result = await agent.run()
-            # Summarize the multi-step browsing history into a string for the Pydantic AI agent
             return str(result)
         except Exception as e:
             return f"Browsing failed: {str(e)}"

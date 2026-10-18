@@ -45,15 +45,15 @@ export default function TeamPage() {
 
   const handleDeactivate = async (userId: string) => {
     if (userId === me?.id) {
-       toast.error("You cannot decommission your own operator node.");
+       toast.error("You cannot deactivate your own account.");
        return;
     }
     try {
       await usersApi.deactivate(userId);
-      toast.success("Operator access suspended.");
+      toast.success("Team member access suspended.");
       refetch();
     } catch (err) {
-      toast.error("Failed to deactivate operator.");
+      toast.error("Failed to deactivate team member.");
     }
   };
 
@@ -62,9 +62,9 @@ export default function TeamPage() {
     try {
       // Hit the new manager API endpoint to save the keys to TeamApiKeys table
       await api.patch(`/team/keys`, keys).catch(() => {});
-      toast.success("Vault Locked! Your team will now dynamically inherit these API keys.");
+      toast.success("API keys updated! Your team will now inherit these keys.");
     } catch (err) {
-      toast.error("Failed to update the API Vault.");
+      toast.error("Failed to update workspace API keys.");
     } finally {
       setIsSavingKeys(false);
     }
@@ -78,9 +78,9 @@ export default function TeamPage() {
            </div>
            <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold text-foreground">Access Restricted</h2>
-              <p className="text-sm font-medium text-muted-foreground max-w-sm mx-auto">Admin authorization required to manage workspace operators.</p>
+              <p className="text-sm font-medium text-muted-foreground max-w-sm mx-auto">Admin authorization required to manage team members.</p>
            </div>
-           <Button variant="outline" className="mt-4" onClick={() => window.location.href='/dashboard'}>Return to HQ</Button>
+           <Button variant="outline" className="mt-4" onClick={() => window.location.href='/dashboard'}>Return to Dashboard</Button>
         </div>
      );
   }
@@ -93,18 +93,18 @@ export default function TeamPage() {
            <div className="space-y-3">
               <Badge variant="primary" className="py-1 px-4 text-xs font-semibold">
                  <ShieldCheck className="w-3.5 h-3.5 mr-2 inline" />
-                 Workspace Governance: Verified
+                 Workspace Governance: Active
               </Badge>
               <h1 className="text-2xl font-bold text-foreground">
                  Team Directory
               </h1>
               <p className="text-muted-foreground text-sm max-w-xl">
-                 Manage workspace operators, access permissions, and autonomous bridge authority.
+                 Manage team members, access roles, and platform permissions.
               </p>
            </div>
            <Button variant="primary" className="h-11 px-6 rounded-lg gap-2">
               <UserPlus className="w-4 h-4" />
-              Invite Operator
+              Invite Team Member
            </Button>
         </div>
 
@@ -142,7 +142,7 @@ export default function TeamPage() {
               </div>
               <div className="md:col-span-2 flex justify-end">
                  <Button variant="primary" onClick={handleSaveKeys} isLoading={isSavingKeys} className="px-6 font-bold tracking-wide">
-                    Lock Vault & Deploy to Team
+                    Save API Keys to Workspace
                  </Button>
               </div>
            </div>
@@ -151,9 +151,9 @@ export default function TeamPage() {
         {/* Workspace IQ Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
            {[
-             { label: "Active Nodes", value: members.length.toString(), icon: Users, color: "text-indigo-600" },
+             { label: "Active Members", value: members.length.toString(), icon: Users, color: "text-indigo-600" },
              { label: "Active Admins", value: members.filter((m: UserOut) => m.role === 'admin').length.toString(), icon: Lock, color: "text-indigo-600" },
-             { label: "Synthesis Uptime", value: "99.9%", icon: TrendingUp, color: "text-emerald-600" },
+             { label: "System Uptime", value: "99.9%", icon: TrendingUp, color: "text-emerald-600" },
              { label: "Infrastructure", value: "Verified", icon: Fingerprint, color: "text-emerald-600" },
            ].map((stat, i) => (
              <Card key={i} className="p-6 space-y-4 bg-card border-border shadow-sm rounded-xl">
@@ -171,14 +171,14 @@ export default function TeamPage() {
            ))}
         </div>
 
-        {/* Operator Registry */}
+        {/* Team Directory */}
         <Card className="p-0 bg-card border border-border shadow-sm overflow-hidden rounded-xl">
            <div className="p-6 border-b border-border flex flex-col md:flex-row items-center justify-between gap-4 bg-muted/20">
               <div className="relative flex-1 w-full md:max-w-md group">
                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                  <input 
                    type="text" 
-                   placeholder="Search operator registry..." 
+                   placeholder="Search team members..." 
                    className="w-full bg-background border border-border focus:ring-2 focus:ring-primary rounded-lg py-2 pl-10 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground transition-all"
                  />
               </div>
@@ -194,19 +194,19 @@ export default function TeamPage() {
               {isLoading && (
                  <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center z-20 gap-4">
                     <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Syncing Registry...</span>
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Syncing Directory...</span>
                  </div>
               )}
               
               <table className="w-full text-left">
                  <thead>
                     <tr className="bg-muted/10 border-b border-border">
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Operator Node</th>
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Bridge Authority</th>
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Authentication</th>
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Last Epoch</th>
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Initialization</th>
-                       <th className="p-6 text-right text-xs font-bold uppercase text-muted-foreground tracking-wider">Protocols</th>
+                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Team Member</th>
+                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Role & Permissions</th>
+                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Status</th>
+                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Last Active</th>
+                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Joined Date</th>
+                       <th className="p-6 text-right text-xs font-bold uppercase text-muted-foreground tracking-wider">Actions</th>
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-border">

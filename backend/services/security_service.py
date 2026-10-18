@@ -5,8 +5,12 @@ Handles PII encryption and structured audit logging.
 import base64
 import hashlib
 from cryptography.fernet import Fernet
-from config import settings
-from db.models import AuditLog, AsyncSessionLocal
+try:
+    from backend.config import settings
+    from backend.db.models import AuditLog, AsyncSessionLocal
+except ImportError:
+    from config import settings
+    from db.models import AuditLog, AsyncSessionLocal
 import uuid
 import structlog
 

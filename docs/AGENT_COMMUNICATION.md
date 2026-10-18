@@ -1,51 +1,68 @@
-# DVT Talent AI — Agent Communication Fabric (v1.1)
+# DVT Talent AI — Agent Communication Fabric
+**Version:** 2.0.0 (October 2026)  
+**Agent Framework:** Pydantic AI 1.94.0  
 
-The **Communication Fabric** enables a loosely coupled, event-driven architecture for the DVT Talent AI agent swarm. With the migration to **Pydantic AI**, agents now utilize a dual-layer communication strategy: **Direct Context Sharing** for task-specific data and **Event-Driven Telemetry** for global visibility.
+---
 
-## 🏗️ Architecture
+## 1. Overview
+
+The **Communication Fabric** enables a loosely coupled, event-driven architecture for the DVT Talent AI 5-agent recruitment swarm. Agents communicate via **Direct Context Sharing** for sequential pipeline handoffs and **Event-Driven Telemetry** for real-time visibility in the Recruiter Command Center.
+
+---
+
+## 2. Agent Interaction & Pipeline Topology
+
 ```mermaid
 graph TD
-    A[Market IQ Agent] -->|Signal: swarm_start| BUS[Redis Telemetry Bus]
-    A -->|Pass Context| B[Discovery Agent]
-    B -->|Broadcast: jd_generated| BUS
+    A[Requisition Analyzer Agent] -->|Signal: requisition_parsed| BUS[Redis Telemetry Bus]
+    A -->|Pass Skill Taxonomy| B[Candidate Sourcing Agent]
     
-    B -->|Shared Memory| MEM[Redis State Store]
-    C[Sourcing Agent] -->|Recall Context| MEM
+    B -->|Broadcast: candidates_discovered| BUS
+    B -->|Shared Memory| MEM[Redis / DB State Store]
     
-    C -->|Signal: candidate_found| BUS
-    BUS -->|WS Stream| UI[Nexus Dashboard]
+    C[Candidate Screening Agent] -->|Evaluate CVs| MEM
+    C -->|Signal: screening_complete| BUS
+    
+    D[Critic & Governance Agent] -->|Adverse Impact & Audit| C
+    D -->|Signal: audit_passed| BUS
+    
+    D -->|Checkpoint Pause| HITL[Human Recruiter Review Gate]
+    HITL -->|Approved Sequence| E[Outreach Dispatcher Agent]
+    
+    BUS -->|WebSocket Stream| UI[Recruiter Command Center]
 ```
 
-## 🧠 Shared Context (Pydantic AI)
-Agents share critical resources and tenant isolation metadata via the `AgentDeps` object. This is passed through the `RunContext` at each step of the pipeline.
+---
 
-### Shared Dependencies
-- **HTTP Client**: A unified `httpx.AsyncClient` for all web requests.
-- **Tenant ID**: Ensures every agent operation is strictly isolated to the current user's workspace.
-- **Global Settings**: Access to shared LLM configurations and mock-mode toggles.
+## 3. Shared Context & Pydantic AI Dependencies
 
-## 📡 Telemetry & Event Bus
-The `EventBus` uses Redis Pub/Sub to broadcast real-time signals to the **Nexus Dashboard**.
+Agents share critical resources and tenant isolation metadata via the `AgentDeps` structure passed through `RunContext`:
 
-### Telemetry Signals
-- `agent_start`: Broadcast when an agent begins a new sequence.
-- `agent_info`: Detailed progress logs (displayed in the Neural Stream).
-- `agent_success`: Confirmation of task completion.
-- `agent_error`: Graceful failure reports with error context.
+### Shared Dependencies:
+- **HTTP Client**: Unified `httpx.AsyncClient` with connection pooling, retries, and rate-limiting.
+- **Tenant ID**: Guarantees that candidate queries, ATS writes, and email sequences remain strictly isolated to the recruiter's tenant.
+- **Provider Settings**: Configured fallback models (OpenAI, Anthropic, Groq, DeepSeek).
+- **Privacy Filters**: Enforces exclusion of candidates who have toggled `is_searchable = false` or blacklisted the target employer's domain in `hide_from_companies`.
 
-### Emitting Signals
-```python
-# Via the orchestrator or tasks relay
-broadcast_signal(
-    message="Scanning market for technology roles...",
-    signal_type="agent_info",
-    tenant_id=current_tenant_id
-)
-```
+---
 
-## 📜 Data Integrity
-With **Pydantic AI**, all agent-to-agent data transfer is strictly validated using Pydantic models. This eliminates the "Hallucination Gap" common in legacy string-based agent communication.
+## 4. Telemetry Signals & Event Bus
 
-## 🛠️ Troubleshooting
-- **WebSocket Handshake**: If the dashboard shows "Disconnected," verify the JWT contains a valid `tenant_id`.
-- **Redis Connectivity**: The telemetry stream requires an active Redis server on `127.0.0.1:6379`.
+The `EventBus` broadcasts real-time execution signals consumed by the frontend **Swarm Monitor** and **Neural Stream** via WebSockets:
+
+| Signal Type | Description |
+|---|---|
+| `agent_start` | Broadcast when a specialized agent initiates a sequence. |
+| `agent_info` | Granular progress updates (displayed in the Neural Stream). |
+| `agent_success` | Confirmation of task stage completion. |
+| `checkpoint_awaiting` | Notification that the workflow is paused awaiting recruiter sign-off. |
+| `agent_error` | Graceful failure reports with recovery suggestions. |
+
+---
+
+## 5. Structured Data Integrity
+
+By utilizing **Pydantic AI**, all agent inputs and outputs conform to strict Pydantic models. This guarantees:
+- Zero data schema mismatch between sequential agents.
+- Elimination of prompt injection and hallucinated field structures.
+- Type-safe persistence into PostgreSQL and SQLite.

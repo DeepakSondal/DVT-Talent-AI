@@ -82,8 +82,8 @@ async def list_candidates(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = select(Candidate)
-    count_query = select(func.count(Candidate.id))
+    query = select(Candidate).where(Candidate.tenant_id == current_user.tenant_id)
+    count_query = select(func.count(Candidate.id)).where(Candidate.tenant_id == current_user.tenant_id)
 
     if search:
         search_filter = (
@@ -107,7 +107,7 @@ async def list_candidates(
         query = query.where(Candidate.source == source)
         count_query = count_query.where(Candidate.source == source)
 
-    total = (await db.execute(count_query)).scalar()
+    total = (await db.execute(count_query)).scalar() or 0
     query = query.order_by(desc(Candidate.score)).offset((page - 1) * page_size).limit(page_size)
     candidates = (await db.execute(query)).scalars().all()
 
@@ -189,7 +189,9 @@ async def get_candidate(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Candidate).where(Candidate.id == candidate_id))
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    )
     candidate = result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -203,7 +205,9 @@ async def update_candidate_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(Candidate).where(Candidate.id == candidate_id))
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    )
     candidate = result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -227,7 +231,9 @@ async def upload_resume(
 
     content = await file.read()
 
-    result = await db.execute(select(Candidate).where(Candidate.id == candidate_id))
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    )
     candidate = result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -276,13 +282,21 @@ async def score_candidate(
 
 
 async def analyze_resume_background(resume_id: str, content: bytes, filename: str):
-    from workers.tasks import analyze_resume_task
-    analyze_resume_task.delay(resume_id, base64.b64encode(content).decode(), filename)
+    try:
+        from workers.tasks import analyze_resume_task, safe_dispatch_task
+        safe_dispatch_task(analyze_resume_task, resume_id, base64.b64encode(content).decode(), filename)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Could not enqueue analyze_resume_task: {e}")
 
 
 async def score_candidate_background(candidate_id: str, job_id: Optional[str]):
-    from workers.tasks import score_candidate_task
-    score_candidate_task.delay(candidate_id, job_id)
+    try:
+        from workers.tasks import score_candidate_task, safe_dispatch_task
+        safe_dispatch_task(score_candidate_task, candidate_id, job_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Could not enqueue score_candidate_task: {e}")
 
 
 

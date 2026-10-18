@@ -41,12 +41,12 @@ export default function SupportPage() {
            </div>
         </div>
 
-        {/* Specialized Knowledge Nodes */}
+        {/* Help Categories & Documentation */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
            {[
-             { title: "Operator Initiation", icon: BookOpen, desc: "Step-by-step protocols for your first autonomous recruitment campaign." },
-             { title: "Synthetic API", icon: Terminal, desc: "High-fidelity technical documentation for deep ecosystem integration." },
-             { title: "Signal Governance", icon: Shield, desc: "Privacy compliance metrics, data sovereignty, and security protocols." },
+             { title: "Getting Started", icon: BookOpen, desc: "Step-by-step guides for running your first automated recruitment campaign." },
+             { title: "API & Integrations", icon: Terminal, desc: "Technical documentation for ATS syncing and custom workflow integration." },
+             { title: "Compliance & Security", icon: Shield, desc: "EEOC adherence, AI bias safeguards, data privacy, and SOC2 protocols." },
            ].map((topic: any, i: number) => (
              <motion.div
                key={i}
@@ -63,14 +63,14 @@ export default function SupportPage() {
                  <h3 className="text-xl font-black text-foreground mb-3 italic tracking-tight uppercase leading-none">{topic.title}</h3>
                  <p className="text-[11px] font-black text-muted-foreground leading-relaxed italic opacity-60 mb-8">{topic.desc}</p>
                  <div className="mt-auto flex items-center gap-2 text-[10px] font-black text-primary uppercase tracking-[0.2em] group-hover:gap-4 transition-all">
-                    Explore Node <ArrowRight className="w-3.5 h-3.5" />
+                    View Guide <ArrowRight className="w-3.5 h-3.5" />
                  </div>
                </Card>
              </motion.div>
            ))}
         </div>
 
-        {/* Human Assistance Bridge */}
+        {/* Support & Help Desk */}
         <Card className="p-10 bg-primary/5 border-primary/10 rounded-[3rem] flex flex-col lg:flex-row items-center justify-between gap-10 shadow-inner">
            <div className="flex items-center gap-8 text-center lg:text-left flex-col lg:flex-row">
               <div className="w-20 h-20 rounded-[2.5rem] bg-white flex items-center justify-center border border-border shadow-md">

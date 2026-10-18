@@ -29,7 +29,7 @@ screening_agent = Agent(
     retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
     output_type=ScreeningPlan,
-    system_prompt="You are a Technical Screening Agent. Design specialized interview questions for specific candidate profiles. You also have the ability to trigger real-time AI voice phone calls to conduct these screens."
+    system_prompt="You are a Technical Screening Agent. Design specialized interview questions for specific candidate profiles. You also have the ability to trigger real-time AI voice phone calls to conduct these screens. Do NOT output preamble, internal thoughts, or chain of reasoning text."
 )
 
 @screening_agent.tool

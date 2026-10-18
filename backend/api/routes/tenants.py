@@ -40,7 +40,9 @@ async def update_my_tenant(
     db: AsyncSession = Depends(get_db)
 ):
     """ Update tenant branding and profile (Admin only) """
-    if current_user.role not in ["admin"]:
+    # Check if role has admin/recruiter permission for tenant branding
+    role_val = getattr(current_user.role, "value", current_user.role)
+    if role_val not in ["admin", "recruiter", "manager"]:
          raise HTTPException(status_code=403, detail="Insufficient permissions")
          
     query = select(Tenant).filter(Tenant.id == current_user.tenant_id)
@@ -66,13 +68,15 @@ async def get_team_members(
     query = select(User).filter(User.tenant_id == current_user.tenant_id)
     result = await db.execute(query)
     return result.scalars().all()
+
 @router.post("/complete-onboarding")
 async def complete_onboarding(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """ Mark the current tenant as onboarded (First Run Wizard complete) """
-    if current_user.role not in ["admin"]:
+    role_val = getattr(current_user.role, "value", current_user.role)
+    if role_val not in ["admin", "recruiter", "manager"]:
          raise HTTPException(status_code=403, detail="Insufficient permissions")
          
     query = select(Tenant).filter(Tenant.id == current_user.tenant_id)
@@ -85,3 +89,4 @@ async def complete_onboarding(
     tenant.onboarded = True
     await db.commit()
     return {"status": "success", "message": "Onboarding complete"}
+

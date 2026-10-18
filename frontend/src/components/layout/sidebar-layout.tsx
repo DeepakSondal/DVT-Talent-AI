@@ -53,15 +53,17 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     {
       items: [
         { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-        { label: "Swarm Control", icon: Rocket, href: "/dashboard/swarm" },
-        { label: "Discovery Lab", icon: Search, href: "/dashboard/discovery" },
-        { label: "Sourcing Lab", icon: Target, href: "/dashboard/sourcing" },
-        { label: "Outreach Lab", icon: Mail, href: "/dashboard/outreach" },
-        { label: "Talent Grid", icon: Users, href: "/dashboard/candidates" },
-        { label: "Analytics", icon: Zap, href: "/dashboard/monitoring" },
-        { label: "Billing", icon: CreditCard, href: "/dashboard/billing" },
+        { label: "AI Automation", icon: Rocket, href: "/dashboard/swarm" },
+        { label: "AI Governance", icon: ShieldCheck, href: "/dashboard/compliance" },
+        { label: "Recruiter Approvals", icon: Bot, href: "/dashboard/approvals" },
+        { label: "Job Requisitions", icon: Briefcase, href: "/dashboard/jobs" },
+        { label: "Talent Sourcing", icon: Target, href: "/dashboard/sourcing" },
+        { label: "Outreach Campaigns", icon: Mail, href: "/dashboard/outreach" },
+        { label: "Candidates", icon: Users, href: "/dashboard/candidates" },
+        { label: "Analytics & Monitoring", icon: Zap, href: "/dashboard/monitoring" },
+        { label: "Billing & Credits", icon: CreditCard, href: "/dashboard/billing" },
         // Render Team tab ONLY for Managers
-        ...(user?.role === "manager" || (user?.role as string) === "MANAGER" ? [{ label: "Team & Vault", icon: ShieldCheck, href: "/dashboard/team" }] : []),
+        ...(user?.role === "manager" || (user?.role as string) === "MANAGER" ? [{ label: "Team Management", icon: ShieldCheck, href: "/dashboard/team" }] : []),
       ]
     }
   ];

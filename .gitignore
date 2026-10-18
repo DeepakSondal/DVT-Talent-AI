@@ -12,11 +12,12 @@ share/python-wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
+# Virtual environments & links
 venv/
 env/
 ENV/
 .venv/
+backend/backend
 
 # Environment files
 .env
@@ -83,6 +84,8 @@ credentials.json
 credentials.json.json
 generate_token.py
 backend/test_agent_diagnostic.py
+backend/run_live_swarm_test.py
+backend/test_groq_models.py
 .env.production
 
 # AI & Editor Config

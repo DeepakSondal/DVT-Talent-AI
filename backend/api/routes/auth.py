@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from config import settings
-from db.models import User, UserRole, Tenant, get_db
+from db.models import User, UserRole, Tenant, Candidate, CandidateStatus, get_db
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -28,6 +28,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    role: Optional[str] = "recruiter"
 
 
 class UserLogin(BaseModel):
@@ -49,7 +50,7 @@ class TokenData(BaseModel):
 
 
 class UserOut(BaseModel):
-    id: str
+    id: uuid.UUID
     email: str
     full_name: str
     role: str
@@ -144,34 +145,76 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Create a default workspace tenant for the new user
-    tenant = Tenant(
-        name=f"{user_data.full_name}'s Workspace",
-        domain=user_data.email.split("@")[-1],
-        is_active=True
-    )
-    db.add(tenant)
-    await db.flush()
+    is_candidate = (user_data.role or "").strip().lower() == "candidate"
+    
+    tenant_id = None
+    if not is_candidate:
+        # Create a default workspace tenant for the recruiter/agency
+        email_domain = user_data.email.split("@")[-1].lower()
+        common_domains = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "example.com", "test.com", "proton.me", "protonmail.com"}
+        
+        existing_tenant = (await db.execute(select(Tenant).where(Tenant.domain == email_domain))).scalar_one_or_none()
+        tenant_domain = f"{email_domain}-{uuid.uuid4().hex[:6]}" if (email_domain in common_domains or existing_tenant) else email_domain
+
+        tenant = Tenant(
+            name=f"{user_data.full_name}'s Workspace",
+            domain=tenant_domain,
+            is_active=True
+        )
+        db.add(tenant)
+        await db.flush()
+        tenant_id = tenant.id
 
     user = User(
         email=user_data.email,
         full_name=user_data.full_name,
         hashed_password=await hash_password(user_data.password),
-        role=UserRole.RECRUITER,
-        tenant_id=tenant.id,
+        role=UserRole.CANDIDATE if is_candidate else UserRole.RECRUITER,
+        tenant_id=tenant_id,
     )
     db.add(user)
+    await db.flush()
+
+    if is_candidate:
+        # Check if an existing candidate record was previously sourced with this email
+        cand_res = await db.execute(select(Candidate).where(Candidate.email == user_data.email))
+        existing_cand = cand_res.scalar_one_or_none()
+        name_parts = user_data.full_name.strip().split(" ", 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        if existing_cand:
+            existing_cand.user_id = user.id
+            if not existing_cand.first_name:
+                existing_cand.first_name = first_name
+            if not existing_cand.last_name:
+                existing_cand.last_name = last_name
+        else:
+            new_candidate = Candidate(
+                user_id=user.id,
+                first_name=first_name,
+                last_name=last_name or "Candidate",
+                email=user_data.email,
+                status=CandidateStatus.SOURCED,
+                is_searchable=True,
+            )
+            db.add(new_candidate)
+
     await db.commit()
     await db.refresh(user)
 
-    token_data = {"sub": str(user.id), "tenant_id": str(user.tenant_id)}
+    token_data = {
+        "sub": str(user.id),
+        "role": user.role.value,
+        "tenant_id": str(user.tenant_id) if user.tenant_id else ""
+    }
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
     
     content = {
         "access_token": access_token,
         "user_id": str(user.id),
-        "tenant_id": str(user.tenant_id),
+        "tenant_id": str(user.tenant_id) if user.tenant_id else None,
         "email": user.email,
         "full_name": user.full_name,
         "role": user.role.value,
@@ -213,14 +256,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     user.last_login = datetime.now(timezone.utc)
     await db.commit()
 
-    token_data = {"sub": str(user.id), "tenant_id": str(user.tenant_id)}
+    token_data = {
+        "sub": str(user.id),
+        "role": user.role.value,
+        "tenant_id": str(user.tenant_id) if user.tenant_id else ""
+    }
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
     
     content = {
         "access_token": access_token,
         "user_id": str(user.id),
-        "tenant_id": str(user.tenant_id),
+        "tenant_id": str(user.tenant_id) if user.tenant_id else None,
         "email": user.email,
         "full_name": user.full_name,
         "role": user.role.value,

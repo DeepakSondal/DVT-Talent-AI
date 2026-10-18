@@ -22,6 +22,14 @@ from backend.services.notification_service import notification_service
 
 log = structlog.get_logger(__name__)
 
+def _get_agent_data(res: Any) -> Any:
+    """Helper to safely retrieve data/output from Pydantic AI AgentRunResult across versions."""
+    if hasattr(res, 'output'):
+        return res.output
+    if hasattr(res, 'data'):
+        return res.data
+    return res
+
 def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: str = "default", payload: Any = None):
     """Bridge to the Celery task broadcaster for live UI telemetry"""
     from backend.workers.tasks import broadcast_signal as relay
@@ -41,6 +49,15 @@ class AgentOrchestrator:
         self.tenant_id = tenant_id
         self.job_id = job_id
         self.context = {"tenant_id": tenant_id, "job_id": job_id}
+        self.agents = {
+            "market_iq": market_iq_agent,
+            "discovery": discovery_agent,
+            "sourcing": sourcing_agent,
+            "outreach": outreach_agent,
+            "analytics": analytics_agent,
+            "screening": screening_agent,
+            "critic": critic_agent,
+        }
 
     async def _resolve_tenant_keys(self) -> Dict[str, Optional[str]]:
         """Query the database to load and decrypt Team API Keys for this tenant."""
@@ -59,7 +76,6 @@ class AgentOrchestrator:
             
         try:
             async with AsyncSessionLocal() as session:
-                # Find a team belonging to this tenant
                 import uuid
                 tenant_uuid = uuid.UUID(self.tenant_id) if isinstance(self.tenant_id, str) else self.tenant_id
                 
@@ -102,6 +118,27 @@ class AgentOrchestrator:
             mock_mode=mock_mode
         )
 
+    async def _run_agent_with_retry(
+        self, agent, prompt: str, deps: Any, model: Any, model_settings: Optional[Dict[str, Any]] = None, max_attempts: int = 3
+    ) -> Any:
+        if hasattr(agent, "run_async"):
+            return await agent.run_async(prompt, deps=deps, model=model, model_settings=model_settings)
+        last_error = None
+        for attempt in range(max_attempts):
+            try:
+                if attempt > 0:
+                    await asyncio.sleep(4 * attempt)
+                return await agent.run(prompt, deps=deps, model=model, model_settings=model_settings)
+            except Exception as e:
+                last_error = e
+                err_str = str(e).lower()
+                if "429" in err_str or "rate_limit" in err_str or "tpm" in err_str or "too large" in err_str:
+                    log.warning("agent_rate_limit_retry", attempt=attempt+1, error=str(e))
+                    await asyncio.sleep(5 * (attempt + 1))
+                else:
+                    raise e
+        raise last_error
+
     async def run_full_pipeline(
         self,
         industry: str = "technology",
@@ -116,7 +153,6 @@ class AgentOrchestrator:
         results = {"stages": {}}
 
         async with httpx.AsyncClient() as client:
-            # Load and decrypt tenant keys
             t_keys = await self._resolve_tenant_keys()
             
             deps = AgentDeps(
@@ -132,60 +168,71 @@ class AgentOrchestrator:
             try:
                 # 1. Market IQ
                 broadcast_signal("Agent 'market_iq' initiating market analysis...", "agent_start", self.tenant_id)
-                market_iq_res = await market_iq_agent.run(
-                    f"Analyze {industry} market in {location}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 250}
+                market_iq_res = await self._run_agent_with_retry(
+                    market_iq_agent, f"Analyze {industry} market in {location}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 1200}
                 )
                 broadcast_signal("Agent 'market_iq' completed analysis.", "agent_success", self.tenant_id)
-                results["stages"]["market_iq"] = market_iq_res.data.model_dump()
+                m_data = _get_agent_data(market_iq_res)
+                results["stages"]["market_iq"] = m_data.model_dump() if hasattr(m_data, 'model_dump') else m_data
                 
+                await asyncio.sleep(3)
+
                 # 2. Discovery
                 broadcast_signal("Agent 'discovery' extracting JD constraints...", "agent_start", self.tenant_id)
-                discovery_res = await discovery_agent.run(
-                    f"Identify leads and extract JD for {industry} in {location}", deps=deps, model=dynamic_model
+                discovery_res = await self._run_agent_with_retry(
+                    discovery_agent, f"Identify leads and extract JD for {industry} in {location}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 1200}
                 )
                 broadcast_signal("Agent 'discovery' completed JD extraction.", "agent_success", self.tenant_id)
                 
+                await asyncio.sleep(3)
+
                 # 3. Sourcing with Self-Healing Fallback Loop
                 broadcast_signal("Agent 'sourcing' initiated node discovery...", "agent_start", self.tenant_id)
                 
-                # Safely extract JD data, checking if the attribute exists
+                disc_data = _get_agent_data(discovery_res)
                 extracted_jd_data = "{}"
-                if hasattr(discovery_res.data, 'extracted_jd') and discovery_res.data.extracted_jd:
-                    extracted_jd_data = discovery_res.data.extracted_jd.model_dump_json()
-                elif hasattr(discovery_res.data, 'optimized_jd') and discovery_res.data.optimized_jd:
-                    extracted_jd_data = discovery_res.data.optimized_jd.model_dump_json()
+                if hasattr(disc_data, 'extracted_jd') and disc_data.extracted_jd:
+                    extracted_jd_data = disc_data.extracted_jd.model_dump_json()
+                elif hasattr(disc_data, 'optimized_jd') and disc_data.optimized_jd:
+                    extracted_jd_data = disc_data.optimized_jd.model_dump_json()
 
-                sourcing_res = await sourcing_agent.run(
-                    f"Find candidates for {industry} roles in {location} matching constraints: {extracted_jd_data}", deps=deps, model=dynamic_model
+                sourcing_res = await self._run_agent_with_retry(
+                    sourcing_agent, f"Find candidates for {industry} roles in {location} matching constraints: {extracted_jd_data}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 1200}
                 )
                 
+                sourc_data = _get_agent_data(sourcing_res)
+                candidates = getattr(sourc_data, 'candidates', [])
+                
                 # THE FALLBACK PROTOCOL
-                if len(sourcing_res.data.candidates) < 3:
+                if len(candidates) < 3:
                     broadcast_signal("WARNING: Sourcing threshold unmet (0-2 nodes found). Initiating fallback to Discovery...", "agent_info", self.tenant_id)
+                    await asyncio.sleep(3)
                     
-                    # Bounce back to Discovery to loosen constraints
-                    discovery_res = await discovery_agent.run(
-                        f"Extract JD for {industry} in {location}. PREVIOUS EXTRACTION YIELDED NO CANDIDATES. LOOSEN THE 'MUST-HAVE' CONSTRAINTS IMMEDIATELY.", deps=deps, model=dynamic_model
+                    discovery_res = await self._run_agent_with_retry(
+                        discovery_agent, f"Extract JD for {industry} in {location}. PREVIOUS EXTRACTION YIELDED NO CANDIDATES. LOOSEN THE 'MUST-HAVE' CONSTRAINTS IMMEDIATELY.", deps=deps, model=dynamic_model, model_settings={"max_tokens": 1200}
                     )
-                    
-                    if hasattr(discovery_res.data, 'extracted_jd') and discovery_res.data.extracted_jd:
-                        extracted_jd_data = discovery_res.data.extracted_jd.model_dump_json()
-                    elif hasattr(discovery_res.data, 'optimized_jd') and discovery_res.data.optimized_jd:
-                        extracted_jd_data = discovery_res.data.optimized_jd.model_dump_json()
+                    disc_data = _get_agent_data(discovery_res)
+                    if hasattr(disc_data, 'extracted_jd') and disc_data.extracted_jd:
+                        extracted_jd_data = disc_data.extracted_jd.model_dump_json()
+                    elif hasattr(disc_data, 'optimized_jd') and disc_data.optimized_jd:
+                        extracted_jd_data = disc_data.optimized_jd.model_dump_json()
                         
                     broadcast_signal("Agent 'sourcing' re-initiating hunt with loosened market constraints...", "agent_start", self.tenant_id)
-                    sourcing_res = await sourcing_agent.run(
-                        f"Find candidates for {industry} roles in {location} matching loosened constraints: {extracted_jd_data}", deps=deps, model=dynamic_model
+                    await asyncio.sleep(3)
+                    sourcing_res = await self._run_agent_with_retry(
+                        sourcing_agent, f"Find candidates for {industry} roles in {location} matching loosened constraints: {extracted_jd_data}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 1200}
                     )
+                    sourc_data = _get_agent_data(sourcing_res)
+                    candidates = getattr(sourc_data, 'candidates', [])
 
                 broadcast_signal("Agent 'sourcing' completed node discovery.", "agent_success", self.tenant_id)
-                
+                await asyncio.sleep(3)
+
                 # 3. Logic Audit (Critic) with Payload Trimming
                 broadcast_signal("Agent 'critic' initiating logic audit...", "agent_start", self.tenant_id)
                 
-                # STRATEGY 1: Payload Trimming. Strip heavy github/linkedin raw data.
                 sanitized_candidates = []
-                for c in sourcing_res.data.candidates:
+                for c in candidates:
                     c_dict = c.model_dump() if hasattr(c, 'model_dump') else c
                     sanitized_candidates.append({
                         "name": c_dict.get("full_name", ""),
@@ -193,50 +240,54 @@ class AgentOrchestrator:
                         "experience": c_dict.get("experience_years", 0)
                     })
                 
-                audit_res = await critic_agent.run(
-                    f"Audit these trimmed candidates: {sanitized_candidates}", 
-                    deps=deps, 
-                    model=dynamic_model
+                audit_res = await self._run_agent_with_retry(
+                    critic_agent, f"Audit these trimmed candidates: {sanitized_candidates}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 1200}
                 )
                 broadcast_signal("Agent 'critic' audit complete: Trust verified.", "agent_success", self.tenant_id)
                 
-                results["stages"]["discovery"] = discovery_res.data.model_dump()
-                results["stages"]["sourcing"] = sourcing_res.data.model_dump()
-                results["stages"]["critic"] = audit_res.data.model_dump()
+                c_data = _get_agent_data(audit_res)
+                results["stages"]["discovery"] = disc_data.model_dump() if hasattr(disc_data, 'model_dump') else disc_data
+                results["stages"]["sourcing"] = sourc_data.model_dump() if hasattr(sourc_data, 'model_dump') else sourc_data
+                results["stages"]["critic"] = c_data.model_dump() if hasattr(c_data, 'model_dump') else c_data
                 
-                # 4. Outreach (STRATEGY 2: Batch Processing)
+                await asyncio.sleep(3)
+
+                # 4. Outreach
                 broadcast_signal("Agent 'outreach' drafting personalized sequences in bulk...", "agent_start", self.tenant_id)
-                candidates = sourcing_res.data.candidates
                 
                 candidate_names = [c.full_name if hasattr(c, 'full_name') else c.get('full_name', 'Unknown') for c in candidates[:5]]
+                raw_role = getattr(disc_data, 'job_description', f"{industry} Role")
+                role_desc = str(raw_role)[:200]
                 
-                # Draft all emails in a single API call
-                out_res = await outreach_agent.run(
-                    f"Draft personalized outreach for these candidates: {candidate_names} for role {discovery_res.data.job_description}",
-                    deps=deps,
-                    model=dynamic_model,
-                    model_settings={"max_tokens": 800} # STRATEGY 4: Hard Cap
+                out_res = await self._run_agent_with_retry(
+                    outreach_agent, f"Draft personalized outreach for these candidates: {candidate_names} for role {role_desc}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 1200}
                 )
                 
                 broadcast_signal("Agent 'outreach' sequence drafting complete.", "agent_success", self.tenant_id)
-                results["stages"]["outreach"] = out_res.data.model_dump()
+                out_data = _get_agent_data(out_res)
+                results["stages"]["outreach"] = out_data.model_dump() if hasattr(out_data, 'model_dump') else out_data
                 
+                await asyncio.sleep(3)
+
                 # 5. Analytics
                 broadcast_signal("Agent 'analytics' generating run report...", "agent_start", self.tenant_id)
-                analytics_res = await analytics_agent.run("Generate report for this run", deps=deps, model=dynamic_model)
+                analytics_res = await self._run_agent_with_retry(
+                    analytics_agent, "Generate report for this run", deps=deps, model=dynamic_model, model_settings={"max_tokens": 1200}
+                )
                 broadcast_signal("Agent 'analytics' report generated.", "agent_success", self.tenant_id)
-                results["stages"]["analytics"] = analytics_res.data.model_dump()
+                a_data = _get_agent_data(analytics_res)
+                results["stages"]["analytics"] = a_data.model_dump() if hasattr(a_data, 'model_dump') else a_data
                 
                 # 6. Optional Screening
                 if enable_screening:
+                    await asyncio.sleep(3)
                     screening_results = []
                     for cand in candidates[:3]:
-                        scr_res = await screening_agent.run(
-                            f"Screen {cand.full_name} for {discovery_res.data.job_description}",
-                            deps=deps,
-                            model=dynamic_model
+                        scr_res = await self._run_agent_with_retry(
+                            screening_agent, f"Screen {getattr(cand, 'full_name', 'Candidate')} for role {role_desc}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 1200}
                         )
-                        screening_results.append(scr_res.data.model_dump())
+                        s_item = _get_agent_data(scr_res)
+                        screening_results.append(s_item.model_dump() if hasattr(s_item, 'model_dump') else s_item)
                     results["stages"]["screening"] = screening_results
 
             except Exception as e:
@@ -296,7 +347,6 @@ class AgentOrchestrator:
         results = {}
         dynamic_model = get_pydantic_model(deps=deps)
         
-        # Build a rich context string
         context_parts = []
         if job_title: context_parts.append(f"for {job_title}")
         if industry: context_parts.append(f"in {industry} sector")
@@ -309,15 +359,15 @@ class AgentOrchestrator:
         
         broadcast_signal(f"Discovery Agent scanning {full_context}...", "agent_start", self.tenant_id)
         
-        # 1. Market IQ with rich context
         res_iq = await market_iq_agent.run(f"Analyze market trends {full_context}", deps=deps, model=dynamic_model)
-        results["market_iq"] = res_iq.data.model_dump()
+        m_data = _get_agent_data(res_iq)
+        results["market_iq"] = m_data.model_dump() if hasattr(m_data, 'model_dump') else m_data
         broadcast_signal("Market IQ Analysis Complete: Strategic vectors identified.", "agent_info", self.tenant_id, payload={"market_iq": results["market_iq"]})
         
-        # 2. Discovery with rich context
         broadcast_signal(f"Synthesizing Hyper-Sourcing results {full_context}...", "agent_start", self.tenant_id)
         res_disc = await discovery_agent.run(f"Identify leads and optimize JD {full_context}", deps=deps, model=dynamic_model)
-        results["discovery"] = res_disc.data.model_dump()
+        d_data = _get_agent_data(res_disc)
+        results["discovery"] = d_data.model_dump() if hasattr(d_data, 'model_dump') else d_data
         broadcast_signal("Hyper-Sourcing Complete: Market positioning and target nodes synthesized.", "agent_success", self.tenant_id, payload={"discovery": results["discovery"]})
         
         if mode == "copilot":
@@ -334,18 +384,20 @@ class AgentOrchestrator:
         """Phase 2: Talent Sourcing."""
         dynamic_model = get_pydantic_model(deps=deps)
         res = await sourcing_agent.run(f"Find candidates for: {job_description}", deps=deps, model=dynamic_model)
-        sourcing_res = res.data.model_dump()
+        s_data = _get_agent_data(res)
+        sourcing_res = s_data.model_dump() if hasattr(s_data, 'model_dump') else s_data
         
-        # Audit
-        audit = await critic_agent.run(f"Audit: {res.data.model_dump_json()}", deps=deps, model=dynamic_model)
-        sourcing_res["audit"] = audit.data.model_dump()
+        audit = await critic_agent.run(f"Audit: {s_data.model_dump_json() if hasattr(s_data, 'model_dump_json') else str(s_data)}", deps=deps, model=dynamic_model)
+        a_data = _get_agent_data(audit)
+        sourcing_res["audit"] = a_data.model_dump() if hasattr(a_data, 'model_dump') else a_data
         
         if mode == "copilot":
+            cand_count = len(getattr(s_data, 'candidates', [])) if hasattr(s_data, 'candidates') else 0
             await notification_service.notify_recruiter_action(
                 tenant_id=deps.tenant_id,
                 action_type="Candidates Ready",
                 job_title=job_description[:50],
-                details=f"Found {len(res.data.candidates)} candidates."
+                details=f"Found {cand_count} candidates."
             )
         return {"sourcing": sourcing_res}
 
@@ -354,30 +406,25 @@ class AgentOrchestrator:
         results = []
         dynamic_model = get_pydantic_model(deps=deps)
         
-        # ISSUE 1 FIX: Deliverability Collapse (Spam Blacklist Prevention)
-        # Enforce a hard volume limit to protect the agency's primary email domain.
         MAX_DAILY_OUTREACH = 30
         if len(approved_candidates) > MAX_DAILY_OUTREACH:
             approved_candidates = approved_candidates[:MAX_DAILY_OUTREACH]
-            # Emit a warning to the frontend
             print(f"WARNING: Outreach capped at {MAX_DAILY_OUTREACH} candidates to protect domain reputation.")
         
-        # STRATEGY 2 & 3: Batch Outreach, Opt-In Screening
         candidate_names = [c.get("full_name") for c in approved_candidates]
         
-        # Draft all outreach in one shot
         out = await outreach_agent.run(f"Draft outreach for {candidate_names} for role {job.get('title')}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 800})
-        outreach_data = out.data.model_dump()
+        o_data = _get_agent_data(out)
+        outreach_data = o_data.model_dump() if hasattr(o_data, 'model_dump') else o_data
         
         for cand in approved_candidates:
             res_item = {"candidate": cand.get("full_name"), "outreach": outreach_data}
             
-            # STRATEGY 3: Only screen if explicitly requested
             if enable_screening:
                 scr = await screening_agent.run(f"Screen {cand.get('full_name')} for {job.get('title')}", deps=deps, model=dynamic_model, model_settings={"max_tokens": 400})
-                res_item["screening"] = scr.data.model_dump()
+                sc_data = _get_agent_data(scr)
+                res_item["screening"] = sc_data.model_dump() if hasattr(sc_data, 'model_dump') else sc_data
                 
             results.append(res_item)
             
         return results
-

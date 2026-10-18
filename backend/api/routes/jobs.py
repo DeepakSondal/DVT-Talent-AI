@@ -56,8 +56,8 @@ async def list_jobs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = select(Job).where(Job.is_active == True)
-    count_q = select(func.count(Job.id)).where(Job.is_active == True)
+    query = select(Job).where(and_(Job.tenant_id == current_user.tenant_id, Job.is_active == True))
+    count_q = select(func.count(Job.id)).where(and_(Job.tenant_id == current_user.tenant_id, Job.is_active == True))
     if company_id:
         query = query.where(Job.company_id == company_id)
         count_q = count_q.where(Job.company_id == company_id)
@@ -67,7 +67,7 @@ async def list_jobs(
     if remote is not None:
         query = query.where(Job.remote == remote)
         count_q = count_q.where(Job.remote == remote)
-    total = (await db.execute(count_q)).scalar()
+    total = (await db.execute(count_q)).scalar() or 0
     query = query.order_by(desc(Job.created_at)).offset((page - 1) * page_size).limit(page_size)
     items = (await db.execute(query)).scalars().all()
     return {"items": [JobOut.model_validate(i) for i in items], "total": total, "page": page, "page_size": page_size}
@@ -79,7 +79,7 @@ async def create_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    job = Job(**data.model_dump(exclude_none=True))
+    job = Job(**data.model_dump(exclude_none=True), tenant_id=current_user.tenant_id)
     db.add(job)
     await db.commit()
     await db.refresh(job)
@@ -90,7 +90,7 @@ async def create_job(
 
 @router.get("/{job_id}")
 async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    result = await db.execute(select(Job).where(Job.id == job_id))
+    result = await db.execute(select(Job).where(Job.id == job_id, Job.tenant_id == current_user.tenant_id))
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -98,7 +98,7 @@ async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db), current_user
 
 @router.patch("/{job_id}/deactivate", status_code=200)
 async def deactivate_job(job_id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    result = await db.execute(select(Job).where(Job.id == job_id))
+    result = await db.execute(select(Job).where(Job.id == job_id, Job.tenant_id == current_user.tenant_id))
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -107,5 +107,9 @@ async def deactivate_job(job_id: UUID, db: AsyncSession = Depends(get_db), curre
     return {"message": "Job deactivated"}
 
 async def _source_candidates_bg(job_id: str, skills: list, location: Optional[str]):
-    from workers.tasks import source_candidates_for_job
-    source_candidates_for_job.delay(job_id, skills, location)
+    try:
+        from workers.tasks import source_candidates_for_job, safe_dispatch_task
+        safe_dispatch_task(source_candidates_for_job, job_id, skills, location)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Could not enqueue source_candidates_for_job task: {e}")

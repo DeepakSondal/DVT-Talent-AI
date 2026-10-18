@@ -20,22 +20,26 @@ import { Suspense } from "react";
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const initialPortal = searchParams.get("portal") === "candidate" ? "candidate" : "recruiter";
+  const [portal, setPortal] = useState<"recruiter" | "candidate">(initialPortal);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   
-  const from = searchParams.get("from") || "/dashboard";
+  const from = searchParams.get("from") || (portal === "candidate" ? "/portal" : "/dashboard");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await authApi.login({ email, password });
+      const res = await authApi.login({ email: email.trim().toLowerCase(), password });
+      const isCandidateUser = res.role === "candidate" || portal === "candidate";
       toast.success("Login Successful", {
-        description: "Welcome back to DVT Talent.",
+        description: isCandidateUser ? "Welcome to your Candidate Portal." : "Welcome back to DVT Talent.",
         icon: <Shield className="w-4 h-4 text-indigo-600" />
       });
-      router.push(from);
+      const target = isCandidateUser ? "/portal" : (searchParams.get("from") || "/dashboard");
+      router.push(target);
     } catch (err: any) {
       const msg = err.response?.data?.detail || "Invalid credentials provided.";
       toast.error("Login Failed", {
@@ -55,15 +59,51 @@ function LoginContent() {
         initial={{ opacity: 0, y: 20, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-[440px] relative z-10"
+        className="w-full max-w-[460px] relative z-10"
       >
-        <Card className="bg-white border-slate-200 shadow-2xl shadow-indigo-600/5 p-10 space-y-8 rounded-2xl">
-          <div className="text-center space-y-3">
-             <div className="w-14 h-14 rounded-2xl bg-indigo-60 flex items-center justify-center mx-auto bg-indigo-50 border border-indigo-100 mb-6">
-                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">D</div>
+        <Card className="bg-white border-slate-200 shadow-2xl shadow-indigo-600/5 p-8 md:p-10 space-y-6 rounded-2xl">
+          {/* Segmented Portal Toggle */}
+          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl text-xs font-bold border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setPortal("recruiter")}
+              className={`py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 ${
+                portal === "recruiter"
+                  ? "bg-white text-indigo-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <span>💼 Recruiter</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPortal("candidate")}
+              className={`py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 ${
+                portal === "candidate"
+                  ? "bg-white text-emerald-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <span>🎯 Candidate</span>
+            </button>
+          </div>
+
+          <div className="text-center space-y-2">
+             <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-2 border">
+                {portal === "recruiter" ? (
+                  <div className="w-full h-full bg-indigo-50 border-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center font-bold text-lg">D</div>
+                ) : (
+                  <div className="w-full h-full bg-emerald-50 border-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center font-bold text-lg">🎯</div>
+                )}
              </div>
-             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Welcome to DVT Talent</h1>
-             <p className="text-sm font-medium text-slate-500">Log in to your enterprise recruiting dashboard</p>
+             <h1 className="text-xl font-bold tracking-tight text-slate-900">
+               {portal === "recruiter" ? "Recruiter Sign In" : "Candidate Sign In"}
+             </h1>
+             <p className="text-xs font-medium text-slate-500">
+               {portal === "recruiter" 
+                 ? "Access your talent sourcing swarms, requisitions, and candidate pipelines"
+                 : "Access your 5-dimension match scores, ATS resume tailor, and applications"}
+             </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">

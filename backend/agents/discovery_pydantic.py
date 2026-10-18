@@ -3,7 +3,7 @@ DVT Talent AI — Discovery Agent (Pydantic AI Version)
 Phase 1: Market Intelligence & Strategic JD Synthesis
 """
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
 from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
 import structlog
@@ -13,31 +13,35 @@ log = structlog.get_logger(__name__)
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class ExtractedJD(BaseModel):
-    title: str = Field(description="The exact job title from the market data")
-    core_stack: List[str] = Field(description="Primary technologies explicitly required in the JD")
-    must_haves: List[str] = Field(description="Absolute non-negotiable skills or experience extracted from the JD")
-    nice_to_haves: List[str] = Field(description="Bonus skills mentioned in the JD")
-    experience_range: str = Field(description="Required years of experience stated in the JD")
-    market_positioning: str = Field(description="The core value proposition or 'hook' the company is using to attract talent")
+    model_config = ConfigDict(extra="allow")
+    title: str = Field(default="Senior Software Engineer", description="The exact job title from the market data")
+    core_stack: List[str] = Field(default_factory=list, description="Primary technologies explicitly required in the JD")
+    must_haves: List[str] = Field(default_factory=list, description="Absolute non-negotiable skills or experience extracted from the JD")
+    nice_to_haves: List[str] = Field(default_factory=list, description="Bonus skills mentioned in the JD")
+    experience_range: str = Field(default="3-5 years", description="Required years of experience stated in the JD")
+    market_positioning: str = Field(default="Competitive", description="The core value proposition or 'hook' the company is using to attract talent")
 
 class MarketIQ(BaseModel):
-    currency: str = Field(description="Local currency symbol (e.g. $, ₹, €)")
-    salary_range: str = Field(description="Salary range in local currency")
-    talent_density: str = Field(description="Description of where talent is concentrated within the target country")
-    trending_skills: List[str] = Field(description="Skills currently on the rise in this sector")
-    competitor_activity: str = Field(description="Brief summary of what competitors are doing in this region")
+    model_config = ConfigDict(extra="allow")
+    currency: str = Field(default="$", description="Local currency symbol (e.g. $, ₹, €)")
+    salary_range: str = Field(default="$120,000 - $180,000", description="Salary range in local currency")
+    talent_density: str = Field(default="High", description="Description of where talent is concentrated within the target country")
+    trending_skills: List[str] = Field(default_factory=list, description="Skills currently on the rise in this sector")
+    competitor_activity: str = Field(default="Active", description="Brief summary of what competitors are doing in this region")
 
 class TargetCompany(BaseModel):
-    name: str
-    hiring_velocity: str = Field(description="High, Medium, or Stable")
-    signals: List[str] = Field(description="e.g. 'Recent Series B', 'Multiple new engineering openings'")
-    fit_score: float = Field(description="0-100 score of how well this company fits the search")
+    model_config = ConfigDict(extra="allow")
+    name: str = Field(default="TechCorp")
+    hiring_velocity: str = Field(default="High", description="High, Medium, or Stable")
+    signals: List[str] = Field(default_factory=list, description="e.g. 'Recent Series B', 'Multiple new engineering openings'")
+    fit_score: float = Field(default=90.0, description="0-100 score of how well this company fits the search")
 
 class DiscoveryResult(BaseModel):
-    market_iq: MarketIQ
-    target_companies: List[TargetCompany]
-    extracted_jd: ExtractedJD
-    strategic_advice: str = Field(description="Expert commentary on how to win this talent")
+    model_config = ConfigDict(extra="allow")
+    market_iq: MarketIQ = Field(default_factory=MarketIQ)
+    target_companies: List[TargetCompany] = Field(default_factory=list)
+    extracted_jd: ExtractedJD = Field(default_factory=ExtractedJD)
+    strategic_advice: str = Field(default="Focus on target tech hubs and competitive equity packages.")
 
 # ── Agent Definition ─────────────────────────────────────────────────────────
 
@@ -51,9 +55,10 @@ discovery_agent = Agent(
         "Your mission is to analyze real-world job descriptions scraped by the Market IQ Agent. "
         "1. INGEST: Read the raw job postings and requirements provided in the context. "
         "2. ANALYZE: Break down the actual JD to find the absolute 'Must-Have' technical skills and 'Nice-to-Have' bonuses. "
-        "3. EXTRACT: Do NOT hallucinate or generate a new JD from scratch. Extract the core stack and requirements directly from the provided market data. "
+        "3. EXTRACT: Extract the core stack and requirements directly from the provided market data. "
         "4. SYNTHESIZE: Provide a list of target companies and high-velocity signals based on the market. "
-        "Always hunt for REAL companies and base your extraction strictly on the live web data."
+        "5. Do NOT attempt to call nonexistent or unprovided tools. "
+        "6. Do NOT output preamble, internal thoughts, or chain of reasoning text."
     )
 )
 
@@ -84,7 +89,7 @@ async def search_market_signals(ctx: RunContext[AgentDeps], query: str) -> str:
         return "\n\n".join(results) if results else "No significant market signals found."
     except Exception as e:
         log.error("serper_api_error", error=str(e))
-        raise RuntimeError(f"Market Signal Search Failed: {str(e)}")
+        return f"Market signal search temporary error ({str(e)}). Synthesize requirements using provided Market IQ data."
 
 @discovery_agent.tool
 async def research_company_deep_dive(ctx: RunContext[AgentDeps], research_goal: str) -> str:

@@ -55,7 +55,7 @@ async def seed():
         user = existing_user.scalar_one_or_none()
         
         if not user:
-            password = "admin_password_123"
+            password = os.getenv("ADMIN_PASSWORD", "admin_password_123")
             hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             
             user = User(

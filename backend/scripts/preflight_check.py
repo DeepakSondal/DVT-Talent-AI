@@ -14,6 +14,10 @@ from dotenv import load_dotenv
 # Add the backend directory to sys.path to import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+
 from config import settings
 
 # ANSI Color Codes for terminal output

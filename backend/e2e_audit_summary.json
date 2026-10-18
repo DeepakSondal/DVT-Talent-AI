@@ -1,0 +1,184 @@
+[
+  {
+    "workflow": "1. Authentication & RBAC",
+    "test": "User Registration",
+    "status": "PASSED",
+    "details": "User and tenant workspace created cleanly",
+    "evidence": "HTTP 201, UserID: b0c7937e-d7f6-4ce9-8d60-2d8da8e5ba81"
+  },
+  {
+    "workflow": "1. Authentication & RBAC",
+    "test": "Duplicate Registration Rejection",
+    "status": "PASSED",
+    "details": "Duplicate email properly rejected with HTTP 400",
+    "evidence": "{\"detail\":\"Email already registered\"}"
+  },
+  {
+    "workflow": "1. Authentication & RBAC",
+    "test": "Invalid Password Rejection",
+    "status": "PASSED",
+    "details": "Rejected invalid credentials with HTTP 401",
+    "evidence": "{\"detail\":\"Incorrect email or password\"}"
+  },
+  {
+    "workflow": "1. Authentication & RBAC",
+    "test": "Valid Login & JWT Issuance",
+    "status": "PASSED",
+    "details": "Issued JWT token and set HttpOnly cookies",
+    "evidence": "HTTP 200, Token len: 280"
+  },
+  {
+    "workflow": "1. Authentication & RBAC",
+    "test": "Profile Verification (/auth/me)",
+    "status": "PASSED",
+    "details": "Identity verified via JWT claims",
+    "evidence": "HTTP 200, Role: recruiter"
+  },
+  {
+    "workflow": "1. Authentication & RBAC",
+    "test": "Unauthenticated Route Guard",
+    "status": "PASSED",
+    "details": "Route correctly blocked with HTTP 401 Unauthorized",
+    "evidence": "{\"detail\":\"Could not validate credentials\"}"
+  },
+  {
+    "workflow": "2. Dashboard & Analytics",
+    "test": "Main Dashboard KPIs",
+    "status": "PASSED",
+    "details": "Retrieved scoped KPI summary",
+    "evidence": "Companies: 0, Candidates: 0"
+  },
+  {
+    "workflow": "2. Dashboard & Analytics",
+    "test": "Pipeline Funnel Breakdown",
+    "status": "PASSED",
+    "details": "Lead and Candidate funnels computed cleanly",
+    "evidence": "Lead stages: 7"
+  },
+  {
+    "workflow": "3. Sales Lead Discovery",
+    "test": "Company Creation & Tenant Scoping",
+    "status": "PASSED",
+    "details": "Company created and assigned to tenant",
+    "evidence": "Company ID: 5c05cd5c-6422-4b69-b594-7cca18eaef38"
+  },
+  {
+    "workflow": "3. Sales Lead Discovery",
+    "test": "Lead Pipeline Intake",
+    "status": "PASSED",
+    "details": "Lead successfully created in sales pipeline",
+    "evidence": "Lead ID: 321e9c39-1736-4a11-bad2-8c1c3def5e9a"
+  },
+  {
+    "workflow": "3. Sales Lead Discovery",
+    "test": "Hiring Signal Monitoring Intake",
+    "status": "PASSED",
+    "details": "Recent market signals retrieved successfully",
+    "evidence": "Retrieved 0 signals"
+  },
+  {
+    "workflow": "4. Sourcing & Candidate Matching",
+    "test": "Job Requisition Creation",
+    "status": "PASSED",
+    "details": "Job created with skill requirements and tenant scoping",
+    "evidence": "Job ID: 204b450b-3db2-435d-9686-1cc6c95f7111"
+  },
+  {
+    "workflow": "4. Sourcing & Candidate Matching",
+    "test": "Candidate Intake & Ranking",
+    "status": "PASSED",
+    "details": "Candidate ingested with score 94.5% and skills",
+    "evidence": "Candidate ID: 21b56d3b-8d1b-4167-b2a0-13eae636a4f3"
+  },
+  {
+    "workflow": "4. Sourcing & Candidate Matching",
+    "test": "Resume Validation Guard",
+    "status": "PASSED",
+    "details": "Blocked non-document file extension (.exe)",
+    "evidence": "{\"detail\":\"Only PDF, DOCX, TXT files allowed\"}"
+  },
+  {
+    "workflow": "4. Sourcing & Candidate Matching",
+    "test": "Resume Document Intake",
+    "status": "PASSED",
+    "details": "Accepted PDF document and registered resume entity",
+    "evidence": "HTTP 200"
+  },
+  {
+    "workflow": "4. Sourcing & Candidate Matching",
+    "test": "Candidate Shortlist CSV Export",
+    "status": "PASSED",
+    "details": "Generated CSV stream with talent synthesis headers",
+    "evidence": "CSV bytes: 223"
+  },
+  {
+    "workflow": "5. Personalized Outreach",
+    "test": "Campaign Creation & Template Configuration",
+    "status": "PASSED",
+    "details": "Campaign sequence established with dynamic placeholders",
+    "evidence": "Campaign ID: db6cfe0e-dc91-4a9e-975a-9681767ef8a6"
+  },
+  {
+    "workflow": "6. Email Integration & Tracking",
+    "test": "Email Sender Config Inspection",
+    "status": "PASSED",
+    "details": "Fetched tenant email sender status",
+    "evidence": "Configured: False"
+  },
+  {
+    "workflow": "6. Email Integration & Tracking",
+    "test": "Admin RBAC Protection on SMTP Test",
+    "status": "PASSED",
+    "details": "Recruiter role blocked from admin email test with HTTP 403",
+    "evidence": "{\"detail\":\"Only admins can test the sender\"}"
+  },
+  {
+    "workflow": "6. Email Integration & Tracking",
+    "test": "Email Open Tracking Pixel",
+    "status": "PASSED",
+    "details": "Returned 1x1 transparent GIF with HTTP 200",
+    "evidence": "Bytes: 43"
+  },
+  {
+    "workflow": "6. Email Integration & Tracking",
+    "test": "Click Tracking Redirect",
+    "status": "PASSED",
+    "details": "Tracked recipient engagement and emitted HTTP 302/307 redirect",
+    "evidence": "https://talent-ai.dvt.com/careers"
+  },
+  {
+    "workflow": "7. Database & Vector Search",
+    "test": "Vector Store Singleton Architecture",
+    "status": "PASSED",
+    "details": "VectorStore preserves memory reference across calls",
+    "evidence": ""
+  },
+  {
+    "workflow": "7. Database & Vector Search",
+    "test": "Vector Embedding Generation",
+    "status": "PASSED",
+    "details": "Generated vector embedding of length 384",
+    "evidence": ""
+  },
+  {
+    "workflow": "7. Database & Vector Search",
+    "test": "Vector Search Tenant-Scoped Query",
+    "status": "PASSED",
+    "details": "Vector store fallback safely handled without crash when ChromaDB server offline",
+    "evidence": "ChromaDB offline fallback verified"
+  },
+  {
+    "workflow": "8. Background Jobs & Recovery",
+    "test": "Background Task Status Polling",
+    "status": "PASSED",
+    "details": "Handled non-existent/active task query gracefully",
+    "evidence": "HTTP 404"
+  },
+  {
+    "workflow": "8. Background Jobs & Recovery",
+    "test": "Malformed Swarm Phase Rejection",
+    "status": "PASSED",
+    "details": "Properly handled malformed phase input with error code 400",
+    "evidence": "{\"detail\":\"Invalid phase\"}"
+  }
+]

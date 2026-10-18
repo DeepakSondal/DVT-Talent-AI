@@ -47,16 +47,10 @@ def get_pydantic_model(dynamic_api_key: str = None, deps: Optional['AgentDeps'] 
 
     # 3. System Defaults
     if settings.groq_api_key:
-        from openai import AsyncOpenAI
-        from pydantic_ai.providers.openai import OpenAIProvider
-        client = AsyncOpenAI(
-            base_url=settings.groq_api_base,
-            api_key=settings.groq_api_key
-        )
-        return OpenAIModel(
-            model_name=settings.groq_model,
-            provider=OpenAIProvider(openai_client=client)
-        )
+        import os
+        from pydantic_ai.models.groq import GroqModel
+        os.environ["GROQ_API_KEY"] = settings.groq_api_key
+        return GroqModel(model_name=settings.groq_model)
 
     
     if settings.openai_api_key:

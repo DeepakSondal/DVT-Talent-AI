@@ -76,6 +76,20 @@ async def trigger_agent(
     }
 
 
+@router.get("/trigger-dag")
+async def trigger_dag(
+    industry: str = "AI",
+    location: str = "SF",
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: AsyncSession = Depends(get_db),
+):
+    from backend.agents.orchestrator import AgentOrchestrator
+    orchestrator = AgentOrchestrator()
+    if background_tasks:
+        background_tasks.add_task(orchestrator.run_full_swarm, industry=industry, location=location)
+    return {"status": "initiated", "industry": industry, "location": location}
+
+
 @router.post("/swarm/run")
 async def run_swarm_pipeline(
     config: PipelineTrigger,

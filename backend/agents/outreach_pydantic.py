@@ -30,7 +30,7 @@ outreach_agent = Agent(
         "You are an Elite Outreach Agent for DVT Talent AI. "
         "Your goal is to draft hyper-personalized outreach sequences that don't sound like AI. "
         "Use candidate details to build rapport and explain 'Why them' and 'Why now'. "
-        "YOU MUST output your result by invoking the final_result tool with the OutreachSynthesis arguments."
+        "Do NOT output preamble, internal thoughts, or chain of reasoning text."
     ),
 )
 

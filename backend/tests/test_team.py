@@ -4,17 +4,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import uuid
 
-
-from backend.main import app
-from backend.db.models import User, UserRole, Team, TeamApiKeys
+from main import app
+from db.models import User, UserRole, Team, TeamApiKeys, Tenant
 
 @pytest.mark.asyncio
 async def test_create_manager_and_team(db_session: AsyncSession):
+    tenant = Tenant(name="Enterprise Tenant")
+    db_session.add(tenant)
+    await db_session.commit()
+
     # 1. Create Manager
     manager = User(
         email="manager@enterprise.com",
         full_name="Enterprise Manager",
         role=UserRole.MANAGER,
+        tenant_id=tenant.id,
         hashed_password="mock"
     )
     db_session.add(manager)
@@ -23,6 +27,7 @@ async def test_create_manager_and_team(db_session: AsyncSession):
     # 2. Create Team
     team = Team(
         name="Global Sourcing",
+        tenant_id=tenant.id,
         manager_id=manager.id,
         default_credit_limit=5000,
         shared_pool_enabled=True
@@ -53,6 +58,7 @@ async def test_invite_recruiter_and_inherit_keys(db_session: AsyncSession):
         email="recruiter@enterprise.com",
         full_name="Junior Recruiter",
         role=UserRole.RECRUITER,
+        tenant_id=team.tenant_id,
         manager_id=team.manager_id,
         team_id=team.id,
         hashed_password="mock"
@@ -71,9 +77,14 @@ async def test_invite_recruiter_and_inherit_keys(db_session: AsyncSession):
 async def test_team_api_keys_encryption(db_session: AsyncSession):
     from services.security_service import encrypt_pii, decrypt_pii
     
+    tenant = Tenant(name="Sec Tenant")
+    db_session.add(tenant)
+    await db_session.commit()
+
     # 1. Create a dummy team
     team = Team(
         name="Security Test Team",
+        tenant_id=tenant.id,
         manager_id=uuid.uuid4(), # mock ID
         default_credit_limit=1000
     )

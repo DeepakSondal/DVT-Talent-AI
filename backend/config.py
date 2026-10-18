@@ -28,10 +28,10 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
 
-    # Database (PostgreSQL Connection Pooling)
+    # Database (Connection Pooling)
     database_url: str = ""
-    db_pool_size: int = 100
-    db_max_overflow: int = 200
+    db_pool_size: int = 20
+    db_max_overflow: int = 10
     database_sync_url: str = ""
     postgres_db: str = ""
     postgres_user: str = ""
@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # AI — Groq (High Speed)
     groq_api_key: str = ""
     groq_api_base: str = "https://api.groq.com/openai/v1"
-    groq_model: str = "openai/gpt-oss-120b"
+    groq_model: str = "openai/gpt-oss-20b"
 
     # Search
     serper_api_key: str = ""
@@ -179,10 +179,6 @@ class Settings(BaseSettings):
         if self.deepseek_api_key:
             return self.deepseek_model
         return self.openai_model
-
-    # [NEW] Enterprise Hardening: Connection Pooling
-    db_pool_size: int = 20
-    db_max_overflow: int = 10
 
     def validate_required_settings(self) -> None:
         """

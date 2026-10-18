@@ -65,8 +65,14 @@ async def list_leads(
     current_user: User = Depends(get_current_user),
 ):
     from sqlalchemy.orm import selectinload
-    query = select(Lead).options(selectinload(Lead.company)).where(Lead.owner_id == current_user.id)
-    count_q = select(func.count(Lead.id)).where(Lead.owner_id == current_user.id)
+    query = select(Lead).options(selectinload(Lead.company)).where(
+        Lead.owner_id == current_user.id,
+        Lead.tenant_id == current_user.tenant_id
+    )
+    count_q = select(func.count(Lead.id)).where(
+        Lead.owner_id == current_user.id,
+        Lead.tenant_id == current_user.tenant_id
+    )
     if status:
         query = query.where(Lead.status == status)
         count_q = count_q.where(Lead.status == status)
@@ -80,7 +86,7 @@ async def list_leads(
         count_q = count_q.join(Lead.company).where(
             (Company.name.ilike(search_filter)) | (Lead.notes.ilike(search_filter))
         )
-    total = (await db.execute(count_q)).scalar()
+    total = (await db.execute(count_q)).scalar() or 0
     query = query.order_by(desc(Lead.score)).offset((page - 1) * page_size).limit(page_size)
     items = (await db.execute(query)).scalars().all()
     
@@ -98,7 +104,7 @@ async def list_leads(
 
 @router.post("", status_code=201)
 async def create_lead(data: LeadCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    lead = Lead(**data.model_dump(exclude_none=True), owner_id=current_user.id)
+    lead = Lead(**data.model_dump(exclude_none=True), owner_id=current_user.id, tenant_id=current_user.tenant_id)
     db.add(lead)
     await db.commit()
     await db.refresh(lead)

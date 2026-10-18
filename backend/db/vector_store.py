@@ -38,7 +38,7 @@ class VectorStore:
     def _init_chroma(self):
         """Initialize ChromaDB HttpClient"""
         if not CHROMA_AVAILABLE:
-            print("⚠️ ChromaDB not installed. Vector Store running in MOCK mode.")
+            print("[WARNING] ChromaDB not installed. Vector Store running in MOCK mode.")
             self.client = None
             return
 
@@ -57,7 +57,7 @@ class VectorStore:
                     self.client = chromadb.PersistentClient(path="./chroma_db")
                     self._ensure_collections()
                 except Exception:
-                    print("⚠️ Failed to initialize Persistent ChromaDB. Vector Store is disabled.")
+                    print("[WARNING] Failed to initialize Persistent ChromaDB. Vector Store is disabled.")
                     self.client = None
             else:
                 raise e

@@ -26,7 +26,7 @@ critic_agent = Agent(
         "1. Check the candidate details against requirement expectations. "
         "2. Ensure the candidate strictly meets the JD. "
         "3. You can use consult_swarm_memory to check historical rejection rules. "
-        "4. YOU MUST output your result by invoking the final_result tool with the AuditResult arguments."
+        "4. Do NOT output preamble, internal thoughts, or chain of reasoning text."
     )
 )
 

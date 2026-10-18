@@ -2,6 +2,7 @@
 DVT Talent AI — Stripe Billing API
 Handles subscription plans, Stripe Checkout, Customer Portal, and webhooks.
 """
+import uuid
 import stripe
 import structlog
 from datetime import datetime, timezone
@@ -178,8 +179,17 @@ async def stripe_webhook(
         plan_id = data.get("metadata", {}).get("plan_id")
 
         if tenant_id and plan_id:
-            tenant: Optional[Tenant] = await db.get(Tenant, tenant_id)
-            plan_result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
+            try:
+                t_uuid = uuid.UUID(str(tenant_id)) if isinstance(tenant_id, (str, uuid.UUID)) else tenant_id
+            except (ValueError, TypeError):
+                t_uuid = tenant_id
+            try:
+                p_uuid = uuid.UUID(str(plan_id)) if isinstance(plan_id, (str, uuid.UUID)) else plan_id
+            except (ValueError, TypeError):
+                p_uuid = plan_id
+
+            tenant: Optional[Tenant] = await db.get(Tenant, t_uuid)
+            plan_result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == p_uuid))
             plan: Optional[SubscriptionPlan] = plan_result.scalar_one_or_none()
 
             if tenant and plan:

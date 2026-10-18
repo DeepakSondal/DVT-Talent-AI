@@ -24,10 +24,10 @@ def test_vector_store_live_index():
     # vs.collection.delete(ids=[test_id])
     
     # 2. Upsert
-    vs.upsert_resume(test_id, test_text, test_meta)
+    vs.upsert_resume("tenant_integration_001", test_id, test_text, test_meta)
     
     # 3. Query
-    results = vs.query_similar_resumes("Distributed Systems Engineer Rust", n_results=1)
+    results = vs.search_resumes("tenant_integration_001", "Distributed Systems Engineer Rust", limit=1)
     
     assert len(results) >= 1
     assert results[0]["id"] == test_id

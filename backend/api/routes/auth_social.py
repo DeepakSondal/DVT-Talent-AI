@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from config import settings
-from db.models import User, get_db
+from db.models import User, Tenant, get_db
 from api.routes.auth import create_access_token
 
 log = structlog.get_logger()
@@ -103,13 +103,29 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
     user = result.scalars().first()
 
     if not user:
+        # Find or create a default workspace tenant for the new social user
+        email_domain = email.split("@")[-1].lower()
+        common_domains = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "example.com", "test.com", "proton.me", "protonmail.com"}
+        existing_tenant = (await db.execute(select(Tenant).where(Tenant.domain == email_domain))).scalar_one_or_none()
+        tenant_domain = f"{email_domain}-{uuid.uuid4().hex[:6]}" if (email_domain in common_domains or existing_tenant) else email_domain
+
+        full_name = user_info.get("name") or user_info.get("login") or email.split("@")[0]
+        tenant = Tenant(
+            name=f"{full_name}'s Workspace",
+            domain=tenant_domain,
+            is_active=True
+        )
+        db.add(tenant)
+        await db.flush()
+
         # Create new social user
         user = User(
             email=email,
-            full_name=user_info.get("name") or user_info.get("login") or email.split("@")[0],
+            full_name=full_name,
             provider=provider,
             provider_id=provider_id,
             is_active=True,
+            tenant_id=tenant.id,
             hashed_password="oauth_managed_no_password",
         )
         db.add(user)
@@ -132,7 +148,7 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
     # This prevents token leakage and protects against XSS.
     
     # Get the primary frontend origin for redirect
-    response = RedirectResponse(url=f"{settings.frontend_url}/dashboard")
+    response = RedirectResponse(url=f"{settings.frontend_url}/dashboard", status_code=302)
     
     # Set the session cookie
     response.set_cookie(

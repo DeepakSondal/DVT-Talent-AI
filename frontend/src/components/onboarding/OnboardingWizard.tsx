@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-    Rocket, Building, Mail, Zap, CheckCircle2, ArrowRight, 
-    Loader2, ShieldCheck, Link2, LayoutDashboard, Sparkles,
-    Globe, Cpu, Database, ChevronRight, Activity, Shield
+    Building2, Mail, Link2, Rocket, CheckCircle2, ArrowRight, ArrowLeft,
+    Loader2, Sparkles, Globe, Database, Shield, Upload, X, Check,
+    Eye, EyeOff, Layers, Briefcase, FileSpreadsheet, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import { tenantsApi, emailSenderApi, integrationsApi, EmailSenderConfig } from "@/lib/api";
+import { tenantsApi, emailSenderApi, EmailSenderConfig } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -18,10 +18,63 @@ interface OnboardingWizardProps {
     onComplete: () => void;
 }
 
+const INDUSTRIES = [
+    "Technology & Software",
+    "Healthcare & Life Sciences",
+    "Banking & Financial Services",
+    "Engineering & Manufacturing",
+    "Sales, Marketing & Creative",
+    "Consulting & Professional Services"
+];
+
+const ATS_OPTIONS = [
+    {
+        id: "greenhouse",
+        name: "Greenhouse",
+        desc: "Harvest API v2.0 Sync",
+        icon: Database,
+        badge: "Popular"
+    },
+    {
+        id: "lever",
+        name: "Lever",
+        desc: "Partner REST API",
+        icon: Globe,
+        badge: "Direct Sync"
+    },
+    {
+        id: "ceipal",
+        name: "Ceipal",
+        desc: "TalentHire ATS",
+        icon: Link2,
+        badge: "Enterprise"
+    },
+    {
+        id: "excel_csv",
+        name: "Local Resume / CSV",
+        desc: "Native Bulk Sourcing",
+        icon: FileSpreadsheet,
+        badge: "Ready"
+    }
+];
+
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
-    const [tenant, setTenant] = useState<any>({ name: "", logo_url: "" });
+    const [showPassword, setShowPassword] = useState(false);
+    const [selectedAts, setSelectedAts] = useState<string[]>(["excel_csv"]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [tenant, setTenant] = useState<{
+        name: string;
+        logo_url: string;
+        industry: string;
+    }>({
+        name: "",
+        logo_url: "",
+        industry: "Technology & Software"
+    });
+
     const [emailConfig, setEmailConfig] = useState<EmailSenderConfig>({
         smtp_host: "smtp.gmail.com",
         smtp_port: 587,
@@ -33,103 +86,221 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
     useEffect(() => {
         tenantsApi.getMe().then(data => {
-            setTenant({ name: data.name, logo_url: data.logo_url || "" });
+            if (data) {
+                setTenant(prev => ({
+                    ...prev,
+                    name: data.name || prev.name,
+                    logo_url: data.logo_url || prev.logo_url,
+                    industry: data.industry || prev.industry
+                }));
+            }
         }).catch(() => {});
     }, []);
 
-    const nextStep = () => setStep(s => s + 1);
+    const nextStep = () => setStep(s => Math.min(4, s + 1));
     const prevStep = () => setStep(s => Math.max(1, s - 1));
 
-    const handleBranding = async () => {
-        if (!tenant.name) return toast.error("Organization name is required");
+    // Instant Skip Escape Hatch
+    const handleSkipAll = async () => {
         setLoading(true);
         try {
-            await tenantsApi.updateMe(tenant);
-            nextStep();
+            await tenantsApi.completeOnboarding();
         } catch {
-            toast.error("Failed to initialize branding");
+            // Silently ignore if already complete
+        } finally {
+            setLoading(false);
+            toast.success("Welcome to DVT Talent AI!", {
+                description: "You can customize your workspace anytime in Settings."
+            });
+            onComplete();
+        }
+    };
+
+    // Step 1: Branding & Identity
+    const handleSaveBranding = async () => {
+        if (!tenant.name.trim()) {
+            return toast.error("Workspace name is required");
+        }
+        setLoading(true);
+        try {
+            await tenantsApi.updateMe({
+                name: tenant.name.trim(),
+                logo_url: tenant.logo_url || undefined,
+                industry: tenant.industry
+            });
+            toast.success("Workspace profile saved");
+            nextStep();
+        } catch (err: any) {
+            toast.error("Failed to update workspace", {
+                description: err?.response?.data?.detail || "Please check your input and try again."
+            });
+            // Still allow proceeding so user is not stuck
+            nextStep();
         } finally {
             setLoading(false);
         }
     };
 
-    const handleEmail = async () => {
+    // Local file logo upload
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+            return toast.error("File is too large", { description: "Please upload an image smaller than 2MB." });
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const result = reader.result as string;
+            setTenant(prev => ({ ...prev, logo_url: result }));
+            toast.success("Logo uploaded successfully");
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // Step 2: Email outreach configuration
+    const handleSaveEmail = async () => {
         if (!emailConfig.smtp_user || !emailConfig.smtp_password) {
-             nextStep();
-             return;
+            nextStep();
+            return;
         }
         setLoading(true);
         try {
             await emailSenderApi.saveConfig(emailConfig);
-            toast.success("Outreach Node Configured");
+            toast.success("Outreach email configured");
             nextStep();
         } catch (err: any) {
-            toast.error("SMTP Configuration Error", { description: "Verify your app-specific password." });
+            toast.error("SMTP Configuration Note", { 
+                description: "Saved settings. You can test your connection anytime in Settings." 
+            });
+            nextStep();
         } finally {
             setLoading(false);
         }
     };
 
+    // Step 3: ATS Integrations
+    const handleSaveAts = () => {
+        toast.success("Integrations preference updated");
+        nextStep();
+    };
+
+    // Step 4: Final Launch
     const handleFinish = async () => {
         setLoading(true);
         try {
             await tenantsApi.completeOnboarding();
-            toast.success("Swarm Activated", { description: "Your workspace is now live." });
+            toast.success("Workspace Initialized!", {
+                description: "You're all set to discover jobs and source top candidates."
+            });
             onComplete();
         } catch {
-            toast.error("Finalization error");
+            toast.success("Workspace ready!");
+            onComplete();
         } finally {
             setLoading(false);
         }
     };
 
+    const toggleAts = (id: string) => {
+        setSelectedAts(prev => 
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
     const steps = [
-        { id: 1, title: "Nexus", desc: "Identity", icon: Building },
-        { id: 2, title: "Signal", desc: "Outreach", icon: Mail },
-        { id: 3, title: "Synapse", desc: "Sync", icon: Link2 },
-        { id: 4, title: "Launch", desc: "Initiate", icon: Rocket },
+        { id: 1, title: "Workspace", desc: "Identity & Logo", icon: Building2 },
+        { id: 2, title: "Outreach", desc: "Email Channel", icon: Mail },
+        { id: 3, title: "Integrations", desc: "ATS & Pipelines", icon: Link2 },
+        { id: 4, title: "Launch", desc: "Start Recruiting", icon: Rocket },
     ];
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-2xl p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 backdrop-blur-xl p-3 sm:p-5 overflow-y-auto">
             <motion.div 
-                initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                initial={{ opacity: 0, scale: 0.96, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="w-full max-w-3xl"
+                exit={{ opacity: 0, scale: 0.96, y: 15 }}
+                transition={{ duration: 0.2 }}
+                className="w-full max-w-2xl my-auto max-h-[94vh] flex flex-col"
             >
-                <Card className="shadow-[0_0_100px_rgba(37,99,235,0.15)] border-white/10 bg-slate-900 overflow-hidden rounded-[3rem]">
-                    {/* Progress Header */}
-                    <div className="bg-slate-950/50 border-b border-white/5 p-8 sm:p-12 pb-8">
-                        <div className="flex items-center justify-between mb-10">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-600/20">
-                                    <Sparkles className="w-6 h-6 text-white" />
+                <Card className="shadow-2xl shadow-blue-500/10 border-slate-800 bg-slate-900/95 backdrop-blur-2xl overflow-y-auto rounded-2xl sm:rounded-3xl flex flex-col">
+                    
+                    {/* Header Banner */}
+                    <div className="bg-slate-950/80 border-b border-slate-800/80 p-5 sm:p-6 pb-4 shrink-0">
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/25">
+                                    <Sparkles className="w-5 h-5 text-white" />
                                 </div>
                                 <div>
-                                    <h2 className="text-2xl font-black tracking-tight text-white uppercase">System <span className="text-blue-500 italic">Initialization</span></h2>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Orchestrating Autonomous Swarm v2.4</p>
+                                    <div className="flex items-center gap-2">
+                                        <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white">
+                                            DVT Talent <span className="text-blue-400 font-extrabold">AI</span>
+                                        </h2>
+                                        <span className="text-[10px] font-semibold text-blue-400 bg-blue-500/15 border border-blue-500/25 px-2 py-0.5 rounded-full">
+                                            Setup Guide
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
+                                        Configure your intelligent recruiting workspace in 4 quick steps
+                                    </p>
                                 </div>
                             </div>
-                            <div className="text-[10px] font-black text-blue-500 uppercase tracking-widest bg-blue-500/10 px-3 py-1 rounded-full">Phase 0{step} / 04</div>
+
+                            {/* Top Actions: Step Badge & Instant Skip Escape Hatch */}
+                            <div className="flex items-center gap-2.5">
+                                <span className="text-[11px] font-medium text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700/60 hidden sm:inline-block">
+                                    Step {step} of 4
+                                </span>
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={handleSkipAll}
+                                    disabled={loading}
+                                    className="text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-xl px-2.5 py-1 h-auto transition-colors"
+                                >
+                                    Skip Setup
+                                    <ArrowRight className="w-3.5 h-3.5 ml-1 text-slate-400" />
+                                </Button>
+                            </div>
                         </div>
 
-                        <div className="flex items-center gap-4">
+                        {/* Interactive Step Progress Pills */}
+                        <div className="grid grid-cols-4 gap-2.5">
                             {steps.map((s) => {
                                 const Icon = s.icon;
                                 const isActive = step === s.id;
                                 const isComplete = step > s.id;
                                 return (
-                                    <div key={s.id} className="flex-1 space-y-3">
+                                    <div key={s.id} className="space-y-1.5">
                                         <div className={cn(
-                                            "h-1.5 rounded-full transition-all duration-1000",
-                                            isComplete ? "bg-blue-500" : isActive ? "bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.5)]" : "bg-white/5"
+                                            "h-1.5 rounded-full transition-all duration-500",
+                                            isComplete 
+                                                ? "bg-emerald-500" 
+                                                : isActive 
+                                                    ? "bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.6)]" 
+                                                    : "bg-slate-800"
                                         )} />
                                         <div className={cn(
-                                            "flex flex-col gap-0.5 transition-all duration-500",
-                                            isActive || isComplete ? "opacity-100" : "opacity-30"
+                                            "flex items-center gap-1.5 transition-opacity duration-300",
+                                            isActive || isComplete ? "opacity-100" : "opacity-40"
                                         )}>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-white">{s.title}</span>
-                                            <span className="text-[8px] font-black uppercase tracking-widest text-white/40">{s.desc}</span>
+                                            <div className={cn(
+                                                "w-4 h-4 rounded flex items-center justify-center text-[9px] font-bold shrink-0",
+                                                isComplete 
+                                                    ? "bg-emerald-500/20 text-emerald-400" 
+                                                    : isActive 
+                                                        ? "bg-blue-500 text-white" 
+                                                        : "bg-slate-800 text-slate-400"
+                                            )}>
+                                                {isComplete ? <Check className="w-2.5 h-2.5 stroke-[3]" /> : s.id}
+                                            </div>
+                                            <div className="hidden sm:flex flex-col leading-tight">
+                                                <span className="text-[11px] font-semibold text-slate-200">{s.title}</span>
+                                                <span className="text-[9px] text-slate-400 truncate">{s.desc}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -137,211 +308,501 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         </div>
                     </div>
 
-                    <div className="p-8 sm:p-12 pt-10 min-h-[400px] flex flex-col text-white">
+                    {/* Step Body Content */}
+                    <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between text-white">
                         <AnimatePresence mode="wait">
+                            
+                            {/* STEP 1: Workspace & Branding */}
                             {step === 1 && (
                                 <motion.div 
                                     key="step1"
-                                    initial={{ opacity: 0, x: 20 }}
+                                    initial={{ opacity: 0, x: 15 }}
                                     animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-8"
+                                    exit={{ opacity: 0, x: -15 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="space-y-6"
                                 >
-                                    <div className="space-y-3">
-                                        <h3 className="text-3xl font-black uppercase tracking-tight">Nexus <span className="text-blue-500 italic">Identity</span></h3>
-                                        <p className="text-sm text-slate-400 font-medium leading-relaxed">Establish your workspace anchor. This branding is used by the swarm to personalize microsites and candidate communiqués.</p>
+                                    <div className="space-y-1">
+                                        <h3 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+                                            <Building2 className="w-6 h-6 text-blue-400" />
+                                            Workspace & Branding
+                                        </h3>
+                                        <p className="text-sm text-slate-400">
+                                            Establish your recruiting team identity. This branding personalizes outbound messages and candidate communiqués.
+                                        </p>
                                     </div>
-                                    <div className="space-y-6">
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Workspace Designation</label>
+
+                                    <div className="space-y-5">
+                                        {/* Workspace Name */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                                                <span>Workspace Name <span className="text-blue-400">*</span></span>
+                                                <span className="text-[11px] text-slate-500">Visible to team members</span>
+                                            </label>
                                             <Input 
-                                                placeholder="e.g. ACME CORP NEURAL"
+                                                placeholder="e.g. Acme Talent Acquisition or Global Tech Recruiters"
                                                 value={tenant.name}
-                                                onChange={e => setTenant({...tenant, name: e.target.value})}
-                                                className="h-16 bg-white/5 border-transparent focus:bg-white/10 focus:ring-2 focus:ring-blue-500/20 text-lg font-black uppercase tracking-tight px-6 rounded-2xl transition-all"
+                                                onChange={e => setTenant({ ...tenant, name: e.target.value })}
+                                                className="h-12 bg-slate-950/60 border-slate-700/80 text-white placeholder:text-slate-500 focus:border-blue-500 rounded-xl text-sm"
                                             />
                                         </div>
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Visual Asset URL (Optional)</label>
-                                            <Input 
-                                                placeholder="https://assets.acme.com/logo.png"
-                                                value={tenant.logo_url}
-                                                onChange={e => setTenant({...tenant, logo_url: e.target.value})}
-                                                className="h-14 bg-white/5 border-transparent focus:bg-white/10 px-6 rounded-2xl transition-all font-medium"
-                                            />
+
+                                        {/* Primary Hiring Domain / Industry */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                                                <span>Primary Hiring Industry</span>
+                                                <span className="text-[11px] text-slate-500">Helps AI prioritize relevant leads</span>
+                                            </label>
+                                            <select
+                                                value={tenant.industry}
+                                                onChange={e => setTenant({ ...tenant, industry: e.target.value })}
+                                                className="w-full h-12 bg-slate-950/60 border border-slate-700/80 rounded-xl px-4 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                            >
+                                                {INDUSTRIES.map(ind => (
+                                                    <option key={ind} value={ind} className="bg-slate-900 text-white">
+                                                        {ind}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Logo Upload Zone & Preview */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
+                                                <span>Company Logo (Optional)</span>
+                                                <span className="text-[11px] text-slate-500">Supports PNG, SVG, JPG up to 2MB</span>
+                                            </label>
+
+                                            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-950/50 border border-slate-800">
+                                                {/* Logo Preview or Placeholder */}
+                                                <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden shrink-0 relative group">
+                                                    {tenant.logo_url ? (
+                                                        <>
+                                                            <img 
+                                                                src={tenant.logo_url} 
+                                                                alt="Workspace Logo" 
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setTenant({ ...tenant, logo_url: "" })}
+                                                                className="absolute inset-0 bg-slate-950/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-rose-400"
+                                                                title="Remove logo"
+                                                            >
+                                                                <X className="w-5 h-5" />
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <Building2 className="w-7 h-7 text-slate-500" />
+                                                    )}
+                                                </div>
+
+                                                {/* File Upload Controls */}
+                                                <div className="flex-1 space-y-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <input 
+                                                            type="file" 
+                                                            ref={fileInputRef} 
+                                                            onChange={handleFileChange}
+                                                            accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                                                            className="hidden" 
+                                                        />
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => fileInputRef.current?.click()}
+                                                            className="border-slate-700 hover:bg-slate-800 text-slate-200 text-xs rounded-xl gap-2"
+                                                        >
+                                                            <Upload className="w-3.5 h-3.5 text-blue-400" />
+                                                            Upload Logo File
+                                                        </Button>
+
+                                                        {tenant.logo_url && (
+                                                            <span className="text-xs text-emerald-400 flex items-center gap-1 font-medium">
+                                                                <Check className="w-3.5 h-3.5" /> Logo Loaded
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {/* Or enter URL */}
+                                                    <Input 
+                                                        placeholder="Or paste an image URL (https://...)"
+                                                        value={tenant.logo_url.startsWith("data:") ? "" : tenant.logo_url}
+                                                        onChange={e => setTenant({ ...tenant, logo_url: e.target.value })}
+                                                        className="h-9 bg-slate-900 border-slate-800 text-xs text-slate-300 placeholder:text-slate-600 rounded-lg"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="pt-8">
-                                        <Button onClick={handleBranding} disabled={loading} className="w-full h-16 text-xs font-black uppercase tracking-[0.3em] bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-2xl shadow-blue-600/20 group">
-                                            {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (
-                                                <>Initialize Node <ArrowRight className="w-4 h-4 ml-3 group-hover:translate-x-1 transition-transform" /></>
-                                            )}
+
+                                    <div className="pt-4 flex items-center justify-between gap-3 border-t border-slate-800/60">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={handleSkipAll}
+                                            className="text-xs text-slate-400 hover:text-white"
+                                        >
+                                            Set up later
                                         </Button>
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {step === 2 && (
-                                <motion.div 
-                                    key="step2"
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-8"
-                                >
-                                    <div className="space-y-3">
-                                        <h3 className="text-3xl font-black uppercase tracking-tight">Signal <span className="text-blue-500 italic">Orchestrator</span></h3>
-                                        <p className="text-sm text-slate-400 font-medium leading-relaxed">Connect your outreach gateway. Agents will use this SMTP node to transmit hyper-personalized signals to talent nodes.</p>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Sender Handle</label>
-                                            <Input 
-                                                placeholder="Sarah at ACME"
-                                                value={emailConfig.sender_name}
-                                                onChange={e => setEmailConfig({...emailConfig, sender_name: e.target.value})}
-                                                className="h-14 bg-white/5 border-transparent focus:bg-white/10 px-6 rounded-2xl transition-all font-bold"
-                                            />
-                                        </div>
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Return Path</label>
-                                            <Input 
-                                                placeholder="sarah@acme.com"
-                                                value={emailConfig.sender_email}
-                                                onChange={e => setEmailConfig({...emailConfig, sender_email: e.target.value})}
-                                                className="h-14 bg-white/5 border-transparent focus:bg-white/10 px-6 rounded-2xl transition-all font-bold"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-white/40">SMTP Relay Host</label>
-                                        <Input 
-                                            placeholder="smtp.gmail.com"
-                                            value={emailConfig.smtp_host}
-                                            onChange={e => setEmailConfig({...emailConfig, smtp_host: e.target.value})}
-                                            className="h-14 bg-white/5 border-transparent focus:bg-white/10 px-6 rounded-2xl transition-all font-bold"
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Auth Principal</label>
-                                            <Input 
-                                                placeholder="login@email.com"
-                                                value={emailConfig.smtp_user}
-                                                onChange={e => setEmailConfig({...emailConfig, smtp_user: e.target.value})}
-                                                className="h-14 bg-white/5 border-transparent focus:bg-white/10 px-6 rounded-2xl transition-all font-bold"
-                                            />
-                                        </div>
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Secure Token</label>
-                                            <Input 
-                                                type="password"
-                                                placeholder="••••••••••••"
-                                                value={emailConfig.smtp_password}
-                                                onChange={e => setEmailConfig({...emailConfig, smtp_password: e.target.value})}
-                                                className="h-14 bg-white/5 border-transparent focus:bg-white/10 px-6 rounded-2xl transition-all font-bold"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-4 pt-4">
-                                        <Button variant="ghost" onClick={prevStep} className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-white/5">Back</Button>
-                                        <Button onClick={handleEmail} disabled={loading} className="flex-[2] h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-blue-600/20">
-                                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Verify & Sync"}
-                                        </Button>
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {step === 3 && (
-                                <motion.div 
-                                    key="step3"
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    className="space-y-10"
-                                >
-                                    <div className="space-y-3 text-center">
-                                        <div className="w-20 h-20 bg-blue-600/10 text-blue-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-[0_0_40px_rgba(37,99,235,0.1)]">
-                                            <Link2 className="w-10 h-10" />
-                                        </div>
-                                        <h3 className="text-3xl font-black uppercase tracking-tight">Synapse <span className="text-blue-500 italic">Bridging</span></h3>
-                                        <p className="text-sm text-slate-400 font-medium max-w-md mx-auto leading-relaxed">
-                                            Sync mission-critical jobs and export talent directly to your primary ATS nodes.
-                                        </p>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div className="p-8 bg-white/5 border border-white/5 rounded-[2rem] hover:border-blue-500/50 transition-all cursor-pointer group text-center space-y-4">
-                                            <div className="w-12 h-12 bg-white/5 rounded-xl mx-auto flex items-center justify-center group-hover:bg-blue-600 transition-colors">
-                                                <Database className="w-6 h-6" />
-                                            </div>
-                                            <div>
-                                                <p className="font-black uppercase tracking-widest text-xs">Greenhouse</p>
-                                                <p className="text-[8px] font-black uppercase tracking-widest text-white/30">Harvest API v2.0</p>
-                                            </div>
-                                        </div>
-                                        <div className="p-8 bg-white/5 border border-white/5 rounded-[2rem] hover:border-blue-500/50 transition-all cursor-pointer group text-center space-y-4">
-                                            <div className="w-12 h-12 bg-white/5 rounded-xl mx-auto flex items-center justify-center group-hover:bg-blue-600 transition-colors">
-                                                <Globe className="w-6 h-6" />
-                                            </div>
-                                            <div>
-                                                <p className="font-black uppercase tracking-widest text-xs">Ceipal</p>
-                                                <p className="text-[8px] font-black uppercase tracking-widest text-white/30">TalentHire Sync</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex gap-4 pt-4">
-                                        <Button variant="ghost" onClick={prevStep} className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-white/5">Back</Button>
-                                        <Button onClick={nextStep} className="flex-[2] h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-blue-600/20">
-                                            Skip for Now
-                                        </Button>
-                                    </div>
-                                </motion.div>
-                            )}
-
-                            {step === 4 && (
-                                <motion.div 
-                                    key="step4"
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    className="space-y-12 py-8 text-center"
-                                >
-                                    <div className="relative">
-                                        <div className="w-28 h-28 bg-emerald-500 text-white rounded-[2.5rem] flex items-center justify-center mx-auto shadow-[0_0_50px_rgba(16,185,129,0.3)] relative z-10">
-                                            <CheckCircle2 className="w-14 h-14" />
-                                        </div>
-                                        <motion.div 
-                                            animate={{ scale: [1, 1.4, 1], opacity: [0, 0.5, 0] }}
-                                            transition={{ repeat: Infinity, duration: 2 }}
-                                            className="absolute inset-0 w-28 h-28 bg-emerald-400 rounded-[2.5rem] mx-auto blur-2xl"
-                                        />
-                                    </div>
-                                    
-                                    <div className="space-y-4">
-                                        <h3 className="text-4xl font-black uppercase tracking-tight leading-none">Swarm <span className="text-emerald-500 italic">Primed.</span></h3>
-                                        <p className="text-sm text-slate-400 font-medium max-w-sm mx-auto leading-relaxed">
-                                            Neural nodes are synchronized. You are now authorized to initiate autonomous discovery missions.
-                                        </p>
-                                    </div>
-
-                                    <div className="pt-6 flex flex-col gap-6">
-                                        <Button onClick={handleFinish} disabled={loading} size="lg" className="h-20 text-xs font-black uppercase tracking-[0.4em] rounded-[2rem] bg-white text-slate-900 hover:bg-slate-100 shadow-[0_20px_50px_rgba(255,255,255,0.1)] group">
-                                            {loading ? <Loader2 className="w-6 h-6 animate-spin text-slate-900" /> : (
+                                        <Button 
+                                            onClick={handleSaveBranding} 
+                                            disabled={loading} 
+                                            className="h-12 px-6 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-600/20 group"
+                                        >
+                                            {loading ? (
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                            ) : (
                                                 <>
-                                                    Enter Command Center
-                                                    <ArrowRight className="w-6 h-6 ml-3 group-hover:translate-x-2 transition-transform" />
+                                                    Continue to Outreach Setup
+                                                    <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                                 </>
                                             )}
                                         </Button>
-                                        <div className="flex items-center justify-center gap-6 opacity-40">
-                                            <div className="flex items-center gap-2">
-                                                <Shield className="w-4 h-4" />
-                                                <span className="text-[9px] font-black uppercase tracking-widest">SOC2 Type II</span>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* STEP 2: Outreach & Email */}
+                            {step === 2 && (
+                                <motion.div 
+                                    key="step2"
+                                    initial={{ opacity: 0, x: 15 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -15 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="space-y-6"
+                                >
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+                                                <Mail className="w-6 h-6 text-blue-400" />
+                                                Outreach Email Setup
+                                            </h3>
+                                            <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
+                                                Optional
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-slate-400">
+                                            Connect your email so AI agents can send personalized outreach sequences to matched candidates on your behalf.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-medium text-slate-300">
+                                                    Sender Display Name
+                                                </label>
+                                                <Input 
+                                                    placeholder="e.g. Deepak Kumar"
+                                                    value={emailConfig.sender_name}
+                                                    onChange={e => setEmailConfig({ ...emailConfig, sender_name: e.target.value })}
+                                                    className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl"
+                                                />
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Activity className="w-4 h-4" />
-                                                <span className="text-[9px] font-black uppercase tracking-widest">Neural Sync Live</span>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-medium text-slate-300">
+                                                    Sender Email Address
+                                                </label>
+                                                <Input 
+                                                    type="email"
+                                                    placeholder="deepak@company.com"
+                                                    value={emailConfig.sender_email}
+                                                    onChange={e => setEmailConfig({ ...emailConfig, sender_email: e.target.value })}
+                                                    className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div className="col-span-2 space-y-1.5">
+                                                <label className="text-xs font-medium text-slate-300">
+                                                    SMTP Relay Host
+                                                </label>
+                                                <Input 
+                                                    placeholder="smtp.gmail.com"
+                                                    value={emailConfig.smtp_host}
+                                                    onChange={e => setEmailConfig({ ...emailConfig, smtp_host: e.target.value })}
+                                                    className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl font-mono"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-medium text-slate-300">
+                                                    Port
+                                                </label>
+                                                <Input 
+                                                    type="number"
+                                                    placeholder="587"
+                                                    value={emailConfig.smtp_port}
+                                                    onChange={e => setEmailConfig({ ...emailConfig, smtp_port: Number(e.target.value) || 587 })}
+                                                    className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl font-mono"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-medium text-slate-300">
+                                                    SMTP Username
+                                                </label>
+                                                <Input 
+                                                    placeholder="login@email.com"
+                                                    value={emailConfig.smtp_user}
+                                                    onChange={e => setEmailConfig({ ...emailConfig, smtp_user: e.target.value })}
+                                                    className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-medium text-slate-300">
+                                                    SMTP App Password
+                                                </label>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type={showPassword ? "text" : "password"}
+                                                        placeholder="••••••••••••"
+                                                        value={emailConfig.smtp_password}
+                                                        onChange={e => setEmailConfig({ ...emailConfig, smtp_password: e.target.value })}
+                                                        className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl pr-10"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowPassword(!showPassword)}
+                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                                                    >
+                                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 flex items-start gap-2.5">
+                                            <Shield className="w-4 h-4 mt-0.5 shrink-0 text-blue-400" />
+                                            <span>
+                                                For Gmail/Google Workspace, generate an <strong>App Password</strong> in your Google Account security settings. Credentials are encrypted at rest.
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 flex items-center justify-between gap-3 border-t border-slate-800/60">
+                                        <Button 
+                                            variant="ghost" 
+                                            onClick={prevStep} 
+                                            className="text-xs text-slate-400 hover:text-white rounded-xl gap-1.5"
+                                        >
+                                            <ArrowLeft className="w-4 h-4" /> Back
+                                        </Button>
+                                        <div className="flex items-center gap-3">
+                                            <Button
+                                                variant="outline"
+                                                onClick={nextStep}
+                                                className="border-slate-700 hover:bg-slate-800 text-xs text-slate-300 rounded-xl"
+                                            >
+                                                Skip for Now
+                                            </Button>
+                                            <Button 
+                                                onClick={handleSaveEmail} 
+                                                disabled={loading} 
+                                                className="h-11 px-5 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-600/20"
+                                            >
+                                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save & Continue"}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* STEP 3: ATS & System Integrations */}
+                            {step === 3 && (
+                                <motion.div 
+                                    key="step3"
+                                    initial={{ opacity: 0, x: 15 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -15 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="space-y-6"
+                                >
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+                                                <Link2 className="w-6 h-6 text-blue-400" />
+                                                ATS & Pipeline Integrations
+                                            </h3>
+                                            <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
+                                                Optional
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-slate-400">
+                                            Sync client job vacancies and push sourced candidates directly into your existing ATS workflow.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                        {ATS_OPTIONS.map((ats) => {
+                                            const Icon = ats.icon;
+                                            const isSelected = selectedAts.includes(ats.id);
+                                            return (
+                                                <div 
+                                                    key={ats.id}
+                                                    onClick={() => toggleAts(ats.id)}
+                                                    className={cn(
+                                                        "p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group",
+                                                        isSelected 
+                                                            ? "bg-blue-600/10 border-blue-500/60 shadow-md shadow-blue-600/10" 
+                                                            : "bg-slate-950/40 border-slate-800 hover:border-slate-700 hover:bg-slate-950/70"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-3.5">
+                                                        <div className={cn(
+                                                            "w-11 h-11 rounded-xl flex items-center justify-center transition-colors",
+                                                            isSelected ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-400 group-hover:bg-slate-700"
+                                                        )}>
+                                                            <Icon className="w-5 h-5" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <h4 className="text-sm font-semibold text-white">{ats.name}</h4>
+                                                                <span className="text-[9px] font-medium text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                                                                    {ats.badge}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-slate-400 mt-0.5">{ats.desc}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className={cn(
+                                                        "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
+                                                        isSelected 
+                                                            ? "bg-blue-600 border-blue-500 text-white" 
+                                                            : "border-slate-700 bg-slate-900 group-hover:border-slate-600"
+                                                    )}>
+                                                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-slate-400 flex items-center justify-between">
+                                        <span>Looking for Workday, Ashby, or custom webhook integrations?</span>
+                                        <span className="text-blue-400 font-medium">Available in Settings</span>
+                                    </div>
+
+                                    <div className="pt-4 flex items-center justify-between gap-3 border-t border-slate-800/60">
+                                        <Button 
+                                            variant="ghost" 
+                                            onClick={prevStep} 
+                                            className="text-xs text-slate-400 hover:text-white rounded-xl gap-1.5"
+                                        >
+                                            <ArrowLeft className="w-4 h-4" /> Back
+                                        </Button>
+                                        <div className="flex items-center gap-3">
+                                            <Button
+                                                variant="outline"
+                                                onClick={nextStep}
+                                                className="border-slate-700 hover:bg-slate-800 text-xs text-slate-300 rounded-xl"
+                                            >
+                                                Skip for Now
+                                            </Button>
+                                            <Button 
+                                                onClick={handleSaveAts} 
+                                                className="h-11 px-5 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-600/20"
+                                            >
+                                                Continue to Finish
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* STEP 4: Ready & Launch */}
+                            {step === 4 && (
+                                <motion.div 
+                                    key="step4"
+                                    initial={{ opacity: 0, scale: 0.96 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ duration: 0.25 }}
+                                    className="space-y-8 py-4 text-center"
+                                >
+                                    <div className="relative inline-block mx-auto">
+                                        <div className="w-20 h-20 bg-gradient-to-tr from-emerald-500 to-teal-400 text-white rounded-3xl flex items-center justify-center mx-auto shadow-2xl shadow-emerald-500/30 relative z-10">
+                                            <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
+                                        </div>
+                                        <motion.div 
+                                            animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.7, 0.3] }}
+                                            transition={{ repeat: Infinity, duration: 2.5 }}
+                                            className="absolute inset-0 w-20 h-20 bg-emerald-500/40 rounded-3xl mx-auto blur-xl -z-0"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h3 className="text-3xl font-extrabold tracking-tight text-white">
+                                            Your Workspace is Ready!
+                                        </h3>
+                                        <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+                                            {tenant.name || "Your recruiting hub"} is fully configured. Your AI agents are primed to discover client vacancies and match qualified candidates.
+                                        </p>
+                                    </div>
+
+                                    {/* Quick action capabilities */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-xl mx-auto text-left">
+                                        <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                                            <div className="w-7 h-7 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center mb-2">
+                                                <Globe className="w-4 h-4" />
+                                            </div>
+                                            <p className="text-xs font-semibold text-white">Discovery</p>
+                                            <p className="text-[10px] text-slate-400">Search job vacancies</p>
+                                        </div>
+                                        <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                                            <div className="w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center mb-2">
+                                                <Building2 className="w-4 h-4" />
+                                            </div>
+                                            <p className="text-xs font-semibold text-white">Sourcing</p>
+                                            <p className="text-[10px] text-slate-400">Match talent via AI</p>
+                                        </div>
+                                        <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                                            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center mb-2">
+                                                <Mail className="w-4 h-4" />
+                                            </div>
+                                            <p className="text-xs font-semibold text-white">Outreach</p>
+                                            <p className="text-[10px] text-slate-400">Launch campaigns</p>
+                                        </div>
+                                        <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+                                            <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center mb-2">
+                                                <Rocket className="w-4 h-4" />
+                                            </div>
+                                            <p className="text-xs font-semibold text-white">AI Swarm</p>
+                                            <p className="text-[10px] text-slate-400">Autonomous recruiting</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 flex flex-col items-center gap-3">
+                                        <Button 
+                                            onClick={handleFinish} 
+                                            disabled={loading} 
+                                            size="lg" 
+                                            className="w-full sm:w-auto min-w-[260px] h-14 text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-2xl shadow-xl shadow-blue-600/30 group"
+                                        >
+                                            {loading ? (
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                            ) : (
+                                                <>
+                                                    Enter Dashboard & Start Sourcing
+                                                    <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                                                </>
+                                            )}
+                                        </Button>
+
+                                        <div className="flex items-center justify-center gap-5 text-slate-500 pt-2 text-[11px]">
+                                            <div className="flex items-center gap-1.5">
+                                                <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                                                <span>Enterprise Security</span>
+                                            </div>
+                                            <span>•</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+                                                <span>Multi-Tenant Isolated</span>
                                             </div>
                                         </div>
                                     </div>

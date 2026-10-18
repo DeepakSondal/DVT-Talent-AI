@@ -78,17 +78,17 @@ export default function RecruitingPage() {
         </div>
 
         <div className="grid grid-cols-12 gap-12">
-           {/* Left: Vacancy Node & Market Intel */}
+           {/* Left: Target Role & Market Intel */}
            <div className="col-span-12 lg:col-span-4 space-y-8">
               <Card className="bg-white/80 border-border/50 p-8 shadow-xl shadow-primary/5">
                  <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground opacity-40 mb-8 flex items-center gap-3">
                     <Target className="w-3.5 h-3.5" />
-                    Target Node
+                    Target Role
                  </h3>
                  <div className="space-y-8">
                     <div className="p-6 rounded-[2rem] bg-primary/5 border border-transparent hover:border-primary/20 hover:bg-white transition-all duration-500 cursor-pointer group">
                        <h4 className="text-lg font-black text-foreground group-hover:text-primary transition-colors italic leading-none">Senior Architect</h4>
-                       <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mt-2">DVT-NODE: ACTIVE</p>
+                       <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mt-2">STATUS: ACTIVE VACANCY</p>
                        <div className="absolute top-6 right-6 text-primary/20 group-hover:text-primary transition-all">
                           <ChevronRight className="w-5 h-5" />
                        </div>
@@ -190,18 +190,18 @@ export default function RecruitingPage() {
                                </div>
                                <div className="text-right space-y-1">
                                   <div className="text-5xl font-black text-foreground group-hover:text-primary transition-all duration-700 tracking-tighter">{can.score}%</div>
-                                  <span className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.25em] italic">IQ SIGNAL</span>
+                                  <span className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.25em] italic">MATCH SCORE</span>
                                </div>
                             </div>
 
                             <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-8">
                                <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-xl bg-primary/5 flex items-center justify-center text-primary/40"><MapPin className="w-4 h-4" /></div>
-                                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{can.location || "Remote Node"}</span>
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{can.location || "Remote"}</span>
                                </div>
                                <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-xl bg-primary/5 flex items-center justify-center text-primary/40"><Zap className="w-4 h-4 shadow-primary/20" /></div>
-                                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{can.experience_years || 5}y Epochs</span>
+                                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{can.experience_years || 5}+ Years Exp</span>
                                </div>
                                <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-xl bg-primary/5 flex items-center justify-center text-primary/40"><UserCheck className="w-4 h-4" /></div>
@@ -221,7 +221,7 @@ export default function RecruitingPage() {
                             >
                                <p className="text-[11px] font-black text-muted-foreground/80 leading-loose italic opacity-60">
                                   <Sparkles className="w-4 h-4 text-primary animate-pulse mr-3 inline" />
-                                  {can.ai_summary || "Synthesizing full operator reasoning for this profile node. Analysis pending autonomous scan sequence."}
+                                  {can.ai_summary || "Analyzing candidate fit and skills for this role. Evaluation summary will appear shortly."}
                                 </p>
                             </motion.div>
 
@@ -229,10 +229,10 @@ export default function RecruitingPage() {
                                <div className="flex gap-4">
                                   <Button variant="primary" className="gap-3 h-12 px-8 bg-white border-primary/20 text-primary hover:bg-primary hover:text-white shadow-none hover:shadow-lg hover:shadow-primary/20 transition-all duration-500 font-black uppercase text-[10px] tracking-widest">
                                      <MessageSquare className="w-4 h-4" />
-                                     Connect Bridge
+                                     Contact Candidate
                                   </Button>
                                   <Button variant="outline" className="gap-3 h-12 px-8 bg-white border-border/40 text-muted-foreground hover:bg-secondary font-black uppercase text-[10px] tracking-widest">
-                                     View Artifacts
+                                     View Resume
                                   </Button>
                                </div>
                                <Button size="icon" variant="ghost" className="w-12 h-12 rounded-2xl opacity-0 group-hover:opacity-100 transition-all bg-primary/5">

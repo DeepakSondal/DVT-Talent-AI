@@ -17,34 +17,37 @@ from slowapi.errors import RateLimitExceeded
 from prometheus_client import make_asgi_app
 
 # ── Sentry Observability ──────────────────────────────────────────────────────
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-from sentry_sdk.integrations.redis import RedisIntegration
-from sentry_sdk.integrations.celery import CeleryIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
-import logging
-
 _sentry_dsn = os.getenv("SENTRY_DSN", "")
 if _sentry_dsn:
-    sentry_sdk.init(
-        dsn=_sentry_dsn,
-        environment=os.getenv("APP_ENV", "production"),
-        integrations=[
-            FastApiIntegration(transaction_style="endpoint"),
-            SqlalchemyIntegration(),
-            RedisIntegration(),
-            CeleryIntegration(),
-            LoggingIntegration(level=logging.WARNING, event_level=logging.ERROR),
-        ],
-        traces_sample_rate=0.2,       # 20% of transactions traced
-        profiles_sample_rate=0.1,     # 10% profiled
-        send_default_pii=False,       # GDPR: never send PII
-    )
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+        from sentry_sdk.integrations.redis import RedisIntegration
+        from sentry_sdk.integrations.celery import CeleryIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+        import logging
+
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            environment=os.getenv("APP_ENV", "production"),
+            integrations=[
+                FastApiIntegration(transaction_style="endpoint"),
+                SqlalchemyIntegration(),
+                RedisIntegration(),
+                CeleryIntegration(),
+                LoggingIntegration(level=logging.WARNING, event_level=logging.ERROR),
+            ],
+            traces_sample_rate=0.2,       # 20% of transactions traced
+            profiles_sample_rate=0.1,     # 10% profiled
+            send_default_pii=False,       # GDPR: never send PII
+        )
+    except ImportError:
+        pass
 
 from config import settings
 from db.models import Base, engine, get_db
-from api.routes import auth, auth_social, auth_sso, webhooks, monitoring, users, companies, leads, candidates, jobs, campaigns, analytics, agents, websocket, tenants, copilot, billing, integrations, email_sender, team, plg
+from api.routes import auth, auth_social, auth_sso, webhooks, monitoring, users, companies, leads, candidates, jobs, campaigns, analytics, agents, websocket, tenants, copilot, billing, integrations, email_sender, team, plg, compliance, candidate_portal
 from api.routes import health as health_routes
 
 log = structlog.get_logger()
@@ -64,13 +67,7 @@ async def lifespan(app: FastAPI):
         log.info("database_initialized")
     except Exception as e:
         log.warning("database_initialization_race_or_already_exists", error=str(e))
-    # Initialize and start Market Pulse Scheduler
-    from workers.market_pulse_scheduler import MarketPulseScheduler
-    app.state.scheduler = MarketPulseScheduler()
-    app.state.scheduler.start()
-
     yield
-    app.state.scheduler.shutdown()
     await engine.dispose()
     log.info("dvt_shutdown")
 
@@ -89,6 +86,9 @@ app = FastAPI(
 )
 
 # ── Middleware ────────────────────────────────────────────────────────────
+from starlette.middleware.sessions import SessionMiddleware
+
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.api_rate_limit)
 app.add_middleware(AuditLogMiddleware)
 app.add_middleware(
@@ -118,13 +118,16 @@ app.include_router(analytics.router,  prefix=f"{PREFIX}/analytics",  tags=["Anal
 app.include_router(agents.router,     prefix=f"{PREFIX}/agents",     tags=["Agents"])
 app.include_router(webhooks.router,   prefix=f"{PREFIX}/webhooks",   tags=["Webhooks"])
 app.include_router(monitoring.router, prefix=f"{PREFIX}/monitoring", tags=["Monitoring"])
+app.include_router(compliance.router, prefix=f"{PREFIX}/compliance", tags=["Compliance & AI Governance"])
 app.include_router(websocket.router,  prefix=f"{PREFIX}/ws",         tags=["WebSocket"])
 app.include_router(copilot.router,    prefix=f"{PREFIX}/copilot",    tags=["Copilot"])
 app.include_router(billing.router,        prefix=f"{PREFIX}/billing",        tags=["Billing"])
 app.include_router(integrations.router,   prefix=f"{PREFIX}/integrations",   tags=["ATS Integrations"])
 app.include_router(email_sender.router,    prefix=PREFIX,                     tags=["Email Sender"])
 app.include_router(team.router,              prefix=PREFIX,                     tags=["Team Management"])
-app.include_router(plg.router,               prefix=PREFIX,                     tags=["PLG Trojan Horse"])
+app.include_router(candidate_portal.router, prefix=f"{PREFIX}/candidate-portal", tags=["Candidate Portal"])
+# PLG Trojan Horse deactivated per pivot to Recruiter + Candidate focus
+# app.include_router(plg.router,               prefix=PREFIX,                     tags=["PLG Trojan Horse"])
 app.include_router(health_routes.router, tags=["Health"])
 
 # ── Email Open Tracking (no auth — called by email clients) ──────────────

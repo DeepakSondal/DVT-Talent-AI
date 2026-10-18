@@ -26,17 +26,17 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
     log.info("monster_webhook_received", payload=payload)
     
     applicant = payload.get("applicant", {})
-    job_id_external = payload.get("job_external_id")
+    job_id_external = payload.get("job_external_id") or payload.get("jobId")
     
     if not applicant or not job_id_external:
         raise HTTPException(status_code=400, detail="Malformed Monster payload")
 
     # 1. Map external Job ID back to our DB
+    job_uuid = None
     try:
-        job_uuid = uuid.UUID(job_id_external)
-    except ValueError:
-        log.error("invalid_job_uuid", job_id=job_id_external)
-        raise HTTPException(status_code=400, detail="Invalid job ID mapping")
+        job_uuid = uuid.UUID(str(job_id_external))
+    except (ValueError, TypeError):
+        log.info("non_uuid_job_id", job_id=job_id_external)
 
     # 2. Extract Applicant Info
     email = applicant.get("email")

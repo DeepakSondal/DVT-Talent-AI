@@ -7,19 +7,19 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jetBrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" });
 
 export const metadata: Metadata = {
-  title: "DVT Talent AI — Autonomous Recruiting & Intelligence Swarm",
-  description: "Enterprise-grade autonomous recruitment ecosystem using multi-agent intelligence swarms for high-fidelity sourcing and discovery.",
+  title: "DVT Talent AI — AI-Powered Talent Discovery & Recruitment Automation",
+  description: "Enterprise talent acquisition platform powered by intelligent recruiting agents for automated vacancy discovery, candidate sourcing, and multichannel outreach.",
   openGraph: {
-    title: "DVT Talent AI — The Recruiting Swarm",
-    description: "Omnichannel autonomous recruiter that discovers, screens, and engages global talent 24/7.",
+    title: "DVT Talent AI — Intelligent Recruitment Platform",
+    description: "AI-driven recruiting platform that discovers hiring requisitions, sources qualified candidates, and automates outreach 24/7.",
     type: "website",
     url: "https://dvt-talent.ai",
     siteName: "DVT Talent AI",
   },
   twitter: {
     card: "summary_large_image",
-    title: "DVT Talent AI — Autonomous Recruiter",
-    description: "Multi-agent swarm intelligence for high-precision hiring.",
+    title: "DVT Talent AI — Intelligent Recruitment Platform",
+    description: "AI recruiting agents for high-precision sourcing and candidate engagement.",
   }
 };
 

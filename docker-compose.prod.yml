@@ -58,9 +58,18 @@ services:
     networks:
       - dvt_network
     depends_on:
-      - redis
-      - db
-      - chromadb
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   worker:
     build:
@@ -91,9 +100,12 @@ services:
     networks:
       - dvt_network
     depends_on:
-      - redis
-      - db
-      - chromadb
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
 
   scheduler:
     build:
@@ -124,9 +136,12 @@ services:
     networks:
       - dvt_network
     depends_on:
-      - redis
-      - db
-      - chromadb
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
 
   chromadb:
     image: chromadb/chroma:0.4.24
@@ -145,6 +160,11 @@ services:
     image: redis:7-alpine
     container_name: dvt_redis
     restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - dvt_network
 
@@ -156,6 +176,11 @@ services:
       - POSTGRES_USER=dvt_user
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=dvt_talent
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dvt_user -d dvt_talent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:

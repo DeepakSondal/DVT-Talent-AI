@@ -5,9 +5,10 @@
 
 FROM python:3.11-slim AS base
 
-# System dependencies
+# System dependencies (including libxmlsec1 for Enterprise SAML SSO)
 RUN apt-get update && apt-get install -y \
     gcc g++ libpq-dev curl libmagic1 \
+    pkg-config libxml2-dev libxmlsec1-dev libxmlsec1-openssl xmlsec1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Python environment

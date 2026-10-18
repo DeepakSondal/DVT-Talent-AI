@@ -1,47 +1,55 @@
 # DVT Talent AI — Onboarding Guide
+**Version:** 2.0.0 (October 2026)  
 
-Welcome to the future of autonomous recruiting. This guide will take you from initial login to running your first high-precision discovery swarm.
-
-## 🚀 1. The Onboarding Protocol
-
-### Step 1: Nexus Invitation
-Log in via the portal at `http://localhost:3000/auth/login`. If your organization has SSO enabled, use the 'Enterprise Identity' button.
-
-### Step 2: Secret Ingestion (Admins Only)
-Navigate to `/dashboard/settings`. To empower your agents, ensure the following integration keys are configured in your `.env` or Vault:
-- **Serper API**: Powers real-time market signal discovery.
-- **ElevenLabs**: Powers high-fidelity synthetic voice outreach.
-- **Twilio**: Enables the voice-outreach bridge.
-
-### Step 3: Define Your Target Node
-Go to the **Sourcing Hub** (`/dashboard/sourcing`). Here you define the sector and location for the discovery swarm.
-- **Sectors**: e.g., "Generative AI", "Fintech Infrastructure".
-- **Location**: e.g., "London", "Remote (US Timezones)".
-
-## 🛰️ 2. Running Your First Swarm
-
-1. **Ignition**: Click the 'Initiate Swarm Discovery' button.
-2. **Monitoring**: Transition to **The Nexus** (`/dashboard/monitoring`). You will see live signals:
-   - `MarketIntelligenceAgent`: Validating industry signals.
-   - `LeadDiscoveryAgent`: Extracting key decision-makers.
-   - `ConflictResolutionAgent`: Deduplicating nodes in real-time.
-3. **The Results**: Within minutes, your **Leads** and **Candidates** grids will hydrate with new intelligence.
-
-## ⚖️ 3. Interpreting Intelligence
-
-### The Heat Score
-Each candidate and company is assigned a **Heat Score (0-100)**. 
-- **90+**: Exceptional alignment. Immediate outreach recommended.
-- **70-85**: Strong node. Requires agent-led screening.
-- **<60**: Signal noise. Agent will continue to monitor for better alignment.
-
-### Integrity Verification
-Click any candidate to view their **Integrity Scorecard**. This surfaces the AI's reasoning for their ranking and validates their background against external nodes (GitHub, Dice, LinkedIn).
-
-## 🛡️ 4. Governance & Safety
-As an enterprise recruiter, all your actions are logged for compliance.
-- View the **Audit Log** (`/dashboard/audit`) to track system mutations.
-- Use the **Bias Guardrail** in the outreach composer to ensure inclusive communication.
+Welcome to **DVT Talent AI**. This guide walks through initial setup and first-time usage for both user personas: **Recruiters & Staffing Agencies** and **Candidates & Active Job Seekers**.
 
 ---
-**Need Support?** Contact the DVT Intelligence Desk: `support@dvttalent.ai`
+
+## 💼 Track A: Recruiter Onboarding
+
+### Step 1: Authentication & Workspace Setup
+1. Log in via `http://localhost:3000/auth/login` (select the **"Recruiter"** toggle).
+2. If your organization has Enterprise SSO enabled, click **"Sign in with Enterprise SSO"** (SAML 2.0 via Okta or Azure AD).
+3. Access your Recruiter Command Center at `/dashboard`.
+
+### Step 2: Configure Keys & Integrations
+Navigate to `/dashboard/settings`:
+- **LLM Provider Keys (BYOK)**: Add custom OpenAI, Anthropic, DeepSeek, or Groq API keys with AES-256 at-rest encryption.
+- **Search Sourcing**: Configure your Google Serper and GitHub API tokens to empower candidate discovery.
+- **ATS Synchronization**: Connect Greenhouse Harvest or CEIPAL for automated two-way requisition and candidate syncing.
+- **Custom SMTP Mailer**: Configure your company email server with TLS authentication for recruiter outreach.
+
+### Step 3: Create or Import Requisitions
+1. Go to `/dashboard/jobs` and click **"Create Requisition"**.
+2. Paste raw job requirements and click **"Optimize JD"** to run the **Requisition Analyzer Agent**, eliminating non-inclusive bias and extracting skill taxonomies.
+3. Toggle **"Publish to Candidate Portal"** to immediately expose the job to active applicants.
+
+### Step 4: Launching Your First Sourcing Swarm
+1. Navigate to `/dashboard/swarm`.
+2. Select your target requisition and click **"Initiate Sourcing Swarm"**.
+3. Monitor the live **Neural Stream** as the 5-agent team discovers candidates across GitHub and LinkedIn, screens credentials, and queues candidates for review.
+4. Review matches in **Copilot Mode** before any candidate outreach is dispatched.
+
+---
+
+## 🎯 Track B: Candidate Onboarding (Career-Ops)
+
+### Step 1: Register on the Candidate Portal
+1. Navigate to `http://localhost:3000/auth/register` and select **"Candidate"**.
+2. Complete registration to access your free Career-Ops portal at `/portal`.
+
+### Step 2: Profile & Resume Intake
+1. Navigate to `/portal/profile`.
+2. Upload your CV/resume (PDF, DOCX, or text).
+3. The parser extracts your core technical skills, experience history, and target titles.
+
+### Step 3: Configure Your Employer Privacy Shield
+1. On `/portal/profile`, enter your current employer's email domain (e.g., `currentemployer.com`) under the **Employer Blacklist**.
+2. Recruiter swarms matching that employer or domain will be prevented from viewing your searchable profile.
+
+### Step 4: Discover Jobs & Practice
+1. Browse `/portal/jobs` to inspect verified requisitions.
+2. Review your personalized **5-Dimension Fit Score** (Title, Stack, Experience, Domain, Culture).
+3. Check the **Ghost Job Detection badge (Block G)** to avoid stagnant listings.
+4. Click **"Tailor Resume"** for zero-fabrication ATS keyword recommendations.
+5. Go to `/portal/interview-prep` to practice with job-specific **STAR Behavioral Interview Flashcards**.

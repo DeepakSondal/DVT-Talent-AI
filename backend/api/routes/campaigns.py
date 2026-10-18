@@ -149,5 +149,9 @@ async def get_campaign_emails(
     }
 
 async def _send_campaign_bg(campaign_id: str):
-    from workers.tasks import send_campaign_emails
-    send_campaign_emails.delay(campaign_id)
+    try:
+        from workers.tasks import send_campaign_emails, safe_dispatch_task
+        safe_dispatch_task(send_campaign_emails, campaign_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Could not enqueue send_campaign_emails task: {e}")

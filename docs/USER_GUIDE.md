@@ -1,34 +1,79 @@
-# DVT Talent AI — User Guide (v1.1)
+# DVT Talent AI — Dual-Sided Platform User Guide
+**Version:** 2.0.0 (October 2026)  
 
-Welcome to the **DVT Talent AI** platform. This guide explains how to use the **Swarm Command Center** to automate your recruitment operations with maximum precision.
+Welcome to the **DVT Talent AI** platform. DVT Talent AI delivers a unified recruitment ecosystem designed for two user groups:
+1. **Recruiters & Staffing Agencies** — Managing requisitions, running autonomous sourcing swarms, and orchestrating ethical outreach.
+2. **Candidates & Job Seekers** — Discovering verified jobs, analyzing 5-dimension fit scores, tailoring CVs without fabrication, and preparing for interviews.
 
-## 🚀 Swarm Command Center
-The Command Center is your mission control for the autonomous recruitment swarm.
+---
 
-### 1. Execution Modes
-- **Autopilot (Autonomous):** The swarm runs completely hands-free. It performs Market IQ analysis, sources candidates, audits them for quality via the **Critic Agent**, and manages outreach without requiring intervention.
-- **Copilot (Human-in-the-Loop):** Recommended for high-stakes executive or niche technical roles. The swarm will **pause** at critical checkpoints:
-    - **Checkpoint 1 (JD Review):** Review and edit the AI-generated Job Description and Market IQ report.
-    - **Checkpoint 2 (Candidate Curation):** Curate and approve the final candidate list before any emails are dispatched.
+## 💼 Track A: Recruiter & Agency Guide
 
-### 2. Intelligent Parameters
-- **Industry/Role:** Define the target sector or specific job title. The **Market IQ Agent** uses this to analyze hiring trends.
-- **Location:** Define the geographic focus. The system supports global node discovery with high-fidelity local resolution.
-- **Neural Stream:** Watch the live telemetry log on the right side of the dashboard to see real-time agent "thoughts," tool executions, and success signals.
+### 1. Requisitions & Job Descriptions
+- Navigate to `/dashboard/jobs` to create or import open requisitions.
+- Click **"Optimize JD"** to run the **Requisition Analyzer Agent**, which extracts required vs preferred skill taxonomies and removes non-inclusive bias.
+- Toggle **"Publish to Candidate Portal"** to make the job instantly visible to active job seekers on the public talent board.
 
-## 👥 Talent Grid & Pipeline
-Once the swarm completes a cycle, candidates are presented in the **Talent Grid** with a weighted **AI Integrity Score**.
+### 2. Autonomous Talent Sourcing Swarm
+- Navigate to `/dashboard/swarm` to launch the 5-agent recruitment team.
+- Select your target requisition, seniority level, and search sources (GitHub, LinkedIn, Web).
+- Watch real-time execution in the **Neural Stream** as the **Candidate Sourcing Agent** extracts candidate profiles and the **Screening Agent** evaluates qualification rubrics.
 
-- **Integrity Score:** A multi-dimensional rating based on skills alignment, experience verification, and propensity to leave.
-- **Manual Export:** Use the **Export to CSV** feature in the Talent Grid to bring your top-tier candidates into your existing ATS or CRM.
+### 3. Human-in-the-Loop (HITL) Copilot
+For high-stakes roles, enable **Copilot Mode**:
+- **Checkpoint 1 (JD Review):** Inspect and edit the synthesized job description.
+- **Checkpoint 2 (Candidate Curation):** Review candidate scores, strengths, and risk factors. Approve or reject candidates before any outreach is prepared.
+- **Checkpoint 3 (Sequence Approval):** Inspect personalized multi-stage email drafts before transmission.
 
-## 📈 Monitoring & Analytics
-Track the swarm's ROI directly through the **Nexus Analytics** tab:
-- **Market Intelligence:** Visualized hiring intent and competitive tech-stack trends.
-- **Outreach Performance:** Real-time tracking of email open rates and reply velocity.
-- **Placement Velocity:** Measure how fast the swarm is moving candidates from discovery to interview.
+### 4. Governance & EEOC Compliance
+- Navigate to `/dashboard/compliance` to view the **AI Decision Ledger**.
+- Calculate the 4/5ths adverse impact ratio across candidate pools to prevent disparate impact.
+- Record mandatory written rationales whenever manually overriding an AI screening score.
 
-## 🛠️ Elite Interface Tips
-- **Neural Telemetry:** If an agent run seems to stall, check the Neural Stream for "Mediation" signals—this usually means the Critic is resolving a data conflict.
-- **IPv4 Stability:** Always access the dashboard via `http://127.0.0.1:3000` for the most stable real-time experience.
-- **Collapsible Sidebar:** Use the chevron in the bottom-left to maximize your workspace during deep dossier reviews.
+### 5. ATS Synchronization
+- Connect Greenhouse Harvest or CEIPAL in `/dashboard/settings`.
+- Auto-sync approved candidates directly into your existing enterprise ATS pipelines.
+
+---
+
+## 🎯 Track B: Candidate & Job Seeker Guide (Career-Ops)
+
+### 1. Profile & Resume Intake
+- Access the Candidate Portal at `/portal` or register directly at `/auth/register` (select **"Candidate"**).
+- Navigate to `/portal/profile` to upload your existing resume (PDF, DOCX, or text).
+- The parser extracts your core skills, experience history, and target role titles automatically.
+
+### 2. Verified Job Board & 5-Dimension Match Scoring
+- Navigate to `/portal/jobs` to browse actively published requisitions.
+- View your personalized **5-Dimension Fit Breakdown**:
+  - **Title Alignment:** Match against your target career track.
+  - **Tech Stack:** Overlap of languages, frameworks, and tooling.
+  - **Experience:** Seniority and domain years.
+  - **Domain:** Industry alignment (FinTech, AI/ML, SaaS).
+  - **Culture & Work Style:** Remote preferences and team velocity.
+
+### 3. Ghost Job Detection (Block G)
+- Every job posting displays a Ghost Job indicator.
+- Postings older than 60 days without verified hiring manager activity are flagged with a warning, protecting your time from black-hole applications.
+
+### 4. Zero-Fabrication ATS CV Tailoring
+- When viewing any job posting, click **"Tailor Resume"** (`/portal/jobs`).
+- The AI cross-references the job requirements against your verified background, suggesting phrasing enhancements and keyword optimizations **without inventing false claims**.
+
+### 5. STAR Behavioral Interview Flashcards
+- Navigate to `/portal/interview-prep`.
+- Select any role you have applied to or are considering.
+- Review AI-synthesized interview flashcards providing structured coaching using the **S**ituation, **T**ask, **A**ction, and **R**esult methodology.
+
+### 6. Employer Privacy Shield
+- Want to keep your job search confidential?
+- Go to `/portal/profile` and add your current employer's email domain (e.g., `currentemployer.com`) to the **Employer Blacklist**.
+- Recruiters matching blacklisted domains cannot discover your profile, and you can toggle `is_searchable` off at any time.
+
+---
+
+## 🛠️ System Tips & Troubleshooting
+
+- **Local Development Ports:** Backend operates on `http://127.0.0.1:8000`. Frontend operates on `http://localhost:3000` (or `http://localhost:3001` if port 3000 is occupied).
+- **Session Switching:** Use `/auth/login` to toggle between Recruiter and Candidate sign-in modes.
+- **WebSocket Telemetry:** Ensure your network allows persistent WebSocket connections to `ws://127.0.0.1:8000/api/v1/ws/live` for real-time swarm updates.

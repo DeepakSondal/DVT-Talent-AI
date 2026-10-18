@@ -9,7 +9,7 @@ from backend.db.models import get_db, User, UserRole, Team, Candidate, EmailSent
 from backend.api.routes.auth import get_current_user # Assuming a dependency exists
 from services.security_service import encrypt_pii, decrypt_pii
 
-router = APIRouter(prefix="/api/v1/team", tags=["team"])
+router = APIRouter(prefix="/team", tags=["team"])
 
 async def require_manager(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role not in [UserRole.MANAGER, UserRole.ADMIN]:
