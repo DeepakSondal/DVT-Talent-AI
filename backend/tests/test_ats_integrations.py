@@ -212,32 +212,68 @@ class TestCeipalClient:
         assert await client.test_connection() is False
 
 
-# ── Integration Tests (requires real keys, skipped in CI) ────────────────────
+# ── Integration Tests (Live or Automated Sandbox Fallback) ────────────────────
 
 @pytest.mark.integration
-@pytest.mark.skipif(not __import__("os").getenv("GREENHOUSE_API_KEY"), reason="No Greenhouse key set")
-async def test_greenhouse_live_jobs():
-    """Calls the real Greenhouse API and verifies job shape."""
+async def test_greenhouse_live_or_sandbox_jobs(httpx_mock: HTTPXMock):
+    """Calls the Greenhouse integration and verifies normalized job shape (live API or automated sandbox)."""
     import os
     from integrations.greenhouse.client import GreenhouseClient
-    client = GreenhouseClient(api_key=os.getenv("GREENHOUSE_API_KEY"), tenant_id="test")
+    key = os.getenv("GREENHOUSE_API_KEY")
+    if not key:
+        key = "sandbox_test_gh_key"
+        httpx_mock.add_response(
+            url="https://harvest.greenhouse.io/v1/jobs?status=open&per_page=100&page=1",
+            json=[
+                {
+                    "id": 888123,
+                    "name": "Principal AI Architect",
+                    "status": "open",
+                    "offices": [{"name": "San Francisco"}],
+                    "absolute_url": "https://boards.greenhouse.io/dvt/jobs/888123",
+                }
+            ],
+            headers={},
+        )
+    client = GreenhouseClient(api_key=key, tenant_id="test")
     jobs = await client.list_jobs()
     assert isinstance(jobs, list)
+    assert len(jobs) >= 1
     for job in jobs:
         assert "external_id" in job
         assert "title" in job
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(not __import__("os").getenv("CEIPAL_API_KEY"), reason="No Ceipal key set")
-async def test_ceipal_live_jobs():
-    """Calls the real Ceipal API and verifies job shape."""
+async def test_ceipal_live_or_sandbox_jobs(httpx_mock: HTTPXMock):
+    """Calls the Ceipal integration and verifies normalized job shape (live API or automated sandbox)."""
     import os
     from integrations.ceipal.client import CeipalClient
+    key = os.getenv("CEIPAL_API_KEY")
+    base_url = os.getenv("CEIPAL_API_BASE_URL", "https://api.ceipal.com/v1").rstrip("/")
+    if not key:
+        key = "sandbox_test_ceipal_key"
+        httpx_mock.add_response(
+            url=f"{base_url}/jobs?status=open&limit=100&offset=0",
+            json={
+                "data": [
+                    {
+                        "id": "CEI-999",
+                        "title": "Lead Platform Engineer",
+                        "status": "open",
+                        "city": "Austin",
+                    }
+                ]
+            },
+        )
     client = CeipalClient(
-        api_key=os.getenv("CEIPAL_API_KEY"),
-        base_url=os.getenv("CEIPAL_API_BASE_URL", "https://api.ceipal.com/v1"),
+        api_key=key,
+        base_url=base_url,
         tenant_id="test"
     )
     jobs = await client.list_jobs()
     assert isinstance(jobs, list)
+    assert len(jobs) >= 1
+    for job in jobs:
+        assert "external_id" in job
+        assert "title" in job
