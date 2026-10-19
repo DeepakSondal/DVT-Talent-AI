@@ -127,20 +127,25 @@ async def sso_acs(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/metadata")
 async def sso_metadata():
     """ Provides the Service Provider metadata XML for the Identity Provider """
-    if not SAML_AVAILABLE:
-        # Fallback XML metadata representation for testing / configuration
-        acs_url = f"{settings.app_base_url}/api/v1/auth/sso/acs"
-        entity_id = f"{settings.app_base_url}/api/v1/auth/sso/metadata"
-        xml = f"""<?xml version="1.0"?>
+    acs_url = f"{settings.app_base_url}/api/v1/auth/sso/acs"
+    entity_id = f"{settings.app_base_url}/api/v1/auth/sso/metadata"
+    xml_fallback = f"""<?xml version="1.0"?>
 <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{entity_id}">
   <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
     <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{acs_url}" index="1"/>
   </md:SPSSODescriptor>
 </md:EntityDescriptor>"""
-        return JSONResponse(content={"xml": xml}, media_type="application/xml")
-    auth = OneLogin_Saml2_Auth({'https': 'on'}, get_saml_settings())
-    metadata = auth.get_settings().get_sp_metadata()
-    return JSONResponse(content={"xml": metadata}, media_type="application/xml")
+
+    if not SAML_AVAILABLE:
+        return JSONResponse(content={"xml": xml_fallback}, media_type="application/xml")
+
+    try:
+        from onelogin.saml2.settings import OneLogin_Saml2_Settings
+        saml_settings = OneLogin_Saml2_Settings(get_saml_settings(), sp_validation_only=True)
+        metadata = saml_settings.get_sp_metadata()
+        return JSONResponse(content={"xml": metadata}, media_type="application/xml")
+    except Exception:
+        return JSONResponse(content={"xml": xml_fallback}, media_type="application/xml")
 
 
 from pydantic import BaseModel
