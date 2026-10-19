@@ -2,10 +2,11 @@
 DVT Talent AI — Application Settings
 Centralized configuration using pydantic-settings
 """
+import os
+import secrets
 from functools import lru_cache
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 from pathlib import Path
 
@@ -180,6 +181,15 @@ class Settings(BaseSettings):
             return self.deepseek_model
         return self.openai_model
 
+    def model_post_init(self, __context) -> None:
+        """
+        Auto-generates a high-entropy secret_key in development/test if default or unset,
+        preventing JWT forgery vulnerabilities while retaining strict production gatekeeping.
+        """
+        if not self.secret_key or self.secret_key == "change-me-in-production":
+            if not self.is_production:
+                self.secret_key = secrets.token_urlsafe(32)
+
     def validate_required_settings(self) -> None:
         """
         FIX [H-05]: Raises ValueError for missing critical settings.
@@ -187,9 +197,10 @@ class Settings(BaseSettings):
         """
         if not self.primary_llm_api_key:
             raise ValueError("No LLM key set — agents will fail. Set GROQ_API_KEY, KIMI_API_KEY, DEEPSEEK_API_KEY, or OPENAI_API_KEY")
-        if not self.secret_key or self.secret_key == "change-me-in-production":
-            if self.is_production:
-                raise ValueError("SECRET_KEY is default value — CRITICAL security risk in production")
+        if self.is_production:
+            raw_secret = os.getenv("SECRET_KEY", "")
+            if not raw_secret or raw_secret == "change-me-in-production" or len(raw_secret) < 32:
+                raise ValueError("SECRET_KEY is insecure or default — CRITICAL security risk in production. Must be at least 32 characters.")
         if not self.database_url:
             raise ValueError("DATABASE_URL is missing — cannot connect to database")
 
