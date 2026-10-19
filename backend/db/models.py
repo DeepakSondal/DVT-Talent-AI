@@ -188,7 +188,7 @@ class User(Base, TimestampMixin):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True, index=True)
     manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
-    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True)
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", use_alter=True, name="fk_users_team_id"), nullable=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     full_name = Column(String(255), nullable=False)
     hashed_password = Column(String(255), nullable=False)
