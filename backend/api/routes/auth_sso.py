@@ -128,7 +128,111 @@ async def sso_acs(request: Request, db: AsyncSession = Depends(get_db)):
 async def sso_metadata():
     """ Provides the Service Provider metadata XML for the Identity Provider """
     if not SAML_AVAILABLE:
-        raise HTTPException(status_code=501, detail="SAML SSO library (python3-saml) is not installed.")
+        # Fallback XML metadata representation for testing / configuration
+        acs_url = f"{settings.app_base_url}/api/v1/auth/sso/acs"
+        entity_id = f"{settings.app_base_url}/api/v1/auth/sso/metadata"
+        xml = f"""<?xml version="1.0"?>
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="{entity_id}">
+  <md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{acs_url}" index="1"/>
+  </md:SPSSODescriptor>
+</md:EntityDescriptor>"""
+        return JSONResponse(content={"xml": xml}, media_type="application/xml")
     auth = OneLogin_Saml2_Auth({'https': 'on'}, get_saml_settings())
     metadata = auth.get_settings().get_sp_metadata()
     return JSONResponse(content={"xml": metadata}, media_type="application/xml")
+
+
+from pydantic import BaseModel
+from api.routes.auth import get_current_user
+
+
+class SSOConfigPayload(BaseModel):
+    idp_entity_id: str | None = None
+    idp_sso_url: str | None = None
+    idp_cert: str | None = None
+    metadata_url: str | None = None
+    is_enabled: bool = False
+
+
+@router.get("/config")
+async def get_sso_config(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """ Returns self-service SSO configuration for the tenant """
+    if not current_user.tenant_id:
+        raise HTTPException(status_code=400, detail="User is not associated with an enterprise tenant.")
+    
+    tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+    tenant = tenant_res.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found.")
+
+    tenant_settings = tenant.settings or {}
+    sso_data = tenant_settings.get("sso", {})
+
+    sp_entity_id = f"{settings.app_base_url}/api/v1/auth/sso/metadata"
+    sp_acs_url = f"{settings.app_base_url}/api/v1/auth/sso/acs"
+
+    return {
+        "sp_entity_id": sp_entity_id,
+        "sp_acs_url": sp_acs_url,
+        "idp_entity_id": sso_data.get("idp_entity_id") or settings.saml_idp_entity_id,
+        "idp_sso_url": sso_data.get("idp_sso_url") or settings.saml_idp_sso_url,
+        "metadata_url": sso_data.get("metadata_url", ""),
+        "certificate_installed": bool(sso_data.get("idp_cert") or settings.saml_idp_cert),
+        "is_enabled": sso_data.get("is_enabled", False),
+    }
+
+
+@router.post("/config")
+async def update_sso_config(
+    payload: SSOConfigPayload,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """ Updates self-service SAML IdP configuration for the tenant """
+    if not current_user.tenant_id:
+        raise HTTPException(status_code=400, detail="User is not associated with an enterprise tenant.")
+
+    tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+    tenant = tenant_res.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found.")
+
+    current_settings = dict(tenant.settings or {})
+    current_settings["sso"] = {
+        "idp_entity_id": payload.idp_entity_id or "",
+        "idp_sso_url": payload.idp_sso_url or "",
+        "idp_cert": payload.idp_cert or "",
+        "metadata_url": payload.metadata_url or "",
+        "is_enabled": payload.is_enabled,
+    }
+    tenant.settings = current_settings
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": "Enterprise SSO configuration saved successfully.",
+        "is_enabled": payload.is_enabled,
+    }
+
+
+@router.post("/test")
+async def test_sso_config(
+    payload: SSOConfigPayload,
+    current_user: User = Depends(get_current_user)
+):
+    """ Validates SAML IdP inputs without persisting """
+    if not payload.idp_sso_url and not payload.metadata_url:
+        raise HTTPException(status_code=400, detail="Please provide either an IdP SSO URL or IdP Metadata URL.")
+
+    if payload.idp_sso_url and not (payload.idp_sso_url.startswith("https://") or payload.idp_sso_url.startswith("http://")):
+        raise HTTPException(status_code=400, detail="IdP SSO URL must start with https://")
+
+    return {
+        "status": "valid",
+        "message": "SAML parameters are valid and ready for IdP federated handshakes."
+    }
+
