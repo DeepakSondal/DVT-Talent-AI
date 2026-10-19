@@ -15,9 +15,9 @@ import structlog
 from sqlalchemy import select
 
 try:
-    from backend.db.models import AsyncSessionLocal, EmailSent, EmailStatus, Tenant
-    from backend.config import settings
-    from backend.services.security_service import encrypt_pii, decrypt_pii
+    from db.models import AsyncSessionLocal, EmailSent, EmailStatus, Tenant
+    from config import settings
+    from services.security_service import encrypt_pii, decrypt_pii
 except ImportError:
     from db.models import AsyncSessionLocal, EmailSent, EmailStatus, Tenant
     from config import settings

@@ -110,7 +110,8 @@ app.include_router(auth_sso.router,    prefix=f"{PREFIX}/auth/sso",   tags=["Ent
 app.include_router(tenants.router,    prefix=f"{PREFIX}/tenants",    tags=["Tenants"])
 app.include_router(users.router,      prefix=f"{PREFIX}/users",      tags=["Users"])
 app.include_router(companies.router,  prefix=f"{PREFIX}/companies",  tags=["Companies"])
-app.include_router(leads.router,      prefix=f"{PREFIX}/leads",      tags=["Leads"])
+# Sales Lead generation deactivated per product pivot to Recruiter + Candidate talent operations
+# app.include_router(leads.router,      prefix=f"{PREFIX}/leads",      tags=["Leads"])
 app.include_router(candidates.router, prefix=f"{PREFIX}/candidates", tags=["Candidates"])
 app.include_router(jobs.router,       prefix=f"{PREFIX}/jobs",       tags=["Jobs"])
 app.include_router(campaigns.router,  prefix=f"{PREFIX}/campaigns",  tags=["Campaigns"])

@@ -11,7 +11,7 @@ except (ImportError, TypeError):
 
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.groq import GroqModel
-from backend.config import settings
+from config import settings
 from typing import Optional
 
 

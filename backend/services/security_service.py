@@ -6,8 +6,8 @@ import base64
 import hashlib
 from cryptography.fernet import Fernet
 try:
-    from backend.config import settings
-    from backend.db.models import AuditLog, AsyncSessionLocal
+    from config import settings
+    from db.models import AuditLog, AsyncSessionLocal
 except ImportError:
     from config import settings
     from db.models import AuditLog, AsyncSessionLocal

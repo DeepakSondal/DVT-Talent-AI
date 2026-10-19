@@ -2,8 +2,8 @@ import json
 from typing import Any, Dict, Optional, List
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
-from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
-from backend.agents.tools.mcp_tools import execute_mcp_tool
+from agents.pydantic_config import get_pydantic_model, AgentDeps
+from agents.tools.mcp_tools import execute_mcp_tool
 
 class CandidateStatusUpdate(BaseModel):
     name: str

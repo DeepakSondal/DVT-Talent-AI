@@ -64,14 +64,10 @@ async def list_leads(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from sqlalchemy.orm import selectinload
-    query = select(Lead).options(selectinload(Lead.company)).where(
-        Lead.owner_id == current_user.id,
-        Lead.tenant_id == current_user.tenant_id
-    )
-    count_q = select(func.count(Lead.id)).where(
-        Lead.owner_id == current_user.id,
-        Lead.tenant_id == current_user.tenant_id
+    """[DEPRECATED]: Sales lead generation is deactivated per product pivot to Recruiter + Candidate focus."""
+    raise HTTPException(
+        status_code=410,
+        detail="Sales lead generation has been deprecated. DVT Talent AI has pivoted to AI recruitment for recruiters and candidates. Please use /api/v1/candidates."
     )
     if status:
         query = query.where(Lead.status == status)

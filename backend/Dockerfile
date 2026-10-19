@@ -26,9 +26,6 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create symlink so that 'backend' absolute imports resolve correctly inside the container
-RUN ln -sfn . /app/backend
-
 
 # Create non-root user with a writable home directory
 # (browser-use writes config files to $HOME at import time)

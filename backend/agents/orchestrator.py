@@ -8,17 +8,17 @@ from datetime import datetime
 import structlog
 import httpx
 
-from backend.config import settings
-from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
+from config import settings
+from agents.pydantic_config import AgentDeps, get_pydantic_model
 
-from backend.agents.discovery_pydantic import discovery_agent
-from backend.agents.sourcing_pydantic import sourcing_agent
-from backend.agents.outreach_pydantic import outreach_agent
-from backend.agents.analytics_pydantic import analytics_agent
-from backend.agents.screening_pydantic import screening_agent
-from backend.agents.critic_pydantic import critic_agent
-from backend.agents.market_iq_pydantic import market_iq_agent
-from backend.services.notification_service import notification_service
+from agents.discovery_pydantic import discovery_agent
+from agents.sourcing_pydantic import sourcing_agent
+from agents.outreach_pydantic import outreach_agent
+from agents.analytics_pydantic import analytics_agent
+from agents.screening_pydantic import screening_agent
+from agents.critic_pydantic import critic_agent
+from agents.market_iq_pydantic import market_iq_agent
+from services.notification_service import notification_service
 
 log = structlog.get_logger(__name__)
 
@@ -32,7 +32,7 @@ def _get_agent_data(res: Any) -> Any:
 
 def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: str = "default", payload: Any = None):
     """Bridge to the Celery task broadcaster for live UI telemetry"""
-    from backend.workers.tasks import broadcast_signal as relay
+    from workers.tasks import broadcast_signal as relay
     relay(message, signal_type, tenant_id, payload=payload)
 
 class AgentOrchestrator:
@@ -62,7 +62,7 @@ class AgentOrchestrator:
     async def _resolve_tenant_keys(self) -> Dict[str, Optional[str]]:
         """Query the database to load and decrypt Team API Keys for this tenant."""
         from sqlalchemy import select
-        from backend.db.models import AsyncSessionLocal, Team, TeamApiKeys
+        from db.models import AsyncSessionLocal, Team, TeamApiKeys
         from services.security_service import decrypt_pii
         
         keys_dict = {

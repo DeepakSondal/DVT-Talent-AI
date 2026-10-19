@@ -15,15 +15,15 @@ import time
 import urllib.parse
 from sqlalchemy import create_engine, text
 from workers.celery_app import celery_app
-from backend.config import settings
-from backend.agents.orchestrator import AgentOrchestrator
-from backend.agents.pydantic_config import AgentDeps
-from backend.agents.discovery_pydantic import discovery_agent
-from backend.agents.sourcing_pydantic import sourcing_agent
-from backend.agents.outreach_pydantic import outreach_agent
-from backend.agents.analytics_pydantic import analytics_agent
-from backend.agents.screening_pydantic import screening_agent
-from backend.agents.market_iq_pydantic import market_iq_agent
+from config import settings
+from agents.orchestrator import AgentOrchestrator
+from agents.pydantic_config import AgentDeps
+from agents.discovery_pydantic import discovery_agent
+from agents.sourcing_pydantic import sourcing_agent
+from agents.outreach_pydantic import outreach_agent
+from agents.analytics_pydantic import analytics_agent
+from agents.screening_pydantic import screening_agent
+from agents.market_iq_pydantic import market_iq_agent
 
 log = structlog.get_logger(__name__)
 
@@ -307,7 +307,7 @@ def send_campaign_emails(self, campaign_id: str, tenant_id: str = "default") -> 
 
 @celery_app.task(bind=True, name="workers.tasks.copilot_discovery_task", max_retries=5)
 def copilot_discovery_task(self, task_id: str, industry: str, location: str, tenant_id: str):
-    from backend.db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
     async def _run():
         orchestrator = AgentOrchestrator(tenant_id=tenant_id)
         try:
@@ -336,7 +336,7 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
 
 @celery_app.task(bind=True, name="workers.tasks.copilot_sourcing_task", max_retries=5)
 def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, tenant_id: str):
-    from backend.db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
     async def _run():
         orchestrator = AgentOrchestrator(tenant_id=tenant_id)
         try:
@@ -364,7 +364,7 @@ def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, t
 
 @celery_app.task(bind=True, name="workers.tasks.copilot_outreach_task", max_retries=5)
 def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_context: dict, tenant_id: str, enable_screening: bool = False):
-    from backend.db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
     async def _run():
         orchestrator = AgentOrchestrator(tenant_id=tenant_id)
         try:

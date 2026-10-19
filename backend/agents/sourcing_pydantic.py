@@ -6,9 +6,9 @@ import json
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
-from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
-from backend.agents.tools.browser_tools import browser_tool
-from backend.agents.tools.memory_tools import fetch_recruiter_preferences
+from agents.pydantic_config import get_pydantic_model, AgentDeps
+from agents.tools.browser_tools import browser_tool
+from agents.tools.memory_tools import fetch_recruiter_preferences
 
 # ── Models ──────────────────────────────────────────────────────────────────
 
@@ -85,7 +85,7 @@ async def search_internal_ats(ctx: RunContext[AgentDeps], query: str) -> str:
     # In production, this hits the Postgres/Vector DB of past applicants
     import httpx
     from openai import AsyncOpenAI
-    from backend.config import settings
+    from config import settings
     
     PINECONE_API_KEY = getattr(settings, 'pinecone_api_key', 'mock_pinecone_key')
     PINECONE_HOST = getattr(settings, 'pinecone_host', 'https://dvt-memory-tree.pinecone.io')

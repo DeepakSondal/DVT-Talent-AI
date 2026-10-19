@@ -83,7 +83,7 @@ async def trigger_dag(
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
 ):
-    from backend.agents.orchestrator import AgentOrchestrator
+    from agents.orchestrator import AgentOrchestrator
     orchestrator = AgentOrchestrator()
     if background_tasks:
         background_tasks.add_task(orchestrator.run_full_swarm, industry=industry, location=location)
@@ -99,7 +99,7 @@ async def run_swarm_pipeline(
 ):
     print(f"🚀 [SWARM TRACE] Received initiation request for industry: {config.industry}")
     """Trigger the unified swarm pipeline via native background tasks (No Celery required)"""
-    from backend.agents.orchestrator import AgentOrchestrator
+    from agents.orchestrator import AgentOrchestrator
     
     orchestrator = AgentOrchestrator(tenant_id=str(current_user.tenant_id))
     
@@ -130,7 +130,7 @@ async def run_swarm_phase(
     if phase not in ["discovery", "sourcing", "outreach"]:
         raise HTTPException(status_code=400, detail="Invalid phase")
 
-    from backend.agents.orchestrator import AgentOrchestrator
+    from agents.orchestrator import AgentOrchestrator
     # Pass user/tenant context to the orchestrator for notifications
     orchestrator = AgentOrchestrator(tenant_id=str(current_user.tenant_id))
     

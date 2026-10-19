@@ -5,7 +5,7 @@ Phase 1: Market Intelligence & Strategic JD Synthesis
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
-from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
+from agents.pydantic_config import get_pydantic_model, AgentDeps
 import structlog
 
 log = structlog.get_logger(__name__)
@@ -97,7 +97,7 @@ async def research_company_deep_dive(ctx: RunContext[AgentDeps], research_goal: 
     Launches an autonomous browser to find 'hidden' info about a company's hiring status.
     Goal Example: 'Find the current engineering headcount and open roles at TechCorp'
     """
-    from backend.agents.tools.browser_tools import browser_tool
+    from agents.tools.browser_tools import browser_tool
     return await browser_tool.execute_goal(research_goal)
 
 @discovery_agent.tool

@@ -12,7 +12,7 @@ import asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlalchemy import select, text
-from backend.db.models import AsyncSessionLocal, Tenant, User, Job, Candidate, AIDecisionLedger
+from db.models import AsyncSessionLocal, Tenant, User, Job, Candidate, AIDecisionLedger
 
 @pytest.mark.asyncio
 async def test_tenant_isolation_gate():

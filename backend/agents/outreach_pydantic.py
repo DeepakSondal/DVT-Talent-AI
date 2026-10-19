@@ -5,7 +5,7 @@ Handles hyper-personalized communication across LinkedIn and Email.
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
-from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
+from agents.pydantic_config import get_pydantic_model, AgentDeps
 
 class OutreachDraft(BaseModel):
     model_config = ConfigDict(extra="allow")

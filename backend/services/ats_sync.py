@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 from openai import AsyncOpenAI
 import structlog
 
-from backend.config import settings
+from config import settings
 
 log = structlog.get_logger(__name__)
 

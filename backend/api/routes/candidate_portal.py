@@ -24,6 +24,7 @@ from db.models import (
     Company, Resume, get_db
 )
 from api.routes.auth import get_current_user
+from services.privacy_service import is_domain_or_company_blocked
 
 router = APIRouter()
 
@@ -502,9 +503,10 @@ async def list_matched_jobs(
         comp_dom = company_domain or ""
 
         # Check Privacy Shield: Hide from candidate's blocked companies
-        if any(
-            h in comp_name.lower() or (comp_dom and h in comp_dom.lower())
-            for h in hidden_companies
+        if is_domain_or_company_blocked(
+            hide_from_companies=cand.hide_from_companies or [],
+            employer_domain=comp_dom,
+            employer_name=comp_name,
         ):
             continue
 

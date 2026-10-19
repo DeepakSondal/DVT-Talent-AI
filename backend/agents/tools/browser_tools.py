@@ -9,7 +9,7 @@ except ImportError:
 
 from pydantic import BaseModel
 from typing import Optional
-from backend.agents.pydantic_config import get_pydantic_model
+from agents.pydantic_config import get_pydantic_model
 
 class BrowserSearchQuery(BaseModel):
     goal: str

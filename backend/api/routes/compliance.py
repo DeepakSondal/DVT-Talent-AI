@@ -9,9 +9,9 @@ from sqlalchemy import select, desc
 from typing import List, Dict, Any, Optional
 import uuid
 
-from backend.db.models import get_db, AIDecisionLedger, User
-from backend.api.routes.auth import get_current_user
-from backend.services.compliance_service import compliance_service
+from db.models import get_db, AIDecisionLedger, User
+from api.routes.auth import get_current_user
+from services.compliance_service import compliance_service
 
 router = APIRouter(prefix="/compliance", tags=["Compliance & AI Governance"])
 

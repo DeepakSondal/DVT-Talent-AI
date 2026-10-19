@@ -19,8 +19,8 @@ backend_dir = os.path.join(root_dir, 'backend')
 if root_dir not in sys.path: sys.path.append(root_dir)
 if backend_dir not in sys.path: sys.path.append(backend_dir)
 
-from backend.agents.sourcing_pydantic import sourcing_agent
-from backend.agents.pydantic_config import AgentDeps
+from agents.sourcing_pydantic import sourcing_agent
+from agents.pydantic_config import AgentDeps
 
 async def run_browser_demo():
     print("🚀 Starting Autonomous Browser Research Demo...")

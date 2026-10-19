@@ -5,8 +5,8 @@ Conducts initial technical and cultural screening assessments.
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
-from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
-from backend.agents.tools.voice_tools import trigger_vapi_outbound_call
+from agents.pydantic_config import get_pydantic_model, AgentDeps
+from agents.tools.voice_tools import trigger_vapi_outbound_call
 
 class ScreeningQuestion(BaseModel):
     model_config = ConfigDict(extra="allow")

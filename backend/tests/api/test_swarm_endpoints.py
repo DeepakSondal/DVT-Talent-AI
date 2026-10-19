@@ -17,8 +17,8 @@ def test_nexus_monitoring_recent_signals():
 
 def test_swarm_trigger_endpoint():
     """ Verify that the DAG trigger initiates a background task """
-    with patch("backend.agents.orchestrator.AgentOrchestrator.run_full_swarm", new_callable=AsyncMock) as mock_swarm, \
-         patch("backend.agents.orchestrator.AgentOrchestrator.run_full_pipeline", new_callable=AsyncMock) as mock_pipe:
+    with patch("agents.orchestrator.AgentOrchestrator.run_full_swarm", new_callable=AsyncMock) as mock_swarm, \
+         patch("agents.orchestrator.AgentOrchestrator.run_full_pipeline", new_callable=AsyncMock) as mock_pipe:
         response = client.get("/api/v1/agents/trigger-dag?industry=AI&location=SF")
         assert response.status_code == 200
         assert "status" in response.json()

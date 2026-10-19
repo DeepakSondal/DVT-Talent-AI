@@ -18,9 +18,11 @@ from sqlalchemy import select, func, desc
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timezone
 
-from db.models import Candidate, Resume, CandidateStatus, get_db
+from db.models import Candidate, Resume, CandidateStatus, Tenant, UserRole, get_db
 from api.routes.auth import get_current_user, User
 from services.security_service import log_audit_event
+from services.privacy_service import is_candidate_visible_to_recruiter, normalize_domain
+from fastapi import status
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -82,6 +84,22 @@ async def list_candidates(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Recruiter or administrative permissions required to access candidate management."
+        )
+
+    # Fetch recruiter's tenant domain and name for privacy shield evaluation
+    tenant_domain = None
+    tenant_name = None
+    if current_user.tenant_id:
+        tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+        tenant_obj = tenant_res.scalar_one_or_none()
+        if tenant_obj:
+            tenant_domain = tenant_obj.domain
+            tenant_name = tenant_obj.name
+
     query = select(Candidate).where(Candidate.tenant_id == current_user.tenant_id)
     count_query = select(func.count(Candidate.id)).where(Candidate.tenant_id == current_user.tenant_id)
 
@@ -111,7 +129,18 @@ async def list_candidates(
     query = query.order_by(desc(Candidate.score)).offset((page - 1) * page_size).limit(page_size)
     candidates = (await db.execute(query)).scalars().all()
 
-    return CandidateList(items=candidates, total=total, page=page, page_size=page_size)
+    # Enforce candidate privacy shield: exclude candidates who are in stealth mode or have blacklisted this employer
+    visible_candidates = [
+        c for c in candidates
+        if is_candidate_visible_to_recruiter(
+            candidate=c,
+            recruiter_tenant_domain=tenant_domain,
+            recruiter_tenant_name=tenant_name,
+            recruiter_email=current_user.email,
+        )
+    ]
+
+    return CandidateList(items=visible_candidates, total=len(visible_candidates), page=page, page_size=page_size)
 
 
 @router.post("", response_model=CandidateOut, status_code=201)
@@ -189,12 +218,37 @@ async def get_candidate(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Recruiter or administrative permissions required to view candidate records."
+        )
+
     result = await db.execute(
         select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
     )
     candidate = result.scalar_one_or_none()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # Fetch recruiter's tenant domain and name for privacy shield evaluation
+    tenant_domain = None
+    tenant_name = None
+    if current_user.tenant_id:
+        tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+        tenant_obj = tenant_res.scalar_one_or_none()
+        if tenant_obj:
+            tenant_domain = tenant_obj.domain
+            tenant_name = tenant_obj.name
+
+    if not is_candidate_visible_to_recruiter(
+        candidate=candidate,
+        recruiter_tenant_domain=tenant_domain,
+        recruiter_tenant_name=tenant_name,
+        recruiter_email=current_user.email,
+    ):
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
     return candidate
 
 

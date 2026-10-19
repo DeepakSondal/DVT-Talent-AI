@@ -17,7 +17,7 @@ from sqlalchemy.sql import func
 import enum
 
 try:
-    from backend.config import settings
+    from config import settings
 except ImportError:
     from config import settings
 

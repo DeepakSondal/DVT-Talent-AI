@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import structlog
 from db.models import get_db, User
 from api.routes.auth import get_current_user
-from backend.agents.tools.memory_tools import fetch_recruiter_preferences, add_recruiter_preference
+from agents.tools.memory_tools import fetch_recruiter_preferences, add_recruiter_preference
 
 log = structlog.get_logger(__name__)
 router = APIRouter()

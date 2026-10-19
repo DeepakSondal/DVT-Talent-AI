@@ -4,8 +4,8 @@ DVT Talent AI — Critic Agent (Pydantic AI Version)
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
-from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
-from backend.agents.swarm_memory import query_memory_tree
+from agents.pydantic_config import get_pydantic_model, AgentDeps
+from agents.swarm_memory import query_memory_tree
 
 class AuditResult(BaseModel):
     model_config = ConfigDict(extra="allow")

@@ -5,7 +5,7 @@ import sqlite3
 import httpx
 from typing import List, Dict, Optional
 from openai import AsyncOpenAI
-from backend.config import settings
+from config import settings
 
 DB_FILE = "swarm_memory.db"
 PINECONE_API_KEY = getattr(settings, 'pinecone_api_key', 'mock_pinecone_key')

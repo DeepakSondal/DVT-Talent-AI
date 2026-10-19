@@ -8,8 +8,8 @@ from typing import Optional, List
 from jinja2 import Template
 
 try:
-    from backend.services.email_service import email_service
-    from backend.db.models import AsyncSessionLocal, User, Tenant, Candidate
+    from services.email_service import email_service
+    from db.models import AsyncSessionLocal, User, Tenant, Candidate
 except ImportError:
     from services.email_service import email_service
     from db.models import AsyncSessionLocal, User, Tenant, Candidate

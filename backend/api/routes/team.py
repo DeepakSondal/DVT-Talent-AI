@@ -5,8 +5,8 @@ from typing import List, Optional, Dict, Any
 import uuid
 from pydantic import BaseModel
 
-from backend.db.models import get_db, User, UserRole, Team, Candidate, EmailSent, TeamApiKeys
-from backend.api.routes.auth import get_current_user # Assuming a dependency exists
+from db.models import get_db, User, UserRole, Team, Candidate, EmailSent, TeamApiKeys
+from api.routes.auth import get_current_user # Assuming a dependency exists
 from services.security_service import encrypt_pii, decrypt_pii
 
 router = APIRouter(prefix="/team", tags=["team"])

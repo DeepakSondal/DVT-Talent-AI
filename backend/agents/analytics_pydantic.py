@@ -5,7 +5,7 @@ Generates high-level performance reports and conversion insights.
 from typing import Dict, List
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent
-from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
+from agents.pydantic_config import get_pydantic_model, AgentDeps
 
 class PerformanceMetrics(BaseModel):
     model_config = ConfigDict(extra="allow")
