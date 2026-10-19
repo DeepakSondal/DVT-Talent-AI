@@ -8,8 +8,8 @@ import structlog
 
 log = structlog.get_logger(__name__)
 
-# List of sensitive paths or actions to log specifically
-SENSITIVE_PATHS = ["/candidates", "/leads", "/auth/login", "/users"]
+# List of sensitive root paths to log specifically (read or write)
+SENSITIVE_PATHS = ["/candidates", "/users", "/auth/login", "/auth/sso", "/candidate-portal", "/compliance", "/billing"]
 
 class AuditLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -24,8 +24,11 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
         
+        # Strip API version prefix for clean pattern matching and entity categorization
+        normalized_path = path[7:] if path.startswith("/api/v1") else path
+        
         # Only log mutations or sensitive views
-        is_sensitive = any(path.startswith(p) for p in SENSITIVE_PATHS)
+        is_sensitive = any(normalized_path.startswith(p) for p in SENSITIVE_PATHS)
         is_mutation = method in ["POST", "PUT", "PATCH", "DELETE"]
         
         if is_sensitive or is_mutation:
@@ -52,7 +55,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                         tenant_id=tenant_id,
                         user_id=user_id,
                         action=f"{method} {path}",
-                        entity_type=path.split("/")[1] if len(path.split("/")) > 1 else "root",
+                        entity_type=normalized_path.strip("/").split("/")[0] if normalized_path.strip("/") else "root",
                         severity=severity,
                         status=status,
                         ip_address=request.client.host if request.client else "unknown",

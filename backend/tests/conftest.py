@@ -14,7 +14,15 @@ import db.models
 # Test database URL (using SQLite in-memory for speed)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
-@pytest.fixture(scope="session")
+@pytest.fixture(autouse=True)
+async def ensure_db_tables():
+    from db.models import engine, Base
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        pass
+    yield
 def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop

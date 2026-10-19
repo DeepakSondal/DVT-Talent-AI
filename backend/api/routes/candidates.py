@@ -100,8 +100,8 @@ async def list_candidates(
             tenant_domain = tenant_obj.domain
             tenant_name = tenant_obj.name
 
-    query = select(Candidate).where(Candidate.tenant_id == current_user.tenant_id)
-    count_query = select(func.count(Candidate.id)).where(Candidate.tenant_id == current_user.tenant_id)
+    query = select(Candidate).where(Candidate.tenant_id == current_user.tenant_id, Candidate.is_searchable != False)
+    count_query = select(func.count(Candidate.id)).where(Candidate.tenant_id == current_user.tenant_id, Candidate.is_searchable != False)
 
     if search:
         search_filter = (
@@ -140,7 +140,7 @@ async def list_candidates(
         )
     ]
 
-    return CandidateList(items=visible_candidates, total=len(visible_candidates), page=page, page_size=page_size)
+    return CandidateList(items=visible_candidates, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=CandidateOut, status_code=201)

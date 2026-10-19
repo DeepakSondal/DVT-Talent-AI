@@ -35,6 +35,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # 2. If Redis circuit breaker is open, use fast in-memory rate limiting
         if now < self._redis_down_until:
+            if len(self._memory_counts) > 2048:
+                self._memory_counts = {
+                    k: v for k, v in self._memory_counts.items() if v[0] == current_minute
+                }
             minute, count = self._memory_counts.get(client_id, (current_minute, 0))
             if minute != current_minute:
                 count = 0
