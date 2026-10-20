@@ -92,7 +92,7 @@ export default function BillingPage() {
                 onClick={handlePortal} 
                 disabled={openingPortal}
                 variant="outline" 
-                className="h-12 px-6 rounded-2xl bg-white border-border hover:bg-muted font-black uppercase text-[10px] tracking-widest shadow-sm"
+                className="h-12 px-6 rounded-2xl bg-card border-border hover:bg-muted font-black uppercase text-[10px] tracking-widest shadow-sm"
               >
                 {openingPortal ? <RefreshCcw className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
                 Customer Portal
@@ -178,7 +178,7 @@ export default function BillingPage() {
                       >
                           <Card className={cn(
                               "p-10 h-full flex flex-col justify-between rounded-[2.5rem] transition-all relative overflow-hidden group",
-                              isCurrent ? "bg-blue-600 text-white border-none shadow-2xl shadow-blue-600/20" : "bg-white border-border hover:border-blue-500/50 shadow-xl"
+                              isCurrent ? "bg-blue-600 text-white border-none shadow-2xl shadow-blue-600/20" : "bg-card border-border hover:border-blue-500/50 shadow-xl"
                           )}>
                               {isPopular && !isCurrent && (
                                   <div className="absolute top-0 right-0 px-6 py-2 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-bl-2xl">
