@@ -193,6 +193,62 @@ class EmailService:
             log.error("verification_email_failed", error=str(e))
             return False
 
+    async def send_team_invitation_email(
+        self,
+        to_address: str,
+        tenant_name: str,
+        inviter_name: str,
+        invite_token: str,
+        role: str,
+        tenant_id: Optional[uuid.UUID] = None,
+    ) -> bool:
+        """
+        Send a single-use team invitation link.
+        Uses tenant SMTP if configured; falls back to system SMTP.
+        Returns True if delivery succeeded, False if SMTP unconfigured or failed.
+        """
+        accept_url = f"{settings.app_base_url}/invite/accept?token={invite_token}"
+        body = (
+            f"Hello,\n\n"
+            f"{inviter_name} has invited you to join {tenant_name} on DVT Talent AI as a {role}.\n\n"
+            f"Click the link below to accept the invitation and set up your password:\n\n"
+            f"{accept_url}\n\n"
+            f"This link is single-use and will expire in 48 hours.\n\n"
+            f"If you were not expecting this invitation, you can safely ignore this email.\n\n"
+            f"— DVT Talent AI Team"
+        )
+        msg = EmailMessage()
+        msg.set_content(body)
+        msg["Subject"] = f"Invitation to join {tenant_name} on DVT Talent AI"
+        msg["To"] = to_address
+
+        # 1. Resolve SMTP config
+        smtp_cfg: Optional[SMTPConfig] = None
+        if tenant_id:
+            smtp_cfg = await _get_tenant_smtp(tenant_id)
+
+        if not smtp_cfg:
+            smtp_cfg = _get_system_smtp()
+
+        if not smtp_cfg:
+            log.warning("no_smtp_configured_for_invitation", to=to_address, tenant_id=str(tenant_id) if tenant_id else None)
+            return False
+
+        msg["From"] = smtp_cfg.from_header
+
+        try:
+            with smtplib.SMTP(smtp_cfg.host, smtp_cfg.port, timeout=15) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(smtp_cfg.user, smtp_cfg.password)
+                server.send_message(msg)
+            log.info("team_invitation_email_sent", to=to_address, tenant_id=str(tenant_id) if tenant_id else None)
+            return True
+        except Exception as e:
+            log.error("team_invitation_email_failed", to=to_address, error=str(e))
+            return False
+
     async def process_incoming_webhook(self, payload: Dict[str, Any]) -> bool:
         """Track email replies via webhook (SendGrid Inbound Parse / Gmail Watcher)."""
         headers = payload.get("Headers", {})

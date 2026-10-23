@@ -113,6 +113,9 @@ class VectorStore:
 
     def search_resumes(self, tenant_id: str, query_text: str, limit: int = 10, filters: dict = None) -> List[dict]:
         """Find most similar resumes ONLY within the specified tenant space"""
+        if not CHROMA_AVAILABLE or not self.client or not getattr(self, "resumes", None):
+            return []
+            
         query_embedding = self.embed_text(query_text)
         
         # [NEW] Gap 3: Build mandatory tenant 'where' filter
@@ -138,6 +141,49 @@ class VectorStore:
                     "score": 1 - results["distances"][0][i]  # Convert distance to similarity
                 })
         return formatted
+
+    def delete_resumes(
+        self,
+        tenant_id: str,
+        resume_ids: Optional[List[str]] = None,
+        candidate_id: Optional[str] = None
+    ) -> bool:
+        """
+        Delete resume vector embeddings from ChromaDB.
+        Strictly scoped to tenant_id and candidate_id / resume_ids.
+        Raises an exception if the vector store is offline/unavailable.
+        """
+        if not CHROMA_AVAILABLE:
+            return True
+
+        if not self.client:
+            raise RuntimeError("ChromaDB vector store is offline or uninitialized")
+
+        ids_to_delete = [str(i) for i in (resume_ids or []) if i]
+        
+        # 1. Delete by IDs if provided
+        if ids_to_delete:
+            try:
+                self.resumes.delete(ids=ids_to_delete)
+            except Exception as e:
+                log.warning("chroma_delete_by_ids_failed", error=str(e), ids=ids_to_delete)
+                raise e
+
+        # 2. Delete by candidate and tenant metadata
+        if candidate_id:
+            try:
+                where_filter = {
+                    "$and": [
+                        {"tenant_id": str(tenant_id)},
+                        {"candidate_id": str(candidate_id)}
+                    ]
+                }
+                self.resumes.delete(where=where_filter)
+            except Exception as e:
+                log.warning("chroma_delete_by_filter_failed", error=str(e), candidate_id=candidate_id)
+                raise e
+
+        return True
 
     # ── Jobs ────────────────────────────────────────────────────────────────
     def upsert_job(self, job_id: str, text: str, metadata: dict):

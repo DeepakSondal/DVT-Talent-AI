@@ -26,6 +26,8 @@ backend/backend
 backend/.env
 frontend/.env
 *.env
+.env-production
+.env-*
 
 # IDE
 .idea/
@@ -49,7 +51,9 @@ frontend/playwright/.cache/
 *.db
 *.sqlite
 *.sqlite3
+*.dump
 backend/dvt_talent.db
+storage/
 
 # ChromaDB & Local Vector Stores
 chroma_data/
@@ -90,7 +94,16 @@ backend/test_groq_models.py
 
 # AI & Editor Config
 .agent/
+.agents/
 .cursor/
 .superdesign/
 CLAUDE.md
 .windsurfrules
+
+# Local backups & dumps
+backups/
+*.dump
+scripts/clean_prod_schema.sql
+graphify-out/
+backend/.staging_pg_env.ps1
+frontend/tsconfig.tsbuildinfo

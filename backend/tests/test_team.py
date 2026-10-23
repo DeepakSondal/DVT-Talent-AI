@@ -9,13 +9,14 @@ from db.models import User, UserRole, Team, TeamApiKeys, Tenant
 
 @pytest.mark.asyncio
 async def test_create_manager_and_team(db_session: AsyncSession):
-    tenant = Tenant(name="Enterprise Tenant")
+    run_id = uuid.uuid4().hex[:6]
+    tenant = Tenant(name=f"Enterprise Tenant {run_id}")
     db_session.add(tenant)
     await db_session.commit()
 
     # 1. Create Manager
     manager = User(
-        email="manager@enterprise.com",
+        email=f"manager_{run_id}@enterprise.com",
         full_name="Enterprise Manager",
         role=UserRole.MANAGER,
         tenant_id=tenant.id,
@@ -26,7 +27,7 @@ async def test_create_manager_and_team(db_session: AsyncSession):
 
     # 2. Create Team
     team = Team(
-        name="Global Sourcing",
+        name=f"Global Sourcing {run_id}",
         tenant_id=tenant.id,
         manager_id=manager.id,
         default_credit_limit=5000,
@@ -47,15 +48,45 @@ async def test_create_manager_and_team(db_session: AsyncSession):
     assert team.id is not None
     assert keys.openai_key == "sk-mock-manager-key"
 
+
 @pytest.mark.asyncio
 async def test_invite_recruiter_and_inherit_keys(db_session: AsyncSession):
-    # Fetch team
-    stmt = select(Team).where(Team.name == "Global Sourcing")
-    team = (await db_session.execute(stmt)).scalar_one()
+    run_id = uuid.uuid4().hex[:6]
+    tenant = Tenant(name=f"Enterprise Tenant {run_id}")
+    db_session.add(tenant)
+    await db_session.commit()
+
+    manager = User(
+        email=f"manager_{run_id}@enterprise.com",
+        full_name="Enterprise Manager",
+        role=UserRole.MANAGER,
+        tenant_id=tenant.id,
+        hashed_password="mock"
+    )
+    db_session.add(manager)
+    await db_session.commit()
+
+    team = Team(
+        name=f"Global Sourcing {run_id}",
+        tenant_id=tenant.id,
+        manager_id=manager.id,
+        default_credit_limit=5000,
+        shared_pool_enabled=True
+    )
+    db_session.add(team)
+    await db_session.commit()
+
+    keys = TeamApiKeys(
+        team_id=team.id,
+        openai_key="sk-mock-manager-key",
+        serper_key="mock-serper"
+    )
+    db_session.add(keys)
+    await db_session.commit()
 
     # Create Recruiter
     recruiter = User(
-        email="recruiter@enterprise.com",
+        email=f"recruiter_{run_id}@enterprise.com",
         full_name="Junior Recruiter",
         role=UserRole.RECRUITER,
         tenant_id=team.tenant_id,
@@ -81,11 +112,22 @@ async def test_team_api_keys_encryption(db_session: AsyncSession):
     db_session.add(tenant)
     await db_session.commit()
 
-    # 1. Create a dummy team
+    # 1. Create manager user
+    manager = User(
+        email=f"mgr.{uuid.uuid4().hex[:6]}@sectenant.com",
+        full_name="Sec Manager",
+        role=UserRole.MANAGER,
+        tenant_id=tenant.id,
+        hashed_password="mock"
+    )
+    db_session.add(manager)
+    await db_session.commit()
+
+    # 2. Create a dummy team
     team = Team(
         name="Security Test Team",
         tenant_id=tenant.id,
-        manager_id=uuid.uuid4(), # mock ID
+        manager_id=manager.id,
         default_credit_limit=1000
     )
     db_session.add(team)

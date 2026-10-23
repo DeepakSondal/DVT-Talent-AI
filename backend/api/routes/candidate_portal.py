@@ -14,6 +14,7 @@ import uuid
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, desc
@@ -25,6 +26,7 @@ from db.models import (
 )
 from api.routes.auth import get_current_user
 from services.privacy_service import is_domain_or_company_blocked
+from services.resume_parser import ResumeParserService
 
 router = APIRouter()
 
@@ -399,8 +401,8 @@ async def upload_candidate_resume(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Upload resume, parse text, extract skills, and attach to candidate profile.
-    Hardened against oversized payloads and unsupported file extensions.
+    Upload resume, extract 100% full text (PDF/DOCX/TXT), parse structured career history,
+    persist file securely, and attach to candidate profile.
     """
     cand = await get_or_create_candidate_for_user(current_user, db)
 
@@ -423,36 +425,60 @@ async def upload_candidate_resume(
             detail="File size exceeds maximum permitted limit of 10 MB."
         )
 
-    raw_text = ""
-    try:
-        raw_text = content_bytes.decode("utf-8", errors="ignore")
-    except Exception:
-        raw_text = f"Resume file {filename}"
+    # 1. Multi-format text extraction (PDF / DOCX / TXT)
+    raw_text = ResumeParserService.extract_text(content_bytes, filename)
+    if not raw_text.strip():
+        raw_text = f"Resume document: {filename}"
 
-    # Extract common technical and business skills from text
-    known_skills = [
-        "python", "react", "next.js", "typescript", "javascript", "fastapi", "django",
-        "node.js", "docker", "kubernetes", "aws", "gcp", "postgresql", "sql",
-        "graphql", "tailwind", "redis", "kafka", "rest api", "ci/cd", "git",
-        "machine learning", "pytorch", "langchain", "llm", "rag", "golang", "java"
-    ]
-    extracted_skills = []
-    text_lower = raw_text.lower()
-    for s in known_skills:
-        if s in text_lower:
-            extracted_skills.append(s.title() if len(s) > 3 else s.upper())
+    # 2. Structured career history extraction
+    parsed_data = ResumeParserService.parse_structured_resume(raw_text, filename)
 
-    # Merge skills with candidate existing skills
+    # 3. Secure file persistence
+    resume_id = uuid.uuid4()
+    file_path = ResumeParserService.save_resume_file(
+        str(cand.id), str(resume_id), filename, content_bytes
+    )
+
+    # 4. Update candidate profile fields
     curr_skills = set(cand.skills or [])
-    curr_skills.update(extracted_skills)
-    cand.skills = list(curr_skills)
+    curr_skills.update(parsed_data.get("skills", []))
+    cand.skills = sorted(list(curr_skills))
 
-    # Save Resume object
+    if parsed_data.get("experience_years"):
+        cand.experience_years = max(cand.experience_years or 0, parsed_data["experience_years"])
+    
+    if parsed_data.get("current_company") and parsed_data["current_company"] != "Parsed From Resume":
+        cand.current_company = parsed_data["current_company"]
+    
+    if parsed_data.get("current_title") and not cand.title:
+        cand.title = parsed_data["current_title"]
+
+    contact = parsed_data.get("contact", {})
+    if contact.get("phone") and not cand.phone:
+        cand.phone = contact["phone"]
+    if contact.get("location") and not cand.location:
+        cand.location = contact["location"]
+    if contact.get("linkedin_url") and not cand.linkedin_url:
+        cand.linkedin_url = contact["linkedin_url"]
+    if contact.get("github_url") and not cand.github_url:
+        cand.github_url = contact["github_url"]
+
+    # 5. Mark older resumes as not current
+    old_resumes = (await db.execute(
+        select(Resume).where(Resume.candidate_id == cand.id, Resume.is_current == True)
+    )).scalars().all()
+    for r in old_resumes:
+        r.is_current = False
+
+    # 6. Save Resume record
     new_resume = Resume(
+        id=resume_id,
         candidate_id=cand.id,
-        file_name=file.filename,
-        raw_text=raw_text[:20000],
-        parsed_data={"extracted_skills": extracted_skills},
+        tenant_id=cand.tenant_id,
+        file_name=filename,
+        file_url=file_path,
+        raw_text=raw_text,
+        parsed_data=parsed_data,
         is_current=True,
     )
     db.add(new_resume)
@@ -460,9 +486,76 @@ async def upload_candidate_resume(
 
     return {
         "status": "success",
-        "message": f"Resume '{file.filename}' processed successfully.",
-        "skills_detected": extracted_skills,
+        "message": f"Resume '{filename}' parsed and stored successfully.",
+        "skills_detected": parsed_data.get("skills", []),
         "total_skills": len(cand.skills),
+        "experience_detected": len(parsed_data.get("experience", [])),
+        "education_detected": len(parsed_data.get("education", [])),
+        "file_name": filename,
+    }
+
+
+@router.get("/resume/download")
+async def download_candidate_resume(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download the candidate's active uploaded resume file."""
+    cand = await get_or_create_candidate_for_user(current_user, db)
+    
+    res = (await db.execute(
+        select(Resume)
+        .where(Resume.candidate_id == cand.id, Resume.is_current == True)
+        .order_by(desc(Resume.created_at))
+    )).scalars().first()
+
+    if not res:
+        raise HTTPException(status_code=404, detail="No resume found on file.")
+
+    file_path = ResumeParserService.get_resume_file_path(res.file_url)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail="Original resume file not found on disk.")
+
+    ext = file_path.suffix.lower()
+    media_types = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".txt": "text/plain",
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=res.file_name or file_path.name,
+        media_type=media_type,
+    )
+
+
+@router.get("/resume/details")
+async def get_candidate_resume_details(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve structured parsed data and full extracted text for the active resume."""
+    cand = await get_or_create_candidate_for_user(current_user, db)
+    
+    res = (await db.execute(
+        select(Resume)
+        .where(Resume.candidate_id == cand.id, Resume.is_current == True)
+        .order_by(desc(Resume.created_at))
+    )).scalars().first()
+
+    if not res:
+        return {"has_resume": False, "message": "No active resume document found."}
+
+    return {
+        "has_resume": True,
+        "resume_id": str(res.id),
+        "file_name": res.file_name,
+        "created_at": res.created_at.isoformat() if res.created_at else None,
+        "raw_text": res.raw_text,
+        "parsed_data": res.parsed_data or {},
     }
 
 
@@ -748,4 +841,23 @@ async def generate_tailored_resume_advice(
         missing_keywords=missing[:8],
         suggested_bullet_enhancements=bullet_suggestions,
         zero_fabrication_audit="Audit Passed: Zero unverified claims or fake employment history introduced. All advice reframes verified candidate capabilities.",
+    )
+
+
+@router.delete("/profile/erasure", summary="GDPR Right to Erasure — candidate self-service")
+@router.delete("/profile/pii", summary="GDPR Right to Erasure alias")
+async def candidate_self_erasure(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Self-service personal data erasure for authenticated candidate.
+    Permanently erases profile, resume records, physical files, and embeddings under GDPR Article 17.
+    """
+    cand = await get_or_create_candidate_for_user(current_user, db)
+    from services.privacy_service import erase_candidate_personal_data
+    return await erase_candidate_personal_data(
+        candidate_id=cand.id,
+        db=db,
+        requesting_user=current_user,
     )

@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   User, Shield, Upload, CheckCircle2,
   AlertCircle, Plus, X, Building2, Lock,
-  Save, Sparkles, FileText, Check
+  Save, Sparkles, FileText, Check, Download
 } from "lucide-react";
 import { candidatePortalApi, type CandidateProfile } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
@@ -167,6 +167,18 @@ export default function CandidateProfilePage() {
     }
   };
 
+  const handleDownloadActiveResume = async () => {
+    try {
+      toast.info("Downloading Resume", { description: "Fetching your uploaded resume from storage..." });
+      await candidatePortalApi.downloadResume(profile?.resume_name || "my_resume.pdf");
+      toast.success("Download Completed");
+    } catch (err: any) {
+      toast.error("Download Failed", {
+        description: err.response?.data?.detail || "Could not retrieve resume file from server."
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-16 text-center">
@@ -200,9 +212,9 @@ export default function CandidateProfilePage() {
 
       {/* Resume Section */}
       <Card className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm rounded-3xl space-y-4 transition-colors">
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
               <FileText className="w-5 h-5" />
             </div>
             <div>
@@ -215,9 +227,21 @@ export default function CandidateProfilePage() {
             </div>
           </div>
           {profile?.has_resume && (
-            <Badge className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-xs font-bold">
-              <Check className="w-3 h-3 mr-1 inline" /> Active
-            </Badge>
+            <div className="flex items-center gap-2 shrink-0">
+              <Badge className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-xs font-bold">
+                <Check className="w-3 h-3 mr-1 inline" /> Active
+              </Badge>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadActiveResume}
+                className="h-8 px-3 rounded-lg text-xs font-bold gap-1.5 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-500" />
+                Download Original
+              </Button>
+            </div>
           )}
         </div>
 

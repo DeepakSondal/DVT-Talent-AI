@@ -1,13 +1,14 @@
 <div align="center">
   <h1>DVT Talent AI</h1>
-  <p><strong>Dual-Sided AI Recruitment & Candidate Platform (v2.0)</strong></p>
+  <p><strong>Dual-Sided AI Recruitment & Candidate Platform (v2.1)</strong></p>
   
   <p>
     <img src="https://img.shields.io/badge/Pydantic_AI-1.94-FF6F00?style=for-the-badge&logo=pydantic&logoColor=white" />
     <img src="https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=FastAPI&logoColor=white" />
     <img src="https://img.shields.io/badge/Next.js-14.2-000000?style=for-the-badge&logo=next.js&logoColor=white" />
-    <img src="https://img.shields.io/badge/PostgreSQL-15-316192?style=for-the-badge&logo=postgresql&logoColor=white" />
-    <img src="https://img.shields.io/badge/Pytest-47%20Passed-brightgreen?style=for-the-badge" />
+    <img src="https://img.shields.io/badge/PostgreSQL-16%20Prod%20%7C%2015%20Staging-316192?style=for-the-badge&logo=postgresql&logoColor=white" />
+    <img src="https://img.shields.io/badge/Redis-7%20Bus%20%26%20Cache-DC382D?style=for-the-badge&logo=redis&logoColor=white" />
+    <img src="https://img.shields.io/badge/Pytest-52%20Passed-brightgreen?style=for-the-badge" />
     <img src="https://img.shields.io/badge/E2E-26%2F26%20Passed-brightgreen?style=for-the-badge" />
   </p>
 </div>
@@ -16,72 +17,69 @@
 
 ## 🌟 Product Vision & Architecture
 
-**DVT Talent AI** is a production-hardened, dual-sided AI talent platform engineered to align enterprise recruiters and active job seekers in a unified, ethical ecosystem:
+**DVT Talent AI** is an enterprise-grade, dual-sided AI talent platform engineered to align recruiters and active job seekers in a unified, ethical ecosystem:
 
-1. **Recruiter & Agency Workspace (B2B SaaS)**: An autonomous multi-agent talent acquisition engine powered by **Pydantic AI**. Recruiters manage requisitions, launch autonomous candidate sourcing swarms across GitHub, LinkedIn, and external sources, review explainable AI fit scoring, and orchestrate approval-gated outreach with enterprise SAML SSO and ATS integrations (Greenhouse, CEIPAL).
-2. **Candidate Portal & Talent Network (B2C Free Core)**: A candidate empowerment workspace powered by the integrated **Career-Ops Engine**. Job seekers upload resumes, browse verified job postings, view multi-dimensional match breakdowns (Title, Stack, Experience, Domain, Culture), detect ghost job postings, generate zero-fabrication ATS-tailored CVs, prepare with STAR behavioral interview flashcards, and protect their privacy with an employer domain blacklist.
-
-> **Architecture Pivot Note:** Legacy sales-lead prospecting, cold company discovery, Voice AI calling, and continuous background scraping loops (MarketIQ) have been decommissioned. The platform is 100% focused on ethical, high-precision recruitment and candidate career enablement.
+1. **Recruiter & Agency Workspace (B2B SaaS)**: An autonomous 7-agent talent acquisition swarm powered by **Pydantic AI** (`market_iq`, `discovery`, `sourcing`, `critic`, `outreach`, `analytics`, `screening`). Features include dynamic constraint extraction, candidate sourcing with an automated self-healing fallback loop, payload-trimmed anti-bias auditing (NYC Local Law 144 / EU AI Act), Human-in-the-Loop (HITL) Copilot approval gates, ATS bi-directional synchronization (Ashby, Greenhouse, Lever), and personalized candidate outreach microsites (`/m/[id]`).
+2. **Candidate Portal & Talent Network (B2C Free Core)**: A candidate empowerment workspace powered by the integrated **Career-Ops Engine**. Job seekers upload resumes, browse verified job postings, view multi-dimensional match breakdowns (Title, Stack, Experience, Domain, Culture), detect ghost job postings, generate zero-fabrication ATS-tailored CVs, prepare with STAR behavioral interview flashcards, and protect their privacy with an employer domain blacklist (`hide_from_companies`).
 
 ---
 
 ## 📚 Canonical Documentation Index
 
-- **[System Architecture (Root)](ARCHITECTURE.md):** Complete architectural topology, auth boundaries, and data flow.
+- **[System Architecture (Root)](ARCHITECTURE.md):** Complete architectural topology, auth boundaries, dual databases, and data flow.
 - **[System Architecture Guide](docs/ARCHITECTURE.md):** In-depth technical architecture and multi-agent interaction model.
+- **[Database Architecture](docs/DATABASE.md):** PostgreSQL 16 prod vs 15 staging, 26 tables, 8 enums, partial unique index, and Alembic governance.
+- **[Autonomous AI Agents](docs/AI_AGENTS.md):** Detailed guide to the 7-agent recruitment swarm, self-healing loop, and Career-Ops engine.
+- **[Production Deployment & Containers](docs/DEPLOYMENT.md):** Dual Docker Compose stacks (`docker-compose.prod.yml` and `docker-compose.yml`), Caddy proxy, and storage setup.
 - **[Project & Folder Structure Guide](docs/PROJECT_STRUCTURE.md):** Directory layout, conventions, and module separation.
 - **[API Reference & Conventions](docs/API.md):** Complete REST endpoints for Recruiters and Candidate Portal.
 - **[API Quickstart](docs/API_QUICKSTART.md):** Curl examples for rapid API integration.
-- **[Database Architecture](docs/DATABASE.md):** Relational schema, dual-persona models, RLS, and pooling.
-- **[Autonomous AI Agents](docs/AI_AGENTS.md):** Detailed guide to the 5-agent recruitment swarm and Career-Ops AI engine.
-- **[Agent Communication Fabric](docs/AGENT_COMMUNICATION.md):** Telemetry, event bus, and shared memory contracts.
-- **[Testing & QA Guide](docs/TESTING.md):** Pytest suite (47 passed, 6 skipped) and E2E verification (26/26 passed).
+- **[Testing & QA Guide](docs/TESTING.md):** Pytest suite (52 passed) and E2E verification (26/26 passed).
 - **[User Guide](docs/USER_GUIDE.md):** Dual user walkthroughs for Recruiters and Job Seekers.
 - **[Complete Setup Guide](docs/SETUP.md):** Local development and VPS deployment instructions.
-- **[Executive Demo Script](docs/DEMO_SCRIPT.md):** 15-minute executive walkthrough script.
 
 ---
 
-## 🚀 Key Platform Capabilities
+## 🚀 Key Architectural Highlights & Remediations
 
-### 💼 For Recruiters & Staffing Agencies (B2B)
-- **Autonomous Multi-Agent Swarm (Pydantic AI)**:
-  - **Requisition Analyzer Agent**: Parses raw JDs, optimizes skill taxonomies, and neutralizes exclusionary bias.
-  - **Talent Sourcing Agent**: Discovers candidates matching open requisitions across GitHub, LinkedIn, and web indexes.
-  - **Screening Agent**: Evaluates qualifications, computing alignment, strengths, and experience risks.
-  - **Critic & Governance Agent**: Audits candidate scoring for EEOC adverse impact and EU AI Act compliance.
-  - **Outreach Dispatcher Agent**: Drafts hyper-personalized email sequences with mandatory human approval gates.
-- **Human-in-the-Loop (HITL) Copilot**: Stepper checkpoints (`AWAITING_APPROVAL`) for requisition review, candidate curation, and sequence inspection before dispatch.
-- **Enterprise Multi-Tenancy & Security**: Tenant-scoped database queries, Fernet AES-256 encrypted SMTP and BYOK API keys, Enterprise SAML 2.0 SSO (Okta, Azure AD), and GDPR Right-to-Erasure support.
-- **Bi-Directional ATS Synchronization**: Normalized sync with Greenhouse Harvest and CEIPAL Talent APIs.
-- **Stripe Billing & Credits Ledger**: Usage-based credit deductions, tier upgrades, and self-serve customer billing portal.
-
-### 🎯 For Candidates & Job Seekers (B2C Career-Ops Suite)
-- **5-Dimension Fit Scoring**: Real-time evaluation against published jobs across Title, Stack, Experience, Domain, and Culture with actionable recommendations.
-- **Ghost Job Detection (Block G)**: Algorithmic detection of stale, compliance-only, or unmonitored job postings.
-- **Zero-Fabrication ATS CV Tailoring**: AI resume optimization that aligns keywords and formats strictly to the candidate's verified background without hallucinating credentials.
-- **STAR Behavioral Interview Flashcards**: Targeted interview questions, scenario prompts, and structured answer coaching tailored to specific job requisitions.
-- **Employer Privacy Shield**: Domain blacklist (`hide_from_companies`) ensuring current employers and competitors cannot view the candidate's searchable profile.
-- **Application Tracking**: Real-time status tracking across applied requisitions with submission timestamps and match history.
+1. **Dual-Database Segregation**:
+   - **Production:** PostgreSQL 16 Alpine (`dvt_db`, database `dvt_talent`, persistent volume `postgres_prod_data`).
+   - **Staging / Testing:** PostgreSQL 15 Alpine (`dvt-postgres`, database `dvt_staging`, host port 5432).
+2. **Multi-Tenant Candidate Isolation**:
+   - Replaced global email uniqueness with a PostgreSQL partial unique index:
+     `CREATE UNIQUE INDEX uq_candidate_tenant_email ON candidates (tenant_id, email) WHERE tenant_id IS NOT NULL;`
+   - Multiple recruiting agencies can source the same candidate without collisions.
+3. **Startup Race Elimination**:
+   - Eliminated destructive `Base.metadata.create_all` calls from startup; schema is governed strictly by Alembic migrations (`007_team_invitations`).
+4. **Horizontally-Scalable Redis Swarm Memory**:
+   - Migrated agent memory from single-file SQLite to a distributed Redis semantic cache with TTL.
+5. **Multiplexed WebSockets**:
+   - Real-time telemetry events (`dvt_signals:{tenant_id}`) multiplex seamlessly across multiple browser tabs via `Dict[str, Set[WebSocket]]`.
+6. **Token Blacklist & Session Revocation**:
+   - Full JWT revocation on `POST /api/v1/auth/logout` checked against Redis on all protected routes.
+7. **Unified File Storage Service**:
+   - Pluggable `LocalStorageDriver` and `S3StorageDriver` (AWS S3, MinIO, Cloudflare R2) with MIME validation and path traversal defense.
+8. **LLM Guardrails**:
+   - Token bucket RPM/TPM rate limiter and circuit breaker with exponential cool-off.
 
 ---
 
 ## 🛠️ Technology Stack
 
 ### Backend
-- **Framework:** FastAPI (Python 3.11+ / 3.14)
-- **Agent Framework:** Pydantic AI 1.94.0
-- **Database ORM:** Async SQLAlchemy 2.0 with connection pooling (`pool_size=20`, `max_overflow=10`)
-- **Schema & Migrations:** Alembic async migrations
-- **Task Queue & Cache:** Celery & Redis
-- **Testing:** Pytest (47 passed, 6 skipped, 0 failed)
+- **Framework:** FastAPI (Python 3.11+)
+- **Agent Framework:** Pydantic AI 1.94.0 with dynamic multi-model routing (Groq, OpenAI, Anthropic, DeepSeek)
+- **Database ORM:** Async SQLAlchemy 2.0 with connection pooling
+- **Schema & Migrations:** Alembic (Head: `007_team_invitations`)
+- **Task Queue & Cache:** Celery & Redis 7
+- **Reverse Proxy:** Caddy 2 with automated TLS
+- **Testing:** Pytest (52 passed, 6 skipped)
 
 ### Frontend
 - **Framework:** Next.js 14.2.3 App Router (React 18 & TypeScript)
 - **Styling:** Tailwind CSS + Radix UI + Framer Motion
 - **State & Data Fetching:** TanStack React Query + Zustand
 - **Real-Time Telemetry:** WebSockets
-- **Production Routing:** 35 optimized static and dynamic routes
 
 ---
 
@@ -105,15 +103,19 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-- **Candidate Portal:** `http://localhost:3000/portal` (or port `3001` if 3000 is occupied)
+- **Candidate Portal:** `http://localhost:3000/portal`
 - **Recruiter Command Center:** `http://localhost:3000/dashboard`
 - **FastAPI OpenAPI Interactive Docs:** `http://127.0.0.1:8000/api/docs`
 
-### 2. Docker Compose Cluster
+### 2. Docker Compose Stacks
 
 ```bash
-cp .env.example .env
+# Staging / Local Testing Stack (PostgreSQL 15 dvt_staging + Redis)
 docker compose up --build -d
+
+# Production Stack (Caddy + Next.js + FastAPI + PostgreSQL 16 dvt_talent + Redis + Celery)
+docker compose -f docker-compose.prod.yml up --build -d
+docker compose -f docker-compose.prod.yml exec api alembic upgrade head
 ```
 
 ---
@@ -121,13 +123,13 @@ docker compose up --build -d
 ## 🧪 Quality Assurance & Test Verification
 
 ```bash
-# Run backend pytest suite (47 passed, 6 skipped)
+# Run backend pytest suite (all 52 tests including architectural remediations pass)
 cd backend && python -m pytest -v
 
 # Run frontend type checking (0 errors)
 cd frontend && npm run type-check
 
-# Run frontend production build (35 routes compiled)
+# Run frontend production build
 cd frontend && npm run build
 ```
 

@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
 
+    # Storage & Uploads
+    storage_dir: str = str(BASE_DIR / "storage")
+    upload_dir: str = str(BASE_DIR / "uploads")
+
     # Database (Connection Pooling)
     database_url: str = ""
     db_pool_size: int = 20
@@ -190,10 +194,11 @@ class Settings(BaseSettings):
             if not self.is_production:
                 self.secret_key = secrets.token_urlsafe(32)
 
-    def validate_required_settings(self) -> None:
+    def validate_required_settings(self) -> list:
         """
         FIX [H-05]: Raises ValueError for missing critical settings.
         Call on startup to prevent app from running with insecure defaults.
+        Returns list of warnings if non-fatal.
         """
         if not self.primary_llm_api_key:
             raise ValueError("No LLM key set — agents will fail. Set GROQ_API_KEY, KIMI_API_KEY, DEEPSEEK_API_KEY, or OPENAI_API_KEY")
@@ -203,6 +208,7 @@ class Settings(BaseSettings):
                 raise ValueError("SECRET_KEY is insecure or default — CRITICAL security risk in production. Must be at least 32 characters.")
         if not self.database_url:
             raise ValueError("DATABASE_URL is missing — cannot connect to database")
+        return []
 
 
 @lru_cache()

@@ -9,7 +9,18 @@ import structlog
 log = structlog.get_logger(__name__)
 
 # List of sensitive root paths to log specifically (read or write)
-SENSITIVE_PATHS = ["/candidates", "/users", "/auth/login", "/auth/sso", "/candidate-portal", "/compliance", "/billing"]
+SENSITIVE_PATHS = [
+    "/candidates",
+    "/users",
+    "/auth/login",
+    "/auth/sso",
+    "/candidate-portal",
+    "/compliance",
+    "/billing",
+    "/team",
+    "/invite",
+    "/invitations",
+]
 
 class AuditLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -49,7 +60,29 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                 elif is_mutation and status == "FAILURE":
                     severity = "WARNING"
 
-                # 5. Save Audit Log
+                # 5. Sanitize query params (redact sensitive tokens, passwords, secrets, repeated parameters)
+                def _is_sensitive_key(key: str) -> bool:
+                    normalized_k = key.lower().replace("-", "_")
+                    sensitive_fragments = {
+                        "token", "secret", "password", "pwd", "auth", "api_key",
+                        "apikey", "credential", "signature", "invite", "invitation"
+                    }
+                    if normalized_k in {"code", "state", "t", "key", "sig"}:
+                        return True
+                    return any(frag in normalized_k for frag in sensitive_fragments)
+
+                sanitized_params = {}
+                for k, v in request.query_params.multi_items():
+                    val = "[REDACTED]" if _is_sensitive_key(k) else v
+                    if k in sanitized_params:
+                        if isinstance(sanitized_params[k], list):
+                            sanitized_params[k].append(val)
+                        else:
+                            sanitized_params[k] = [sanitized_params[k], val]
+                    else:
+                        sanitized_params[k] = val
+
+                # 6. Save Audit Log
                 async with AsyncSessionLocal() as session:
                     audit_entry = AuditLog(
                         tenant_id=tenant_id,
@@ -62,7 +95,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                         user_agent=request.headers.get("user-agent", "unknown"),
                         meta_data={
                             "status_code": response.status_code,
-                            "query_params": dict(request.query_params),
+                            "query_params": sanitized_params,
                             "duration_ms": int((time.time() - start_time) * 1000)
                         }
                     )

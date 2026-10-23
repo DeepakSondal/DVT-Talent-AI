@@ -111,6 +111,22 @@ async def get_current_user(
     if not token:
         raise credentials_exception
 
+    # Check token revocation blocklist in Redis
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.redis_url)
+        is_revoked = await r.get(f"blacklist:{token}")
+        if is_revoked:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         user_obj_id: str = payload.get("sub")
@@ -350,3 +366,38 @@ async def refresh_token_route(dvt_refresh_token: Optional[str] = Cookie(None), d
 @router.get("/me", response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Log out user, clear authentication cookies, and blacklist the current access token in Redis.
+    """
+    raw_token = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        raw_token = auth_header.split(" ")[1]
+    else:
+        cookie_token = request.cookies.get("dvt_token")
+        if cookie_token and cookie_token.startswith("Bearer "):
+            raw_token = cookie_token.split(" ")[1]
+
+    if raw_token:
+        try:
+            payload = jwt.decode(raw_token, settings.secret_key, algorithms=[settings.algorithm])
+            exp = payload.get("exp")
+            remaining = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 3600
+            if remaining > 0:
+                import redis.asyncio as aioredis
+                r = aioredis.from_url(settings.redis_url)
+                await r.setex(f"blacklist:{raw_token}", remaining, "revoked")
+        except Exception:
+            pass
+
+    response = JSONResponse(content={"message": "Logged out successfully"})
+    response.delete_cookie(key="dvt_token", path="/", samesite="lax")
+    response.delete_cookie(key="dvt_refresh_token", path="/api/v1/auth/refresh", samesite="lax")
+    return response

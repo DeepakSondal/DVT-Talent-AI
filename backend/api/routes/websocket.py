@@ -2,7 +2,7 @@ import json
 import asyncio
 import redis.asyncio as redis
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
-from typing import List, Dict
+from typing import List, Dict, Set
 from jose import JWTError, jwt
 from config import settings
 
@@ -11,75 +11,82 @@ router = APIRouter()
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}   # user_id → ws
-        self.user_tenants: Dict[str, str] = {}               # user_id → tenant_id
+        self.active_connections: Dict[str, Set[WebSocket]] = {}   # user_id → Set[WebSocket]
+        self.user_tenants: Dict[str, str] = {}                     # user_id → tenant_id
         self.redis_client = redis.from_url(settings.redis_url)
         self.pubsub_task = None
 
     async def connect(self, websocket: WebSocket, user_id: str, tenant_id: str):
         await websocket.accept()
-        self.active_connections[user_id] = websocket
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = set()
+        self.active_connections[user_id].add(websocket)
         self.user_tenants[user_id] = tenant_id
 
-        # Start Redis listener if not running
-        if self.pubsub_task is None:
+        # Start resilient Redis listener if not running
+        if self.pubsub_task is None or self.pubsub_task.done():
             self.pubsub_task = asyncio.create_task(self._redis_listener())
 
-    def disconnect(self, user_id: str):
-        self.active_connections.pop(user_id, None)
-        self.user_tenants.pop(user_id, None)
+    def disconnect(self, websocket: WebSocket, user_id: str):
+        if user_id in self.active_connections:
+            self.active_connections[user_id].discard(websocket)
+            if not self.active_connections[user_id]:
+                self.active_connections.pop(user_id, None)
+                self.user_tenants.pop(user_id, None)
 
     async def _redis_listener(self):
-        """Listen on ALL active tenant channels and route messages to the correct users."""
-        pubsub = self.redis_client.pubsub()
-        # Subscribe to a pattern: dvt_signals:* covers all tenants
-        await pubsub.psubscribe("dvt_signals:*")
-        try:
-            async for message in pubsub.listen():
-                if message["type"] == "pmessage":
-                    try:
-                        # Channel format: dvt_signals:{tenant_id}
-                        channel: str = message["channel"].decode() if isinstance(message["channel"], bytes) else message["channel"]
-                        tenant_id = channel.split(":", 1)[1] if ":" in channel else None
-                        data = json.loads(message["data"])
-                        # Only broadcast to users belonging to this tenant
-                        await self.broadcast_to_tenant(data, tenant_id)
-                    except Exception:
-                        pass
-        except Exception:
-            self.pubsub_task = None
+        """Resilient background listener for Redis tenant signals with auto-reconnect."""
+        backoff = 1
+        while True:
+            try:
+                pubsub = self.redis_client.pubsub()
+                await pubsub.psubscribe("dvt_signals:*")
+                backoff = 1  # Reset on successful subscription
+                async for message in pubsub.listen():
+                    if message["type"] == "pmessage":
+                        try:
+                            channel: str = message["channel"].decode() if isinstance(message["channel"], bytes) else message["channel"]
+                            tenant_id = channel.split(":", 1)[1] if ":" in channel else None
+                            data = json.loads(message["data"])
+                            await self.broadcast_to_tenant(data, tenant_id)
+                        except Exception:
+                            pass
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                await asyncio.sleep(min(backoff, 30))
+                backoff *= 2
 
     async def send_to_user(self, user_id: str, message: dict):
-        ws = self.active_connections.get(user_id)
-        if ws:
+        sockets = list(self.active_connections.get(user_id, set()))
+        payload = json.dumps(message)
+        for ws in sockets:
             try:
-                await ws.send_text(json.dumps(message))
+                await ws.send_text(payload)
             except Exception:
-                self.disconnect(user_id)
+                self.disconnect(ws, user_id)
 
     async def broadcast_to_tenant(self, message: dict, tenant_id: str | None):
-        """Send to all WebSocket users belonging to a specific tenant."""
-        disconnected = []
-        for uid, ws in self.active_connections.items():
+        """Send to all WebSocket connections belonging to a specific tenant."""
+        payload = json.dumps(message)
+        for uid, sockets in list(self.active_connections.items()):
             if tenant_id and self.user_tenants.get(uid) != tenant_id:
-                continue  # Skip users from other tenants
-            try:
-                await ws.send_text(json.dumps(message))
-            except Exception:
-                disconnected.append(uid)
-        for uid in disconnected:
-            self.disconnect(uid)
+                continue
+            for ws in list(sockets):
+                try:
+                    await ws.send_text(payload)
+                except Exception:
+                    self.disconnect(ws, uid)
 
     async def broadcast(self, message: dict):
-        """Broadcast to ALL connected users (use only for system-level events)."""
-        disconnected = []
-        for uid, ws in self.active_connections.items():
-            try:
-                await ws.send_text(json.dumps(message))
-            except Exception:
-                disconnected.append(uid)
-        for uid in disconnected:
-            self.disconnect(uid)
+        """Broadcast to ALL connected users across all tabs."""
+        payload = json.dumps(message)
+        for uid, sockets in list(self.active_connections.items()):
+            for ws in list(sockets):
+                try:
+                    await ws.send_text(payload)
+                except Exception:
+                    self.disconnect(ws, uid)
 
 
 manager = ConnectionManager()
@@ -105,7 +112,7 @@ async def pipeline_events_endpoint(
 ):
     """
     Dedicated endpoint for real-time AI pipeline activity notifications.
-    Used by the dashboard 'Live Feed' component.
+    Used by the dashboard 'Live Feed' component. Supports multi-tab concurrency.
     """
     user_id, tenant_id = _verify_ws_token(token)
     if not user_id:
@@ -120,4 +127,4 @@ async def pipeline_events_endpoint(
             if data == "ping":
                 await websocket.send_text('{"type":"pong"}')
     except WebSocketDisconnect:
-        manager.disconnect(user_id)
+        manager.disconnect(websocket, user_id)

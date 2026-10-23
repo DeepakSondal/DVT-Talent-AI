@@ -31,6 +31,7 @@ async def test_tenant_isolation_gate():
         t_b = Tenant(id=tenant_b_id, name="Security Test Corp B", domain=f"corp-b-{tenant_b_id.hex[:6]}.com")
         
         session.add_all([t_a, t_b])
+        await session.flush()
         
         # Create Candidate for Tenant A
         cand_a = Candidate(

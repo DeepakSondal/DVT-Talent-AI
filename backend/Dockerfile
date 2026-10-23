@@ -27,11 +27,10 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY . .
 
 
-# Create non-root user with a writable home directory
-# (browser-use writes config files to $HOME at import time)
+# Create non-root user with a writable home directory and persistent storage directories
 RUN addgroup --gid 1001 appgroup \
     && adduser --uid 1001 --gid 1001 --home /home/appuser --disabled-password appuser \
-    && mkdir -p /home/appuser \
+    && mkdir -p /home/appuser /app/storage /app/uploads/resumes \
     && chown -R appuser:appgroup /app /home/appuser
 
 ENV HOME=/home/appuser

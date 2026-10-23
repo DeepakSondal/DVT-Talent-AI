@@ -9,6 +9,7 @@ const jetBrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jet
 export const metadata: Metadata = {
   title: "DVT Talent AI — AI-Powered Talent Discovery & Recruitment Automation",
   description: "Enterprise talent acquisition platform powered by intelligent recruiting agents for automated vacancy discovery, candidate sourcing, and multichannel outreach.",
+  referrer: "origin-when-cross-origin",
   openGraph: {
     title: "DVT Talent AI — Intelligent Recruitment Platform",
     description: "AI-driven recruiting platform that discovers hiring requisitions, sources qualified candidates, and automates outreach 24/7.",

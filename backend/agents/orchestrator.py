@@ -137,6 +137,7 @@ class AgentOrchestrator:
                     await asyncio.sleep(5 * (attempt + 1))
                 else:
                     raise e
+        # pyrefly: ignore[bad-raise]
         raise last_error
 
     async def run_full_pipeline(

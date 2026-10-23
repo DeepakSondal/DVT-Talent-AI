@@ -2,6 +2,8 @@
 DVT Talent AI — Database Models
 Full PostgreSQL schema with SQLAlchemy async ORM
 """
+import sys
+import os
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -31,16 +33,25 @@ if not settings.database_url:
     )
 db_url = settings.database_url
 
-engine = create_async_engine(
-    db_url,
-    echo=settings.app_env == "development",
-    # [NEW] Enterprise Hardening: Connection Pooling
-    # Uses settings to handle high concurrency during pilots
-    pool_size=settings.db_pool_size,
-    max_overflow=settings.db_max_overflow,
-    pool_timeout=30,
-    pool_recycle=1800,
-)
+from sqlalchemy.pool import NullPool
+
+# Use NullPool during test execution so connections are not shared across pytest async event loops
+is_testing = "pytest" in sys.modules or os.environ.get("TESTING") == "true"
+if is_testing:
+    engine = create_async_engine(
+        db_url,
+        echo=settings.app_env == "development",
+        poolclass=NullPool,
+    )
+else:
+    engine = create_async_engine(
+        db_url,
+        echo=settings.app_env == "development",
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+        pool_timeout=30,
+        pool_recycle=1800,
+    )
 
 AsyncSessionLocal = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
@@ -117,6 +128,13 @@ class AgentTaskStatus(str, enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     RETRYING = "retrying"
+
+
+class InvitationStatus(str, enum.Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
 
 
 class CreditTransactionType(str, enum.Enum):
@@ -205,6 +223,30 @@ class User(Base, TimestampMixin):
     tenant = relationship("Tenant")
     leads = relationship("Lead", back_populates="owner", foreign_keys="[Lead.owner_id]")
     campaigns = relationship("EmailCampaign", back_populates="owner")
+
+
+class TeamInvitation(Base, TimestampMixin):
+    __tablename__ = "team_invitations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True, index=True)
+    invited_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    role = Column(Enum(UserRole), default=UserRole.RECRUITER, nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    status = Column(Enum(InvitationStatus), default=InvitationStatus.PENDING, nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    accepted_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    email_sent = Column(Boolean, default=False, nullable=False)
+    email_error = Column(String(500), nullable=True)
+
+    # Relationships
+    tenant = relationship("Tenant")
+    team = relationship("Team")
+    invited_by = relationship("User", foreign_keys=[invited_by_user_id])
+    accepted_by = relationship("User", foreign_keys=[accepted_by_user_id])
 
 
 class Company(Base, TimestampMixin):
@@ -327,7 +369,7 @@ class Candidate(Base, TimestampMixin):
     recruiter_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), index=True, nullable=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
-    email = Column(String(255), unique=True, index=True)
+    email = Column(String(255), index=True, nullable=False)
     phone = Column(String(50))
     title = Column(String(255))
     location = Column(String(255))
@@ -363,6 +405,10 @@ class Candidate(Base, TimestampMixin):
     job_applications = relationship("JobCandidate", back_populates="candidate")
     emails_received = relationship("EmailSent", back_populates="candidate")
     interviews = relationship("Interview", back_populates="candidate")
+
+    __table_args__ = (
+        Index("uq_candidate_tenant_email", "tenant_id", "email", unique=True, postgresql_where=(tenant_id.isnot(None))),
+    )
 
 
 class Resume(Base, TimestampMixin):

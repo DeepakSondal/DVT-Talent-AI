@@ -60,13 +60,14 @@ async def lifespan(app: FastAPI):
     # FIX [NEW-E-01]: Ensure missing critical settings halt the app
     settings.validate_required_settings()
 
-    # Create tables (use Alembic for production migrations)
+    # Verify database connectivity (schema lifecycle managed exclusively by Alembic migrations)
     try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        log.info("database_initialized")
+        from sqlalchemy import text
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        log.info("database_connected")
     except Exception as e:
-        log.warning("database_initialization_race_or_already_exists", error=str(e))
+        log.warning("database_connection_warning", error=str(e))
     yield
     await engine.dispose()
     log.info("dvt_shutdown")
@@ -98,6 +99,30 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
+# ── Security Headers Middleware ───────────────────────────────────────────
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import Request
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        
+        # Base security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        
+        # Strict privacy & no-store headers on invitation, auth, and portal routes
+        if "/invite" in path or "/auth" in path or "/candidate-portal" in path or "/pii" in path:
+            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+            response.headers["Pragma"] = "no-cache"
+        else:
+            response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+            
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 

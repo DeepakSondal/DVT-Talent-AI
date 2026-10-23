@@ -12,7 +12,7 @@ import uuid as _uuid
 import structlog
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from pydantic import BaseModel, EmailStr
@@ -22,6 +22,7 @@ from db.models import Candidate, Resume, CandidateStatus, Tenant, UserRole, get_
 from api.routes.auth import get_current_user, User
 from services.security_service import log_audit_event
 from services.privacy_service import is_candidate_visible_to_recruiter, normalize_domain
+from services.resume_parser import ResumeParserService
 from fastapi import status
 
 log = structlog.get_logger(__name__)
@@ -72,6 +73,19 @@ class CandidateList(BaseModel):
     page_size: int
 
 
+async def _resolve_recruiter_tenant_info(db: AsyncSession, current_user: User) -> tuple[Optional[str], Optional[str]]:
+    """Resolve recruiter's corporate tenant domain and tenant name for privacy evaluation."""
+    tenant_domain = None
+    tenant_name = None
+    if getattr(current_user, "tenant_id", None):
+        res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+        tenant = res.scalar_one_or_none()
+        if tenant:
+            tenant_domain = tenant.domain
+            tenant_name = tenant.name
+    return tenant_domain, tenant_name
+
+
 @router.get("", response_model=CandidateList)
 async def list_candidates(
     page: int = Query(1, ge=1),
@@ -90,18 +104,13 @@ async def list_candidates(
             detail="Recruiter or administrative permissions required to access candidate management."
         )
 
-    # Fetch recruiter's tenant domain and name for privacy shield evaluation
-    tenant_domain = None
-    tenant_name = None
-    if current_user.tenant_id:
-        tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
-        tenant_obj = tenant_res.scalar_one_or_none()
-        if tenant_obj:
-            tenant_domain = tenant_obj.domain
-            tenant_name = tenant_obj.name
+    tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
 
-    query = select(Candidate).where(Candidate.tenant_id == current_user.tenant_id, Candidate.is_searchable != False)
-    count_query = select(func.count(Candidate.id)).where(Candidate.tenant_id == current_user.tenant_id, Candidate.is_searchable != False)
+    query = select(Candidate).where(
+        Candidate.tenant_id == current_user.tenant_id,
+        Candidate.is_searchable != False,
+        Candidate.pii_erased != True,
+    )
 
     if search:
         search_filter = (
@@ -111,27 +120,22 @@ async def list_candidates(
             Candidate.title.ilike(f"%{search}%")
         )
         query = query.where(search_filter)
-        count_query = count_query.where(search_filter)
 
     if status:
         query = query.where(Candidate.status == status)
-        count_query = count_query.where(Candidate.status == status)
 
     if min_score is not None:
         query = query.where(Candidate.score >= min_score)
-        count_query = count_query.where(Candidate.score >= min_score)
 
     if source:
         query = query.where(Candidate.source == source)
-        count_query = count_query.where(Candidate.source == source)
 
-    total = (await db.execute(count_query)).scalar() or 0
-    query = query.order_by(desc(Candidate.score)).offset((page - 1) * page_size).limit(page_size)
-    candidates = (await db.execute(query)).scalars().all()
+    query = query.order_by(desc(Candidate.score))
+    all_matching = (await db.execute(query)).scalars().all()
 
     # Enforce candidate privacy shield: exclude candidates who are in stealth mode or have blacklisted this employer
     visible_candidates = [
-        c for c in candidates
+        c for c in all_matching
         if is_candidate_visible_to_recruiter(
             candidate=c,
             recruiter_tenant_domain=tenant_domain,
@@ -140,7 +144,11 @@ async def list_candidates(
         )
     ]
 
-    return CandidateList(items=visible_candidates, total=total, page=page, page_size=page_size)
+    total = len(visible_candidates)
+    start_idx = (page - 1) * page_size
+    paged_items = visible_candidates[start_idx : start_idx + page_size]
+
+    return CandidateList(items=paged_items, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=CandidateOut, status_code=201)
@@ -149,10 +157,15 @@ async def create_candidate(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Check duplicate
-    existing = (await db.execute(select(Candidate).where(Candidate.email == data.email))).scalar_one_or_none()
+    # Check duplicate within this workspace tenant
+    existing = (await db.execute(
+        select(Candidate).where(
+            Candidate.tenant_id == current_user.tenant_id,
+            Candidate.email == data.email
+        )
+    )).scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=409, detail="Candidate with this email already exists")
+        raise HTTPException(status_code=409, detail="Candidate with this email already exists in your workspace")
 
     candidate = Candidate(**data.model_dump())
     candidate.tenant_id = current_user.tenant_id
@@ -168,10 +181,33 @@ async def export_candidates(
     current_user: User = Depends(get_current_user)
 ):
     """Export the candidate shortlist as a professional CSV for stakeholders."""
+    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Recruiter or administrative permissions required to export candidate records."
+        )
+
+    tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
+
     result = await db.execute(
-        select(Candidate).where(Candidate.tenant_id == current_user.tenant_id)
+        select(Candidate).where(
+            Candidate.tenant_id == current_user.tenant_id,
+            Candidate.is_searchable != False,
+            Candidate.pii_erased != True,
+        ).order_by(desc(Candidate.score))
     )
     candidates = result.scalars().all()
+
+    # Enforce candidate privacy shield: exclude candidates who are in stealth mode or have blacklisted this employer
+    visible_candidates = [
+        c for c in candidates
+        if is_candidate_visible_to_recruiter(
+            candidate=c,
+            recruiter_tenant_domain=tenant_domain,
+            recruiter_tenant_name=tenant_name,
+            recruiter_email=current_user.email,
+        )
+    ]
     
     output = io.StringIO()
     writer = csv.writer(output)
@@ -183,7 +219,7 @@ async def export_candidates(
         "AI Weaknesses", "Synthesis Verdict", "Sourced Date"
     ])
     
-    for c in candidates:
+    for c in visible_candidates:
         strengths = ", ".join(c.scoring_reasoning.get("strengths", [])) if c.scoring_reasoning else ""
         weaknesses = ", ".join(c.scoring_reasoning.get("weaknesses", [])) if c.scoring_reasoning else ""
         alignment = c.scoring_reasoning.get("alignment", "") if c.scoring_reasoning else ""
@@ -199,7 +235,7 @@ async def export_candidates(
             strengths,
             weaknesses,
             alignment,
-            c.created_at.strftime("%Y-%m-%d")
+            c.created_at.strftime("%Y-%m-%d") if c.created_at else ""
         ])
     
     output.seek(0)
@@ -231,15 +267,7 @@ async def get_candidate(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    # Fetch recruiter's tenant domain and name for privacy shield evaluation
-    tenant_domain = None
-    tenant_name = None
-    if current_user.tenant_id:
-        tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
-        tenant_obj = tenant_res.scalar_one_or_none()
-        if tenant_obj:
-            tenant_domain = tenant_obj.domain
-            tenant_name = tenant_obj.name
+    tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
 
     if not is_candidate_visible_to_recruiter(
         candidate=candidate,
@@ -279,11 +307,27 @@ async def upload_resume(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Upload & AI-analyze resume"""
-    if not file.filename.endswith((".pdf", ".docx", ".txt")):
-        raise HTTPException(status_code=400, detail="Only PDF, DOCX, TXT files allowed")
+    """
+    Upload resume for an existing candidate, extract 100% full text (PDF/DOCX/TXT),
+    parse structured career history (work experience, education, skills), persist the file,
+    and update candidate profile fields.
+    """
+    filename = (file.filename or "").strip()
+    allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".rtf"}
+    ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
+    if ext not in allowed_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format '{ext}'. Allowed formats: PDF, DOCX, TXT, RTF."
+        )
 
-    content = await file.read()
+    max_bytes = 10 * 1024 * 1024  # 10 MB
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File size exceeds maximum permitted limit of 10 MB."
+        )
 
     result = await db.execute(
         select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
@@ -292,31 +336,350 @@ async def upload_resume(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    # Mark old resumes as not current
+    # 1. Multi-format text extraction (PDF / DOCX / TXT)
+    raw_text = ResumeParserService.extract_text(content, filename)
+    if not raw_text.strip():
+        raw_text = f"Resume document: {filename}"
+
+    # 2. Structured career history extraction
+    parsed_data = ResumeParserService.parse_structured_resume(raw_text, filename)
+
+    # 3. Secure file persistence
+    resume_id = _uuid.uuid4()
+    file_path = ResumeParserService.save_resume_file(
+        str(candidate.id), str(resume_id), filename, content
+    )
+
+    # 4. Update candidate profile fields
+    curr_skills = set(candidate.skills or [])
+    curr_skills.update(parsed_data.get("skills", []))
+    candidate.skills = sorted(list(curr_skills))
+
+    if parsed_data.get("experience_years"):
+        candidate.experience_years = max(candidate.experience_years or 0, parsed_data["experience_years"])
+    
+    if parsed_data.get("current_company") and parsed_data["current_company"] != "Parsed From Resume":
+        candidate.current_company = parsed_data["current_company"]
+    
+    if parsed_data.get("current_title") and not candidate.title:
+        candidate.title = parsed_data["current_title"]
+
+    contact = parsed_data.get("contact", {})
+    if contact.get("phone") and not candidate.phone:
+        candidate.phone = contact["phone"]
+    if contact.get("location") and not candidate.location:
+        candidate.location = contact["location"]
+    if contact.get("linkedin_url") and not candidate.linkedin_url:
+        candidate.linkedin_url = contact["linkedin_url"]
+    if contact.get("github_url") and not candidate.github_url:
+        candidate.github_url = contact["github_url"]
+
+    # 5. Mark older resumes as not current
     old_resumes = (await db.execute(
         select(Resume).where(Resume.candidate_id == candidate_id, Resume.is_current == True)
     )).scalars().all()
     for r in old_resumes:
         r.is_current = False
 
+    # 6. Save Resume record
     resume = Resume(
+        id=resume_id,
         candidate_id=candidate_id,
-        file_name=file.filename,
+        tenant_id=current_user.tenant_id,
+        file_name=filename,
+        file_url=file_path,
+        raw_text=raw_text,
+        parsed_data=parsed_data,
         is_current=True,
     )
     db.add(resume)
     await db.commit()
     await db.refresh(resume)
 
-    # Background: parse + score resume
+    # Background: dispatch task if broker is available
     background_tasks.add_task(
         analyze_resume_background,
         str(resume.id),
         content,
-        file.filename,
+        filename,
     )
 
-    return {"message": "Resume uploaded, analysis started", "resume_id": str(resume.id)}
+    return {
+        "message": f"Resume '{filename}' uploaded and parsed successfully.",
+        "resume_id": str(resume.id),
+        "skills_detected": parsed_data.get("skills", []),
+        "experience_detected": len(parsed_data.get("experience", [])),
+        "education_detected": len(parsed_data.get("education", [])),
+        "raw_text_length": len(raw_text),
+    }
+
+
+@router.get("/{candidate_id}/resume/download")
+async def download_candidate_resume(
+    candidate_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download candidate's original resume document in PDF or Word format."""
+    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Recruiter or administrative permissions required to download candidate resumes."
+        )
+
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    )
+    candidate = result.scalar_one_or_none()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
+    if not is_candidate_visible_to_recruiter(
+        candidate=candidate,
+        recruiter_tenant_domain=tenant_domain,
+        recruiter_tenant_name=tenant_name,
+        recruiter_email=current_user.email,
+    ):
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    res = (await db.execute(
+        select(Resume)
+        .where(Resume.candidate_id == candidate.id, Resume.is_current == True)
+        .order_by(desc(Resume.created_at))
+    )).scalars().first()
+
+    if not res:
+        raise HTTPException(status_code=404, detail="No resume on file for this candidate.")
+
+    file_path = ResumeParserService.get_resume_file_path(res.file_url)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail="Original resume file not found on disk.")
+
+    ext = file_path.suffix.lower()
+    media_types = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword",
+        ".txt": "text/plain",
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=res.file_name or file_path.name,
+        media_type=media_type,
+    )
+
+
+@router.get("/{candidate_id}/resume/details")
+async def get_candidate_resume_details(
+    candidate_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve full extracted text and structured parsed data (experience, education, skills)."""
+    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Recruiter or administrative permissions required to view candidate resume details."
+        )
+
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    )
+    candidate = result.scalar_one_or_none()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
+    if not is_candidate_visible_to_recruiter(
+        candidate=candidate,
+        recruiter_tenant_domain=tenant_domain,
+        recruiter_tenant_name=tenant_name,
+        recruiter_email=current_user.email,
+    ):
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    res = (await db.execute(
+        select(Resume)
+        .where(Resume.candidate_id == candidate.id, Resume.is_current == True)
+        .order_by(desc(Resume.created_at))
+    )).scalars().first()
+
+    if not res:
+        return {
+            "has_resume": False,
+            "message": "No active resume document found for candidate.",
+            "skills": candidate.skills or [],
+            "experience": [],
+            "education": [],
+            "raw_text": "",
+        }
+
+    return {
+        "has_resume": True,
+        "resume_id": str(res.id),
+        "file_name": res.file_name,
+        "created_at": res.created_at.isoformat() if res.created_at else None,
+        "raw_text": res.raw_text or "",
+        "parsed_data": res.parsed_data or {},
+        "skills": res.parsed_data.get("skills", candidate.skills or []) if res.parsed_data else (candidate.skills or []),
+        "experience": res.parsed_data.get("experience", []) if res.parsed_data else [],
+        "education": res.parsed_data.get("education", []) if res.parsed_data else [],
+        "summary": res.parsed_data.get("summary", "") if res.parsed_data else "",
+    }
+
+
+@router.post("/upload")
+async def intake_candidate_resume(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Intake endpoint for recruiters: upload a resume directly from the talent directory.
+    Extracts 100% full text, structures candidate profile, creates Candidate + Resume records,
+    and returns the fully populated candidate.
+    """
+    filename = (file.filename or "").strip()
+    allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".rtf"}
+    ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
+    if ext not in allowed_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format '{ext}'. Allowed formats: PDF, DOCX, TXT, RTF."
+        )
+
+    max_bytes = 10 * 1024 * 1024
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File size exceeds maximum permitted limit of 10 MB."
+        )
+
+    # 1. Multi-format text extraction
+    raw_text = ResumeParserService.extract_text(content, filename)
+    if not raw_text.strip():
+        raw_text = f"Resume document: {filename}"
+
+    # 2. Structured parsing
+    parsed_data = ResumeParserService.parse_structured_resume(raw_text, filename)
+
+    # 3. Derive contact & name
+    contact = parsed_data.get("contact", {})
+    email = contact.get("email")
+    phone = contact.get("phone")
+    first_name = contact.get("first_name")
+    last_name = contact.get("last_name")
+
+    if not first_name or not last_name:
+        base_name = filename.rsplit(".", 1)[0].replace("-", " ").replace("_", " ")
+        raw_parts = [p for p in base_name.split() if p]
+        clean_parts = [p for p in raw_parts if p.lower() not in {"cv", "resume", "curriculum", "vitae", "pdf", "docx"}]
+        parts = clean_parts if clean_parts else raw_parts
+        first_name = first_name or (parts[0].capitalize() if parts else "Imported")
+        last_name = last_name or (" ".join(parts[1:]).title() if len(parts) > 1 else "Candidate")
+
+    candidate = None
+    if email:
+        res = await db.execute(
+            select(Candidate).where(Candidate.email == email)
+        )
+        candidate = res.scalar_one_or_none()
+
+    cand_id = candidate.id if candidate else _uuid.uuid4()
+    if not candidate:
+        candidate_email = email or f"{first_name.lower().replace(' ', '')}.{last_name.lower().replace(' ', '')}_{str(cand_id)[:6]}@talent-import.io"
+        candidate = Candidate(
+            id=cand_id,
+            tenant_id=current_user.tenant_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=candidate_email,
+            phone=phone,
+            title=parsed_data.get("current_title") or "Software Specialist",
+            current_company=parsed_data.get("current_company") if parsed_data.get("current_company") != "Parsed From Resume" else None,
+            location=contact.get("location") or "Remote",
+            skills=parsed_data.get("skills", []),
+            experience_years=parsed_data.get("experience_years") or 3,
+            status=CandidateStatus.SOURCED,
+            source="Resume Upload",
+            ai_summary=parsed_data.get("summary") or f"Direct resume intake from '{filename}'. Extracted {len(parsed_data.get('skills', []))} skills.",
+            linkedin_url=contact.get("linkedin_url"),
+            github_url=contact.get("github_url"),
+            score=88,
+        )
+        db.add(candidate)
+    else:
+        # Update existing candidate
+        curr_skills = set(candidate.skills or [])
+        curr_skills.update(parsed_data.get("skills", []))
+        candidate.skills = sorted(list(curr_skills))
+        if parsed_data.get("experience_years"):
+            candidate.experience_years = max(candidate.experience_years or 0, parsed_data["experience_years"])
+        if parsed_data.get("current_title") and not candidate.title:
+            candidate.title = parsed_data["current_title"]
+
+    resume_id = _uuid.uuid4()
+    file_path = ResumeParserService.save_resume_file(
+        str(cand_id), str(resume_id), filename, content
+    )
+
+    # Deactivate existing resumes
+    old_res = (await db.execute(
+        select(Resume).where(Resume.candidate_id == cand_id, Resume.is_current == True)
+    )).scalars().all()
+    for r in old_res:
+        r.is_current = False
+
+    resume = Resume(
+        id=resume_id,
+        candidate_id=cand_id,
+        tenant_id=current_user.tenant_id,
+        file_name=filename,
+        file_url=file_path,
+        raw_text=raw_text,
+        parsed_data=parsed_data,
+        is_current=True,
+    )
+    db.add(resume)
+    await db.commit()
+    await db.refresh(candidate)
+
+    # Background task
+    background_tasks.add_task(
+        analyze_resume_background,
+        str(resume.id),
+        content,
+        filename,
+    )
+
+    return {
+        "status": "success",
+        "candidate": {
+            "id": str(candidate.id),
+            "first_name": candidate.first_name,
+            "last_name": candidate.last_name,
+            "email": candidate.email,
+            "phone": candidate.phone,
+            "title": candidate.title,
+            "company": candidate.current_company,
+            "location": candidate.location,
+            "skills": candidate.skills or [],
+            "experience_years": candidate.experience_years,
+            "status": candidate.status.value if hasattr(candidate.status, "value") else str(candidate.status),
+            "source": candidate.source,
+            "score": candidate.score,
+            "ai_summary": candidate.ai_summary,
+            "created_at": candidate.created_at.isoformat() if candidate.created_at else None,
+            "resume_file_name": filename,
+        },
+        "parsed_data": parsed_data,
+        "message": f"Resume '{filename}' imported successfully with {len(parsed_data.get('skills', []))} skills.",
+    }
 
 
 @router.post("/{candidate_id}/score")
@@ -358,7 +721,12 @@ async def score_candidate_background(candidate_id: str, job_id: Optional[str]):
 
 @router.delete(
     "/{candidate_id}/pii",
-    summary="GDPR Right to Erasure — erase all PII for a candidate",
+    summary="GDPR Right to Erasure — erase all personal data for a candidate",
+    status_code=200,
+)
+@router.delete(
+    "/{candidate_id}/erasure",
+    summary="GDPR Right to Erasure alias",
     status_code=200,
 )
 async def erase_candidate_pii(
@@ -367,63 +735,14 @@ async def erase_candidate_pii(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Permanently erases all Personally Identifiable Information (PII) for a candidate.
-    The record row is preserved for audit trail and analytics continuity, but all
-    identifying fields are nullified and the record is flagged as erased.
-
-    Only admin‑role users may call this endpoint.
+    Permanently erases all Personally Identifiable Information (PII), resume database records,
+    physical resume files on disk, and vector embeddings for a candidate in compliance with
+    GDPR Article 17.
     """
-    if current_user.role.value != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can erase candidate PII")
-
-    result = await db.execute(
-        select(Candidate).where(
-            Candidate.id == candidate_id,
-            Candidate.tenant_id == current_user.tenant_id,
-        )
+    from services.privacy_service import erase_candidate_personal_data
+    return await erase_candidate_personal_data(
+        candidate_id=candidate_id,
+        db=db,
+        requesting_user=current_user,
     )
-    candidate = result.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-
-    if candidate.pii_erased:
-        return {"status": "already_erased", "id": str(candidate_id), "erased_at": candidate.pii_erased_at}
-
-    # Nullify all identifying fields
-    candidate.first_name = "Erased"
-    candidate.last_name = "User"
-    candidate.email = f"erased_{candidate.id}@gdpr.removed"
-    candidate.phone = None
-    candidate.linkedin_url = None
-    candidate.github_url = None
-    candidate.portfolio_url = None
-    candidate.current_company = None
-    candidate.resume_url = None if hasattr(candidate, "resume_url") else None
-    candidate.ai_summary = "[PII erased per GDPR Article 17 request]"
-    candidate.do_not_contact = True
-    candidate.pii_erased = True
-    candidate.pii_erased_at = datetime.now(timezone.utc)
-
-    await db.commit()
-
-    # Audit log
-    try:
-        await log_audit_event(
-            tenant_id=current_user.tenant_id,
-            user_id=current_user.id,
-            action="GDPR_PII_ERASURE",
-            entity_type="candidate",
-            entity_id=candidate_id,
-            metadata={"erased_by": str(current_user.id), "timestamp": candidate.pii_erased_at.isoformat()},
-        )
-    except Exception:
-        pass  # Never let audit logging failures block the erasure response
-
-    log.info("gdpr_pii_erased", candidate_id=str(candidate_id), erased_by=str(current_user.id))
-    return {
-        "status": "erased",
-        "id": str(candidate_id),
-        "erased_at": candidate.pii_erased_at.isoformat(),
-        "message": "All PII has been permanently removed in compliance with GDPR Article 17.",
-    }
 

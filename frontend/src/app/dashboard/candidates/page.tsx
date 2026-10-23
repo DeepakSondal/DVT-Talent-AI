@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
     Search, Filter, Plus, MoreHorizontal, 
@@ -127,9 +128,48 @@ export default function CandidatesPage() {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [selectedCandidate, setSelectedCandidate] = useState<CandidateRecord | null>(null);
     const [isUploadOpen, setIsUploadOpen] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Load actual candidates from backend API and merge with initial records
+    useEffect(() => {
+        candidatesApi.list({ page: 1 })
+            .then((res: any) => {
+                const items = res?.items || (Array.isArray(res) ? res : []);
+                if (items.length > 0) {
+                    const mapped: CandidateRecord[] = items.map((c: any) => ({
+                        id: c.id,
+                        first_name: c.first_name,
+                        last_name: c.last_name,
+                        email: c.email,
+                        phone: c.phone || "Not specified",
+                        title: c.title || "Technical Specialist",
+                        company: c.current_company || "Organization",
+                        location: c.location || "Remote",
+                        score: Math.round(c.score || 85),
+                        skills: c.skills || [],
+                        experience_years: c.experience_years || 3,
+                        status: (c.status?.toLowerCase() as any) || "sourced",
+                        source: (c.source as any) || "Resume Upload",
+                        linkedin_url: c.linkedin_url,
+                        github_url: c.github_url,
+                        ai_summary: c.ai_summary,
+                        created_at: c.created_at ? c.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
+                        resume_file_name: c.resume_file_name || `${c.first_name.toLowerCase()}_resume.pdf`
+                    }));
+                    setCandidates(prev => {
+                        const existingEmails = new Set(mapped.map(m => m.email));
+                        const remaining = prev.filter(p => !existingEmails.has(p.email));
+                        return [...mapped, ...remaining];
+                    });
+                }
+            })
+            .catch((err) => {
+                console.warn("Could not fetch remote candidates, using local talent cache:", err);
+            });
+    }, []);
 
     const filteredCandidates = candidates.filter(c => {
         const matchesSearch = 
@@ -197,41 +237,88 @@ export default function CandidatesPage() {
         }
     };
 
-    // Local resume upload handler requested by user
-    const handleFileUpload = (files: FileList | null) => {
+    // Real resume upload and full extraction handler
+    const handleFileUpload = async (files: FileList | null) => {
         if (!files || files.length === 0) return;
         const file = files[0];
         
-        const fileName = file.name;
-        const baseName = fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-        const nameParts = baseName.split(" ");
-        const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : "Imported";
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "Candidate";
+        const allowedExts = [".pdf", ".docx", ".doc", ".txt", ".rtf"];
+        const ext = "." + (file.name.split(".").pop() || "").toLowerCase();
+        if (!allowedExts.includes(ext)) {
+            toast.error("Unsupported file format", {
+                description: "Please upload a PDF, DOCX, or TXT resume document."
+            });
+            return;
+        }
 
-        const newCandidate: CandidateRecord = {
-            id: `cand_up_${Date.now()}`,
-            first_name: firstName,
-            last_name: lastName,
-            email: `${firstName.toLowerCase()}.${lastName.toLowerCase().replace(/\s+/g, '')}@talent-node.io`,
-            phone: "+1 (555) 019-2834",
-            title: "Imported Technical Specialist",
-            company: "Parsed From Resume",
-            location: "Remote",
-            score: 91,
-            skills: ["Python", "TypeScript", "System Design", "Cloud Infrastructure"],
-            experience_years: 5,
-            status: "sourced",
-            source: "Resume Upload",
-            ai_summary: `Parsed local resume document '${fileName}'. Extracted skills and AI match rating verified clean.`,
-            created_at: new Date().toISOString().split("T")[0],
-            resume_file_name: fileName
-        };
+        if (file.size > 10 * 1024 * 1024) {
+            toast.error("File size too large", {
+                description: "Resume documents must be under 10 MB."
+            });
+            return;
+        }
 
-        setCandidates(prev => [newCandidate, ...prev]);
-        setIsUploadOpen(false);
-        toast.success(`Resume '${fileName}' uploaded successfully!`, {
-            description: `Candidate profile for ${firstName} ${lastName} added to Talent Directory.`
+        setIsUploading(true);
+        const toastId = toast.loading(`Uploading and parsing ${file.name}...`, {
+            description: "Extracting complete text, career experience, and skills."
         });
+
+        try {
+            const res = await candidatesApi.uploadNewResume(file);
+            const cand = res.candidate;
+            const parsed = res.parsed_data || {};
+
+            const newCandidate: CandidateRecord = {
+                id: cand.id,
+                first_name: cand.first_name,
+                last_name: cand.last_name,
+                email: cand.email,
+                phone: cand.phone || "Not specified",
+                title: cand.title || "Technical Specialist",
+                company: cand.company || "Parsed From Resume",
+                location: cand.location || "Remote",
+                score: Math.round(cand.score || 88),
+                skills: cand.skills || [],
+                experience_years: cand.experience_years || 3,
+                status: (cand.status?.toLowerCase() as any) || "sourced",
+                source: "Resume Upload",
+                ai_summary: cand.ai_summary || `Parsed resume document '${file.name}'.`,
+                created_at: cand.created_at ? cand.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
+                resume_file_name: file.name
+            };
+
+            setCandidates(prev => [newCandidate, ...prev.filter(c => c.email !== newCandidate.email)]);
+            setIsUploadOpen(false);
+
+            const expCount = parsed.experience?.length || 0;
+            const skillCount = cand.skills?.length || 0;
+            toast.success(`Resume '${file.name}' parsed successfully!`, {
+                id: toastId,
+                description: `Extracted ${skillCount} technical skills and ${expCount} work positions.`
+            });
+        } catch (error: any) {
+            console.error("Resume upload error:", error);
+            toast.error("Resume Upload Failed", {
+                id: toastId,
+                description: error.response?.data?.detail || "Could not parse and persist the resume document."
+            });
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    // Download original resume from server
+    const handleDownloadResume = async (candId: string, filename?: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        try {
+            toast.info("Downloading Original Resume", { description: "Streaming file directly from server..." });
+            await candidatesApi.downloadResume(candId, filename);
+            toast.success("Download Complete");
+        } catch (err: any) {
+            toast.error("Download Failed", {
+                description: err.response?.data?.detail || "No uploaded resume file found on disk for this candidate."
+            });
+        }
     };
 
     return (
@@ -402,12 +489,28 @@ export default function CandidatesPage() {
                                     </td>
                                     <td className="p-6">
                                         <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400">
-                                            <FileText className="w-4 h-4 text-emerald-500" />
-                                            <span>{can.resume_file_name || "Resume_Verified.pdf"}</span>
+                                            <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
+                                            <span className="truncate max-w-[130px]">{can.resume_file_name || "Resume_Verified.pdf"}</span>
+                                            <button
+                                                onClick={(e) => handleDownloadResume(can.id, can.resume_file_name, e)}
+                                                title="Download Original Resume (.docx/.pdf)"
+                                                className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-emerald-500 transition-colors ml-1"
+                                            >
+                                                <Download className="w-3.5 h-3.5" />
+                                            </button>
                                         </div>
                                     </td>
                                     <td className="p-6 text-right">
                                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                            <Link href={`/dashboard/candidates/${can.id}`}>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider border-border hover:bg-muted"
+                                                >
+                                                    View DNA
+                                                </Button>
+                                            </Link>
                                             {can.linkedin_url && (
                                                 <a href={can.linkedin_url} target="_blank" rel="noopener noreferrer" className="p-2 bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20">
                                                     <Linkedin className="w-4 h-4" />
@@ -427,7 +530,7 @@ export default function CandidatesPage() {
                 </div>
             </Card>
 
-            {/* Local Resume Upload Modal requested by user */}
+            {/* Local Resume Upload Modal */}
             <AnimatePresence>
                 {isUploadOpen && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
@@ -444,47 +547,57 @@ export default function CandidatesPage() {
                                     </div>
                                     <div>
                                         <h3 className="text-xl font-black uppercase text-foreground">Import Resume Document</h3>
-                                        <p className="text-xs font-bold text-muted-foreground">Upload local resume (.pdf, .docx, .txt)</p>
+                                        <p className="text-xs font-bold text-muted-foreground">Full multi-format extraction (PDF, DOCX, TXT)</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setIsUploadOpen(false)} className="p-2 text-muted-foreground hover:text-foreground">
+                                <button onClick={() => !isUploading && setIsUploadOpen(false)} disabled={isUploading} className="p-2 text-muted-foreground hover:text-foreground">
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
 
                             {/* Drag and Drop Zone */}
                             <div
-                                onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                                onDragOver={(e) => { e.preventDefault(); if (!isUploading) setDragActive(true); }}
                                 onDragLeave={() => setDragActive(false)}
                                 onDrop={(e) => {
                                     e.preventDefault();
                                     setDragActive(false);
-                                    handleFileUpload(e.dataTransfer.files);
+                                    if (!isUploading) handleFileUpload(e.dataTransfer.files);
                                 }}
-                                onClick={() => fileInputRef.current?.click()}
+                                onClick={() => !isUploading && fileInputRef.current?.click()}
                                 className={cn(
-                                    "border-2 border-dashed rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4 cursor-pointer transition-all",
-                                    dragActive ? "border-emerald-500 bg-emerald-500/10" : "border-border hover:border-emerald-500/50 bg-muted/20"
+                                    "border-2 border-dashed rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4 transition-all",
+                                    isUploading ? "opacity-50 pointer-events-none border-emerald-500/50 bg-emerald-500/5" :
+                                    dragActive ? "border-emerald-500 bg-emerald-500/10 cursor-pointer" : "border-border hover:border-emerald-500/50 bg-muted/20 cursor-pointer"
                                 )}
                             >
                                 <input
                                     ref={fileInputRef}
                                     type="file"
-                                    accept=".pdf,.docx,.doc,.txt"
+                                    accept=".pdf,.docx,.doc,.txt,.rtf"
                                     className="hidden"
+                                    disabled={isUploading}
                                     onChange={(e) => handleFileUpload(e.target.files)}
                                 />
                                 <div className="w-16 h-16 rounded-full bg-slate-900 text-white flex items-center justify-center shadow-lg">
-                                    <FileText className="w-8 h-8 text-emerald-400" />
+                                    {isUploading ? (
+                                        <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+                                    ) : (
+                                        <FileText className="w-8 h-8 text-emerald-400" />
+                                    )}
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-sm font-black text-foreground">Click or Drag & Drop Resume File</p>
-                                    <p className="text-xs text-muted-foreground font-semibold">Supports PDF, DOCX, and TXT files from your device</p>
+                                    <p className="text-sm font-black text-foreground">
+                                        {isUploading ? "Extracting Full Resume & Career History..." : "Click or Drag & Drop Resume File"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground font-semibold">
+                                        {isUploading ? "Persisting binary document and parsing structured timeline" : "Supports Word (.docx), PDF (.pdf), and Plain Text (.txt)"}
+                                    </p>
                                 </div>
                             </div>
 
                             <div className="flex justify-end gap-3 pt-2">
-                                <Button variant="ghost" onClick={() => setIsUploadOpen(false)} className="font-bold text-xs">
+                                <Button variant="ghost" disabled={isUploading} onClick={() => setIsUploadOpen(false)} className="font-bold text-xs">
                                     Cancel
                                 </Button>
                             </div>
@@ -550,6 +663,22 @@ export default function CandidatesPage() {
                                             </Badge>
                                         ))}
                                     </div>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row items-center gap-3 pt-4 border-t border-border">
+                                    <Button
+                                        onClick={() => handleDownloadResume(selectedCandidate.id, selectedCandidate.resume_file_name)}
+                                        className="w-full sm:flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl h-11 gap-2 shadow-lg shadow-emerald-600/20"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                        Download Original Resume
+                                    </Button>
+                                    <Link href={`/dashboard/candidates/${selectedCandidate.id}`} className="w-full sm:flex-1">
+                                        <Button variant="outline" className="w-full font-bold text-xs rounded-xl h-11 gap-2 border-border text-foreground hover:bg-muted">
+                                            <ExternalLink className="w-4 h-4" />
+                                            Full Career &amp; Resume View
+                                        </Button>
+                                    </Link>
                                 </div>
                             </div>
                         </motion.div>

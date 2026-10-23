@@ -5,12 +5,12 @@ Enabled only via RUN_INTEGRATION_TESTS=1.
 """
 import os
 import pytest
-from db.vector_store import VectorStore
+from db.vector_store import VectorStore, CHROMA_AVAILABLE
 
 # Only run if explicitly enabled to allow CI/CD to skip
 @pytest.mark.skipif(
-    os.environ.get("RUN_INTEGRATION_TESTS") != "1",
-    reason="RUN_INTEGRATION_TESTS=1 not set. Skipping live database tests."
+    os.environ.get("RUN_INTEGRATION_TESTS") != "1" or not CHROMA_AVAILABLE,
+    reason="RUN_INTEGRATION_TESTS=1 not set or chromadb client not installed on test runner."
 )
 def test_vector_store_live_index():
     """Verify that we can actually connect and index in a real ChromaDB instance."""

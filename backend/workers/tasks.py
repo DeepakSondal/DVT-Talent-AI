@@ -4,6 +4,7 @@ Unified task execution for the 5-agent model with DB synchronization.
 """
 import base64
 import json
+import uuid
 import structlog
 import asyncio
 from typing import Any, Dict, Optional
@@ -24,6 +25,7 @@ from agents.outreach_pydantic import outreach_agent
 from agents.analytics_pydantic import analytics_agent
 from agents.screening_pydantic import screening_agent
 from agents.market_iq_pydantic import market_iq_agent
+from services.resume_parser import ResumeParserService
 
 log = structlog.get_logger(__name__)
 
@@ -157,10 +159,27 @@ def analyze_resume_task(
     log.info("celery_task_started", task="analyze_resume", resume_id=resume_id)
     try:
         file_bytes = base64.b64decode(file_content_b64)
-        
-        # In a real impl, we'd use a PDF/Docx parser here. 
-        # For now, passing placeholder or extracted text if available.
-        raw_text = file_bytes.decode("utf-8", errors="ignore")
+        engine = create_engine(settings.database_sync_url)
+        clean_rid = str(resume_id).replace("-", "")
+        hyphen_rid = str(uuid.UUID(clean_rid)) if len(clean_rid) == 32 else str(resume_id)
+        with engine.connect() as conn:
+            cand_check = conn.execute(
+                text("""
+                    SELECT c.pii_erased
+                    FROM resumes r
+                    JOIN candidates c ON r.candidate_id = c.id
+                    WHERE r.id = :rid OR r.id = :hrid
+                    LIMIT 1
+                """),
+                {"rid": clean_rid, "hrid": hyphen_rid}
+            ).fetchone()
+            if cand_check and cand_check[0]:
+                log.info("analyze_resume_skipped_candidate_pii_erased", resume_id=resume_id)
+                return {"status": "candidate_erased", "resume_id": resume_id}
+
+        raw_text = ResumeParserService.extract_text(file_bytes, filename)
+        if not raw_text.strip():
+            raw_text = f"Resume document: {filename}"
         
         async def _run():
             import httpx
@@ -185,10 +204,22 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
     log.info("celery_task_started", task="score_candidate", candidate_id=candidate_id)
     try:
         engine = create_engine(settings.database_sync_url)
+        clean_cid = str(candidate_id).replace("-", "")
+        hyphen_cid = str(uuid.UUID(clean_cid)) if len(clean_cid) == 32 else str(candidate_id)
         with engine.connect() as conn:
+            cand_check = conn.execute(
+                text("SELECT pii_erased FROM candidates WHERE id = :cid OR id = :hcid LIMIT 1"),
+                {"cid": clean_cid, "hcid": hyphen_cid}
+            ).fetchone()
+            if not cand_check:
+                return {"candidate_id": candidate_id, "status": "not_found"}
+            if cand_check[0]:
+                log.info("score_candidate_skipped_candidate_pii_erased", candidate_id=candidate_id)
+                return {"candidate_id": candidate_id, "status": "candidate_erased"}
+
             row = conn.execute(
-                text("SELECT raw_text FROM resumes WHERE candidate_id = :cid AND is_current = TRUE LIMIT 1"),
-                {"cid": candidate_id}
+                text("SELECT raw_text FROM resumes WHERE (candidate_id = :cid OR candidate_id = :hcid) AND is_current = TRUE LIMIT 1"),
+                {"cid": clean_cid, "hcid": hyphen_cid}
             ).fetchone()
             
             if not row or not row[0]:
@@ -216,14 +247,21 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
             candidates = result.get("candidates", [])
             cand_data = candidates[0] if candidates else {}
             conn.execute(
-                text("UPDATE candidates SET score = :score, title = :title, ai_summary = :summary WHERE id = :cid"),
-                {"score": cand_data.get("match_score", 0), 
-                 "title": jd_text,
-                 "summary": cand_data.get("ai_reasoning", {}).get("alignment", ""), 
-                 "cid": candidate_id}
+                text("""
+                    UPDATE candidates
+                    SET score = :score, title = :title, ai_summary = :summary
+                    WHERE (id = :cid OR id = :hcid) AND pii_erased = FALSE
+                """),
+                {
+                    "score": cand_data.get("match_score", 0),
+                    "title": jd_text,
+                    "summary": cand_data.get("ai_reasoning", {}).get("alignment", ""),
+                    "cid": clean_cid,
+                    "hcid": hyphen_cid,
+                }
             )
             conn.commit()
-            
+
         return {"candidate_id": candidate_id, "status": "scored"}
     except Exception as exc:
         log.error("ats_sync_failed", error=str(exc))
@@ -390,23 +428,61 @@ def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_con
     except Exception as exc:
         raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2))
 
+@celery_app.task(bind=True, name="workers.tasks.process_pending_gdpr_cleanups_task", max_retries=5)
+def process_pending_gdpr_cleanups_task(self) -> Dict[str, Any]:
+    """
+    Automated background worker task to sweep and process pending GDPR cleanup retries.
+    Ensures external cleanup (vector stores, file storage) completes without user intervention.
+    """
+    from db.models import AsyncSessionLocal
+    from services.privacy_service import sweep_and_process_gdpr_cleanups
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            return await sweep_and_process_gdpr_cleanups(db)
+
+    try:
+        res = asyncio.run(_run())
+        log.info("gdpr_cleanup_sweep_completed", results=res)
+        return res
+    except Exception as exc:
+        log.error("gdpr_cleanup_sweep_failed", error=str(exc))
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2))
+
 # ── DB Helpers (Synchronous) ───────────────────────────────────────────────
 
 def _update_resume_in_db(resume_id: str, analysis: dict, raw_text: str = ""):
     try:
         engine = create_engine(settings.database_sync_url)
+        clean_rid = str(resume_id).replace("-", "")
+        hyphen_rid = str(uuid.UUID(clean_rid)) if len(clean_rid) == 32 else str(resume_id)
         with engine.connect() as conn:
+            cand_check = conn.execute(
+                text("""
+                    SELECT c.pii_erased
+                    FROM resumes r
+                    JOIN candidates c ON r.candidate_id = c.id
+                    WHERE r.id = :rid OR r.id = :hrid
+                    LIMIT 1
+                """),
+                {"rid": clean_rid, "hrid": hyphen_rid}
+            ).fetchone()
+            if cand_check and cand_check[0]:
+                log.info("resume_update_skipped_candidate_pii_erased", resume_id=resume_id)
+                return
+
             conn.execute(
                 text("""
                     UPDATE resumes
                     SET score = :score,
                         parsed_data = :parsed_data,
                         raw_text = :raw_text,
-                        updated_at = NOW()
-                    WHERE id = :resume_id
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :rid OR id = :hrid
                 """),
                 {
-                    "resume_id": resume_id,
+                    "rid": clean_rid,
+                    "hrid": hyphen_rid,
                     "score": analysis.get("score", 0),
                     "parsed_data": json.dumps(analysis.get("parsed", {})),
                     "raw_text": raw_text,

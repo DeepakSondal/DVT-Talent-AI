@@ -32,6 +32,34 @@ export const candidatesService = {
     }).then((r) => r.data);
   },
 
+  uploadNewResume: (file: File): Promise<any> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return http.post("/candidates/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data);
+  },
+
+  downloadResume: async (id: string, filename?: string): Promise<void> => {
+    const response = await http.get(`/candidates/${id}/resume/download`, {
+      responseType: "blob",
+    });
+    const blob = new Blob([response.data], {
+      type: response.headers["content-type"] || "application/octet-stream",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", filename || `candidate_resume_${id}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+
+  getResumeDetails: (id: string): Promise<any> =>
+    http.get(`/candidates/${id}/resume/details`).then((r) => r.data),
+
   export: (): Promise<any> =>
     http.get("/candidates/export", { responseType: "blob" }),
 };

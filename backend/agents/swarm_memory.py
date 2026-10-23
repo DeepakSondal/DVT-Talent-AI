@@ -7,25 +7,34 @@ from typing import List, Dict, Optional
 from openai import AsyncOpenAI
 from config import settings
 
-DB_FILE = "swarm_memory.db"
+import redis
+
 PINECONE_API_KEY = getattr(settings, 'pinecone_api_key', 'mock_pinecone_key')
 PINECONE_HOST = getattr(settings, 'pinecone_host', 'https://dvt-memory-tree.pinecone.io')
 
-def _get_db():
-    conn = sqlite3.connect(DB_FILE, timeout=10.0)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("CREATE TABLE IF NOT EXISTS semantic_cache (query_hash TEXT PRIMARY KEY, result TEXT)")
-    return conn
+_redis_pool = None
+
+def _get_redis():
+    global _redis_pool
+    if _redis_pool is None:
+        _redis_pool = redis.ConnectionPool.from_url(settings.redis_url)
+    return redis.Redis(connection_pool=_redis_pool)
 
 def _get_cache(query_hash: str) -> Optional[str]:
-    with _get_db() as db:
-        res = db.execute("SELECT result FROM semantic_cache WHERE query_hash = ?", (query_hash,)).fetchone()
-        return res[0] if res else None
+    try:
+        r = _get_redis()
+        val = r.get(f"swarm_cache:{query_hash}")
+        return val.decode("utf-8") if val else None
+    except Exception:
+        return None
 
-def _set_cache(query: str, result: str):
-    query_hash = hashlib.md5(query.encode()).hexdigest()
-    with _get_db() as db:
-        db.execute("INSERT OR REPLACE INTO semantic_cache (query_hash, result) VALUES (?, ?)", (query_hash, result))
+def _set_cache(query: str, result: str, ttl_seconds: int = 86400):
+    try:
+        query_hash = hashlib.md5(query.encode()).hexdigest()
+        r = _get_redis()
+        r.setex(f"swarm_cache:{query_hash}", ttl_seconds, result)
+    except Exception:
+        pass
 
 async def add_negative_vector(category: str, reason: str, tenant_id: str = "default"):
     """

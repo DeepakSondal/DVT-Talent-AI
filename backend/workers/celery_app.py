@@ -57,6 +57,13 @@ celery_app.conf.beat_schedule = {
         "args": ["analytics"],
         "kwargs": {},
     },
+    # Periodic GDPR cleanup retry sweep every 15 minutes (reconciles broker outages)
+    "periodic-gdpr-cleanup-sweep": {
+        "task": "workers.tasks.process_pending_gdpr_cleanups_task",
+        "schedule": crontab(minute="*/15"),
+        "args": [],
+        "kwargs": {},
+    },
 }
 
 from celery.signals import worker_process_init
