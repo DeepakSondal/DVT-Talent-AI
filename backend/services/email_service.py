@@ -70,13 +70,15 @@ def _get_system_smtp() -> Optional[SMTPConfig]:
     password = settings.smtp_pass if hasattr(settings, "smtp_pass") else None
     if not user or not password:
         return None
+    sender_name = getattr(settings, "sender_name", "") or "DVT Talent AI"
+    sender_email = getattr(settings, "sender_email", "") or getattr(settings, "gmail_sender_email", "") or user
     return SMTPConfig(
         host=getattr(settings, "smtp_host", "smtp.gmail.com"),
         port=int(getattr(settings, "smtp_port", 587)),
         user=user,
         password=password,
-        sender_name="DVT Talent AI",
-        sender_email=user,
+        sender_name=sender_name,
+        sender_email=sender_email,
     )
 
 
@@ -117,6 +119,7 @@ class EmailService:
         msg.set_content(body)
         msg["Subject"] = subject
         msg["From"] = smtp_cfg.from_header
+        msg["Reply-To"] = smtp_cfg.sender_email
         msg["To"] = to_address
         msg["Message-ID"] = f"<{email_id}@dvt-talent-ai.com>"
         msg["In-Reply-To"] = msg["Message-ID"]

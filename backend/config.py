@@ -90,8 +90,10 @@ class Settings(BaseSettings):
     # Email — System-level SMTP (fallback when tenant has no sender configured)
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
-    smtp_user: str = ""          # e.g. noreply@dvttalent.com
+    smtp_user: str = ""          # e.g. deepu.dk49@gmail.com
     smtp_pass: str = ""          # Gmail App Password or SMTP password
+    sender_name: str = "Deepak from DVT Talent AI"
+    sender_email: str = "deepak@dvttalent.com"
 
     # Email — Gmail OAuth (legacy, kept for reference)
     gmail_client_id: str = ""
