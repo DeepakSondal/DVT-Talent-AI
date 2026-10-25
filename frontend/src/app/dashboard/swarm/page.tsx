@@ -129,7 +129,7 @@ export default function SwarmCommandCenter() {
 
         try {
             setStatus("running");
-            setLogs(prev => [...prev, `🚀 LAUNCHING AUTOMATED RECRUITMENT PIPELINE (${activeAgents.length} Active Agents) for '${targetRole}'...`]);
+            setLogs(prev => [...prev, `[PIPELINE] Initiating automated recruitment workflow (${activeAgents.length} Active Agents) for '${targetRole}'...`]);
             setProgress(10);
             
             // Step 1: Requisition Extraction & Constraints
@@ -196,7 +196,7 @@ export default function SwarmCommandCenter() {
     return (
         <div className="space-y-10 pb-20 max-w-7xl mx-auto px-4 md:px-0">
             {/* Header Banner (User Selected Copy) */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-slate-950 p-8 md:p-10 rounded-[2.5rem] border border-slate-800 text-white shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-slate-900 p-8 rounded-xl border border-slate-800 text-white shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                     <Zap className="w-56 h-56 text-blue-400" />
                 </div>
@@ -391,7 +391,7 @@ export default function SwarmCommandCenter() {
                     </Card>
 
                     {/* Central Swarm Monitor Console */}
-                    <Card className="p-8 md:p-10 bg-slate-950 text-white border-none shadow-2xl rounded-[2.5rem] relative overflow-hidden h-[360px] flex flex-col justify-between">
+                    <Card className="p-8 bg-slate-900 text-white border border-slate-800 shadow-sm rounded-xl relative overflow-hidden h-[360px] flex flex-col justify-between">
                         <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
                             <Activity className="w-64 h-64 text-blue-500" />
                         </div>
@@ -432,7 +432,7 @@ export default function SwarmCommandCenter() {
 
                 {/* Right-Hand Log Stream Sidebar (User Selected Copy) */}
                 <div className="lg:col-span-4 space-y-6">
-                    <Card className="bg-card border-border rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col h-[680px]">
+                    <Card className="bg-card border-border rounded-xl overflow-hidden shadow-sm flex flex-col h-[680px]">
                         <div className="p-6 border-b border-border flex items-center justify-between bg-muted/40">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500">

@@ -5,6 +5,9 @@
 export interface Job {
   id: string;
   company_id?: string;
+  company?: any;
+  status?: string;
+  requirements?: string | string[];
   title: string;
   description?: string;
   location?: string;
@@ -18,6 +21,7 @@ export interface Job {
   is_active: boolean;
   created_at: string;
 }
+
 
 export interface JobCreate {
   company_id: string;

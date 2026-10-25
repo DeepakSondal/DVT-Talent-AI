@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   X, Play, Edit3, Users, Mail, Loader2, CheckCircle2, AlertCircle,
   ChevronRight, Star, Github, Linkedin, Globe, ExternalLink, BarChart3,
-  Briefcase, MapPin, Clock, RefreshCw, ArrowRight, Check, Minus, Sparkles,
+  Briefcase, MapPin, Clock, RefreshCw, ArrowRight, Check, Minus, Activity,
   FileText, Target, Zap, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -153,7 +153,7 @@ export function CopilotActionModal({ task: initialTask, onClose, onComplete }: C
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 16 }}
           transition={{ type: "spring", damping: 25 }}
-          className="bg-background w-full max-w-4xl rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col"
+          className="bg-background w-full max-w-4xl rounded-xl shadow-md border border-border overflow-hidden flex flex-col"
           style={{ maxHeight: "92vh" }}
         >
           {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -161,7 +161,7 @@ export function CopilotActionModal({ task: initialTask, onClose, onComplete }: C
             <div className="flex items-start justify-between mb-5">
               <div>
                 <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] font-black uppercase tracking-widest mb-2">
-                  <ShieldCheck className="w-3 h-3 mr-1" /> Copilot — Human in the Loop
+                  <ShieldCheck className="w-3 h-3 mr-1" /> Copilot: Human in the Loop
                 </Badge>
                 <h2 className="text-xl font-bold text-foreground">
                   {task.status === "failed" ? "⚠️ Pipeline Error"
@@ -271,7 +271,7 @@ export function CopilotActionModal({ task: initialTask, onClose, onComplete }: C
                   <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-2xl border border-blue-200 dark:border-blue-800 flex items-start gap-3">
                     <Users className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                     <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                      Sourcing complete — <strong>{allCandidates.length} candidates</strong> found and scored.
+                      Sourcing complete: <strong>{allCandidates.length} candidates</strong> found and scored.
                       Deselect any you don't want the AI to contact. The AI scores above 80 are recommended.
                     </p>
                   </div>
@@ -367,7 +367,7 @@ export function CopilotActionModal({ task: initialTask, onClose, onComplete }: C
                         className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
                       />
                       <label htmlFor="deepScreening" className="text-xs font-bold text-muted-foreground flex items-center gap-1 cursor-pointer">
-                        <Sparkles className="w-3 h-3" /> Deep Screen (Uses More Tokens)
+                        <Activity className="w-3 h-3" /> Deep Screen (Uses More Tokens)
                       </label>
                     </div>
                     <span className="text-xs text-muted-foreground hidden sm:block">
@@ -394,7 +394,7 @@ export function CopilotActionModal({ task: initialTask, onClose, onComplete }: C
             <div className="px-8 py-5 border-t border-border bg-card shrink-0 flex justify-end">
               <Button variant="primary" onClick={onComplete} className="gap-2">
                 <CheckCircle2 className="w-4 h-4" />
-                Done — Back to Dashboard
+                Done: Return to Dashboard
               </Button>
             </div>
           )}

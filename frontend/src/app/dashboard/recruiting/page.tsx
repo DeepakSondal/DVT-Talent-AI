@@ -7,7 +7,7 @@ import {
   ArrowRight, Download, Share2, Star, 
   GraduationCap, MapPin, DollarSign,
   UserCheck, ExternalLink, MessageSquare,
-  FileText, Globe, Sparkles, Target,
+  FileText, Globe, Activity, Target,
   HeartPulse, ShieldCheck
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -139,8 +139,8 @@ export default function RecruitingPage() {
 
            {/* Right: Synthesis Ranking Grid */}
            <div className="col-span-12 lg:col-span-8 space-y-8">
-              <Card className="p-0 border-border/50 bg-white shadow-2xl shadow-primary/5 min-h-[800px] flex flex-col">
-                 <div className="p-8 border-b border-border/20 flex items-center justify-between bg-white/50 backdrop-blur-sm sticky top-0 z-10 rounded-t-3xl text-foreground">
+              <Card className="p-0 border-border/50 bg-card border-border shadow-sm min-h-[800px] flex flex-col rounded-xl overflow-hidden">
+                 <div className="p-8 border-b border-border/20 flex items-center justify-between bg-card sticky top-0 z-10 rounded-t-xl text-foreground">
                     <div className="flex items-center gap-4 bg-primary/5 border border-transparent focus-within:border-primary/20 focus-within:bg-white rounded-2xl px-6 py-3 w-[450px] transition-all">
                        <Search className="w-4 h-4 text-primary/40" />
                        <input 
@@ -217,10 +217,10 @@ export default function RecruitingPage() {
                             <motion.div 
                                initial={{ opacity: 0 }}
                                whileInView={{ opacity: 1 }}
-                               className="mt-10 p-8 rounded-3xl bg-secondary/5 border border-border/20 group-hover:bg-primary/[0.04] group-hover:border-primary/20 transition-all duration-700"
+                               className="mt-10 p-8 rounded-xl bg-secondary/5 border border-border/20 group-hover:bg-primary/[0.04] group-hover:border-primary/20 transition-all duration-700"
                             >
                                <p className="text-[11px] font-black text-muted-foreground/80 leading-loose italic opacity-60">
-                                  <Sparkles className="w-4 h-4 text-primary animate-pulse mr-3 inline" />
+                                  <Activity className="w-4 h-4 text-primary mr-2 inline" />
                                   {can.ai_summary || "Analyzing candidate fit and skills for this role. Evaluation summary will appear shortly."}
                                 </p>
                             </motion.div>

@@ -48,28 +48,26 @@ export function KpiCard({
 }: KpiCardProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay }}
-      className="relative overflow-hidden rounded-2xl bg-[#0f1117] border border-white/[0.06] p-6 group hover:border-white/[0.12] transition-all duration-300"
+      transition={{ duration: 0.35, delay }}
+      className="relative overflow-hidden rounded-xl bg-card border border-border p-6 shadow-sm hover:border-primary/30 transition-colors"
     >
-      <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-[0.08] ${color}`} />
-
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-widest mb-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
             {title}
           </p>
 
-          <div className="text-3xl font-bold text-white tracking-tight">
+          <div className="text-3xl font-extrabold text-foreground tracking-tight">
             {value}
           </div>
 
-          <p className="text-sm text-zinc-500 mt-1.5">{sub}</p>
+          <p className="text-xs text-muted-foreground mt-1.5">{sub}</p>
         </div>
 
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${color} bg-opacity-10 shrink-0`}>
-          <Icon className="w-5 h-5 text-white opacity-80" />
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color} bg-opacity-10 shrink-0`}>
+          <Icon className="w-5 h-5 opacity-90" />
         </div>
       </div>
 

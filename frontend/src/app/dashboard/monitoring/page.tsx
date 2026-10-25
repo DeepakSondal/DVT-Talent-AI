@@ -119,7 +119,7 @@ export default function MonitoringPage() {
     return (
         <div className="space-y-10 pb-20 max-w-7xl mx-auto px-4 md:px-0">
             {/* Page Header Banner (User Selected Copy) */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-slate-950 p-8 md:p-10 rounded-[2.5rem] border border-slate-800 text-white shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-slate-900 p-8 rounded-xl border border-slate-800 text-white shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                     <Activity className="w-56 h-56 text-blue-400" />
                 </div>
@@ -240,13 +240,13 @@ export default function MonitoringPage() {
 
             {/* Main Console: Live Telemetry Stream + Worker Health */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Live Telemetry Terminal Console (User Selected Copy) */}
-                <Card className="lg:col-span-2 bg-slate-950 border border-slate-800 shadow-2xl rounded-[2.5rem] overflow-hidden relative">
-                    <CardHeader className="border-b border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 bg-slate-900/60">
+                {/* Live Telemetry Event Feed */}
+                <Card className="lg:col-span-2 bg-slate-900 border border-slate-800 shadow-sm rounded-xl overflow-hidden relative">
+                    <CardHeader className="border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-slate-900">
                         <div className="flex items-center gap-3">
-                            <Terminal className="w-5 h-5 text-emerald-400" />
+                            <Activity className="w-5 h-5 text-emerald-400" />
                             <div>
-                                <CardTitle className="text-xs font-black uppercase tracking-widest text-white">
+                                <CardTitle className="text-xs font-bold uppercase tracking-wider text-white">
                                     Real-Time Agent Event Feed
                                 </CardTitle>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">

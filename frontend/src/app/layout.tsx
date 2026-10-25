@@ -1,17 +1,17 @@
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { Metadata } from "next";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-sans" });
 const jetBrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono" });
 
 export const metadata: Metadata = {
-  title: "DVT Talent AI — AI-Powered Talent Discovery & Recruitment Automation",
+  title: "DVT Talent AI: AI-Powered Talent Discovery & Recruitment Automation",
   description: "Enterprise talent acquisition platform powered by intelligent recruiting agents for automated vacancy discovery, candidate sourcing, and multichannel outreach.",
   referrer: "origin-when-cross-origin",
   openGraph: {
-    title: "DVT Talent AI — Intelligent Recruitment Platform",
+    title: "DVT Talent AI: Intelligent Recruitment Platform",
     description: "AI-driven recruiting platform that discovers hiring requisitions, sources qualified candidates, and automates outreach 24/7.",
     type: "website",
     url: "https://dvt-talent.ai",
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "DVT Talent AI — Intelligent Recruitment Platform",
+    title: "DVT Talent AI: Intelligent Recruitment Platform",
     description: "AI recruiting agents for high-precision sourcing and candidate engagement.",
   }
 };
@@ -34,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${jetBrainsMono.variable} antialiased transition-colors duration-300`}
+        className={`${plusJakartaSans.variable} ${jetBrainsMono.variable} antialiased transition-colors duration-300`}
       >
         <Providers>
           {children}

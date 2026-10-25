@@ -2,7 +2,7 @@
 
 import React from "react";
 import { 
-  Sparkles, Zap, Github, 
+  Zap, Github, 
   Terminal, Globe, MessageSquare, 
   Quote, TrendingUp, Award,
   Cpu, Rocket, Heart
@@ -101,7 +101,7 @@ export function IntelligenceSignals({ metadata }: IntelligenceSignalsProps) {
       <div className="flex items-center justify-between px-2">
         <div className="space-y-1">
           <h3 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
+            <Zap className="w-4 h-4 text-primary" />
             Intelligence Signals
           </h3>
           <p className="text-[10px] font-bold text-white/20 uppercase tracking-tight">AI-surfaced DNA & Market Signals</p>

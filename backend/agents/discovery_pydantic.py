@@ -49,7 +49,7 @@ discovery_agent = Agent(
     get_pydantic_model(),
     retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
-    output_type=DiscoveryResult,
+    result_type=DiscoveryResult,
     system_prompt=(
         "You are the DVT Discovery Agent, an elite technical recruiter and JD Analyst. "
         "Your mission is to analyze real-world job descriptions scraped by the Market IQ Agent. "

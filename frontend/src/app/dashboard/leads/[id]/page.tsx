@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { 
   Building2, Globe, MapPin, Search, 
-  Zap, ChevronLeft, Bot, Sparkles, 
+  Zap, ChevronLeft, Bot, Send, 
   TrendingUp, Activity, Star, Quote, 
   Rocket, RefreshCw, CheckCircle2, ArrowRight
 } from "lucide-react";
@@ -85,7 +85,7 @@ export default function LeadDetailPage() {
           href="/dashboard/leads" 
           className="group inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
         >
-           <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+           <ChevronLeft className="w-4 h-4" />
            <span>Back to CRM Pipeline</span>
         </Link>
         <div className="flex items-center gap-3">
@@ -220,10 +220,10 @@ export default function LeadDetailPage() {
                <IntelligenceSignals metadata={lead.meta_data} />
             </Card>
 
-            <Card className="p-6 border-border bg-card shadow-sm rounded-3xl space-y-5">
+            <Card className="p-6 border-border bg-card shadow-sm rounded-xl space-y-5">
                <div className="space-y-1">
                   <div className="flex items-center gap-2 text-primary">
-                     <Sparkles className="w-4 h-4" />
+                     <Send className="w-4 h-4" />
                      <h3 className="text-xs font-black uppercase tracking-wider text-foreground">AI Outreach Hooks</h3>
                   </div>
                   <p className="text-[11px] font-medium text-muted-foreground">Automated personalized icebreakers</p>

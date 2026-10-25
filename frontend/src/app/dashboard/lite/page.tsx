@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Briefcase, Zap, Lock, Mail, ArrowRight, Bot, Target, 
-  Sparkles, ShieldAlert, CheckCircle2, Building2
+  Activity, ShieldAlert, CheckCircle2, Building2
 } from 'lucide-react';
 import api from '@/lib/api';
 
@@ -65,7 +65,7 @@ export default function LiteDashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-foreground flex items-center gap-2">
-            <Sparkles className="w-8 h-8 text-indigo-500" />
+            <Activity className="w-8 h-8 text-indigo-500" />
             DVT Lite Workspace
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
@@ -185,7 +185,7 @@ export default function LiteDashboard() {
             <div className="p-6 md:w-1/2 relative">
               {!sourcingData ? (
                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50 space-y-4">
-                  <Sparkles className="w-12 h-12" />
+                  <Activity className="w-12 h-12" />
                   <p className="text-sm font-medium">Polished JD & Magic List will appear here</p>
                 </div>
               ) : (

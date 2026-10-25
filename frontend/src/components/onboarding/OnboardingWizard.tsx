@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
     Building2, Mail, Link2, Rocket, CheckCircle2, ArrowRight, ArrowLeft,
-    Loader2, Sparkles, Globe, Database, Shield, Upload, X, Check,
+    Loader2, Globe, Database, Shield, Upload, X, Check,
     Eye, EyeOff, Layers, Briefcase, FileSpreadsheet, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -232,7 +232,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         <div className="flex items-center justify-between mb-5">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/25">
-                                    <Sparkles className="w-5 h-5 text-white" />
+                                    <Shield className="w-5 h-5 text-white" />
                                 </div>
                                 <div>
                                     <div className="flex items-center gap-2">
@@ -456,7 +456,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                             ) : (
                                                 <>
                                                     Continue to Outreach Setup
-                                                    <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                                    <ArrowRight className="w-4 h-4 ml-2 " />
                                                 </>
                                             )}
                                         </Button>
@@ -789,7 +789,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                             ) : (
                                                 <>
                                                     Enter Dashboard & Start Sourcing
-                                                    <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                                                    <ArrowRight className="w-5 h-5 ml-2 " />
                                                 </>
                                             )}
                                         </Button>

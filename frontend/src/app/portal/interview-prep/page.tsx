@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Sparkles, CheckCircle2, AlertCircle, Building2,
+  Compass, CheckCircle2, AlertCircle, Building2,
   Briefcase, ChevronRight, BookOpen, Target,
   HelpCircle, ShieldAlert, Award, RefreshCw
 } from "lucide-react";
@@ -58,7 +58,7 @@ function InterviewPrepContent() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <Badge variant="outline" className="text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 border-purple-200 dark:border-purple-800 text-xs font-bold mb-1">
-            <Sparkles className="w-3.5 h-3.5 mr-1 inline" />
+            <Compass className="w-3.5 h-3.5 mr-1 inline" />
             Career-Ops Behavioral Engine
           </Badge>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">

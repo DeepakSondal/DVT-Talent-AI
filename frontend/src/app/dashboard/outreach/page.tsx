@@ -202,7 +202,7 @@ export default function OutreachLab() {
     return (
         <div className="space-y-10 pb-20 max-w-7xl mx-auto px-4 md:px-0">
             {/* Header Banner (User Selected Copy) */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-slate-950 p-8 md:p-10 rounded-[2.5rem] border border-slate-800 text-white shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-slate-900 p-8 rounded-xl border border-slate-800 text-white shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                     <Mail className="w-56 h-56 text-emerald-400" />
                 </div>
@@ -259,7 +259,7 @@ export default function OutreachLab() {
                     const isLaunching = loadingMap[job.id] || false;
 
                     return (
-                        <Card key={job.id} className="p-8 rounded-[2.5rem] bg-card border-border shadow-2xl space-y-8 relative overflow-hidden">
+                        <Card key={job.id} className="p-8 rounded-xl bg-card border-border shadow-sm space-y-8 relative overflow-hidden">
                             {/* Job Requirement Header Block */}
                             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-border">
                                 <div className="space-y-2">

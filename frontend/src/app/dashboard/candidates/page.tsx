@@ -2,14 +2,15 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { 
     Search, Filter, Plus, MoreHorizontal, 
     CheckSquare, Square, Mail, Trash2, 
     ArrowUpRight, Loader2, Linkedin, Github, 
     Globe, Briefcase, Sparkles, ShieldCheck,
     Zap, Activity, Download, Users, Upload,
-    FileText, X, Check, Phone, MapPin, ExternalLink
+    FileText, X, Check, CheckCircle2, Phone, MapPin, ExternalLink
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -131,7 +132,25 @@ export default function CandidatesPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
 
+    const router = useRouter();
+    const shouldReduceMotion = useReducedMotion();
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleBulkShortlist = () => {
+        if (selectedIds.length === 0) return;
+        setCandidates(prev => prev.map(c => selectedIds.includes(c.id) ? { ...c, status: "shortlisted" } : c));
+        toast.success(`Shortlisted ${selectedIds.length} candidate(s)`, {
+            description: "Status updated in your candidate pipeline."
+        });
+        setSelectedIds([]);
+    };
+
+    const handleBulkOutreach = () => {
+        if (selectedIds.length === 0) return;
+        const selectedCands = candidates.filter(c => selectedIds.includes(c.id));
+        const emails = selectedCands.map(c => c.email).filter(Boolean).join(",");
+        router.push(`/dashboard/outreach?emails=${encodeURIComponent(emails)}`);
+    };
 
     // Load actual candidates from backend API and merge with initial records
     useEffect(() => {
@@ -324,7 +343,7 @@ export default function CandidatesPage() {
     return (
         <div className="space-y-10 pb-20 max-w-7xl mx-auto px-4 md:px-0">
             {/* Header Section (User Selected Copy) */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-slate-950 p-8 md:p-10 rounded-[2.5rem] border border-slate-800 text-white shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-slate-900 p-8 rounded-xl border border-slate-800 text-white shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                     <Users className="w-56 h-56 text-emerald-400" />
                 </div>
@@ -408,7 +427,7 @@ export default function CandidatesPage() {
             </div>
 
             {/* Candidates Main Data Table */}
-            <Card className="overflow-hidden border-border shadow-2xl bg-card rounded-[2rem]">
+            <Card className="overflow-hidden border-border shadow-sm bg-card rounded-xl">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
@@ -502,14 +521,11 @@ export default function CandidatesPage() {
                                     </td>
                                     <td className="p-6 text-right">
                                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                            <Link href={`/dashboard/candidates/${can.id}`}>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-8 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider border-border hover:bg-muted"
-                                                >
-                                                    View DNA
-                                                </Button>
+                                            <Link
+                                                href={`/dashboard/candidates/${can.id}`}
+                                                className="inline-flex items-center justify-center h-8 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-border hover:bg-muted text-foreground transition-colors"
+                                            >
+                                                View Profile
                                             </Link>
                                             {can.linkedin_url && (
                                                 <a href={can.linkedin_url} target="_blank" rel="noopener noreferrer" className="p-2 bg-blue-500/10 text-blue-500 rounded-lg hover:bg-blue-500/20">
@@ -530,6 +546,51 @@ export default function CandidatesPage() {
                 </div>
             </Card>
 
+            {/* Floating Bulk Action Bar */}
+            <AnimatePresence>
+                {selectedIds.length > 0 && (
+                    <motion.div
+                        initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 20 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-950/95 dark:bg-card/95 backdrop-blur-xl border border-slate-800 dark:border-border text-white dark:text-foreground px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-4 max-w-xl w-full mx-auto"
+                    >
+                        <span className="text-xs font-bold whitespace-nowrap">
+                            <span className="text-emerald-400 font-extrabold">{selectedIds.length}</span> candidates selected
+                        </span>
+                        <div className="h-4 w-px bg-slate-800 dark:bg-border" />
+                        <div className="flex items-center gap-2 flex-1 justify-end">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleBulkShortlist}
+                                className="h-9 rounded-xl text-xs font-bold border-slate-700 bg-slate-900 text-white hover:bg-slate-800 dark:border-border dark:bg-muted dark:text-foreground"
+                            >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-emerald-400" />
+                                Shortlist
+                            </Button>
+                            <Button
+                                size="sm"
+                                onClick={handleBulkOutreach}
+                                className="h-9 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-white"
+                            >
+                                <Mail className="w-3.5 h-3.5 mr-1.5" />
+                                Outreach
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setSelectedIds([])}
+                                className="h-9 text-xs text-slate-400 hover:text-white dark:text-muted-foreground dark:hover:text-foreground font-semibold"
+                            >
+                                Clear
+                            </Button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Local Resume Upload Modal */}
             <AnimatePresence>
                 {isUploadOpen && (
@@ -538,7 +599,7 @@ export default function CandidatesPage() {
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-card border border-border rounded-[2.5rem] p-8 max-w-lg w-full shadow-2xl space-y-6 relative"
+                            className="bg-card border border-border rounded-xl p-6 sm:p-8 max-w-lg w-full shadow-sm space-y-6 relative"
                         >
                             <div className="flex items-center justify-between border-b border-border pb-4">
                                 <div className="flex items-center gap-3">
@@ -614,7 +675,7 @@ export default function CandidatesPage() {
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-card border border-border rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl space-y-6 relative max-h-[90vh] overflow-y-auto"
+                            className="bg-card border border-border rounded-xl p-6 sm:p-8 max-w-2xl w-full shadow-sm space-y-6 relative max-h-[90vh] overflow-y-auto"
                         >
                             <div className="flex items-center justify-between border-b border-border pb-4">
                                 <div className="flex items-center gap-4">

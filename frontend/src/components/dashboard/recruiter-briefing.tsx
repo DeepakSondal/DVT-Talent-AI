@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import {
-    Sparkles, ShieldCheck, Database, CheckCircle2, ArrowRight,
+    Activity, ShieldCheck, Database, CheckCircle2, ArrowRight,
     Zap, AlertCircle, Users, DollarSign, Clock, RefreshCw, UserCheck, Bot
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -60,9 +60,9 @@ export function RecruiterBriefing() {
     ]);
 
     return (
-        <Card className="p-8 md:p-10 rounded-[2.5rem] bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border-border text-white shadow-2xl relative overflow-hidden">
+        <Card className="p-8 md:p-10 rounded-xl bg-slate-900 border-border text-white shadow-sm relative overflow-hidden">
             <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
-                <Sparkles className="w-80 h-80 text-blue-400" />
+                <Activity className="w-80 h-80 text-blue-400" />
             </div>
 
             <div className="relative z-10 space-y-8">

@@ -1,42 +1,31 @@
 import { test, expect, type Page } from '@playwright/test';
 
-test.describe('Leads Management E2E', () => {
+test.describe('Leads Legacy Route Redirection & Talent Pipeline E2E', () => {
     test.beforeEach(async ({ page }: { page: Page }) => {
-        // Authenticate
+        // Authenticate as Admin
         await page.goto('/auth/login');
         await page.fill('input[name="email"]', 'admin@dvt.com');
         await page.fill('input[name="password"]', 'admin123');
         await page.click('button[type="submit"]');
-        
-        // Navigate to Leads via Sidebar
-        await page.click('nav >> text=Leads');
-        await expect(page).toHaveURL(/.*\/leads/);
+        await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 15000 });
     });
 
-    test('should display the leads management table', async ({ page }: { page: Page }) => {
-        await expect(page.locator('h1:has-text("Lead Management")')).toBeVisible();
-        await expect(page.locator('text=AI Heat Score')).toBeVisible();
-        await expect(page.locator('text=Est. Value')).toBeVisible();
+    test('should seamlessly redirect /dashboard/leads to candidates talent network', async ({ page }: { page: Page }) => {
+        await page.goto('/dashboard/leads');
+        await expect(page).toHaveURL(/.*\/dashboard\/candidates/, { timeout: 15000 });
+        await expect(page.locator('h1')).toContainText('Candidate Talent Directory');
     });
 
-    test('should search and filter leads', async ({ page }: { page: Page }) => {
-        const searchInput = page.locator('input[placeholder="Search leads, status, or signals..."]');
-        await searchInput.fill('Qualified');
-        
-        // Wait for filtering to apply (via debouncing or re-render)
-        // Verify count decreases or content matches
-        await expect(page.locator('tbody tr')).toHaveCount(1); // Assuming our fallback data has 1 'Qualified' lead
+    test('should display active talent pool when redirected from leads', async ({ page }: { page: Page }) => {
+        await page.goto('/dashboard/leads');
+        await expect(page.locator('input[placeholder*="Search candidates"]')).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('text=Total Candidates')).toBeVisible();
     });
 
-    test('should switch status filters', async ({ page }: { page: Page }) => {
-        const filterBtn = page.locator('button:has-text("won")');
-        await filterBtn.click();
-        
-        // Verify the background color changes for active filter
-        await expect(filterBtn).toHaveClass(/text-white/);
-        
-        // Verify list only shows 'won' leads
-        await expect(page.locator('text=won')).toBeVisible();
-        await expect(page.locator('text=new')).not.toBeVisible();
+    test('should allow candidate search after redirection', async ({ page }: { page: Page }) => {
+        await page.goto('/dashboard/leads');
+        const searchInput = page.locator('input[placeholder*="Search candidates"]');
+        await searchInput.fill('Elena');
+        await expect(page.locator('text=Elena Rostova')).toBeVisible({ timeout: 10000 });
     });
 });

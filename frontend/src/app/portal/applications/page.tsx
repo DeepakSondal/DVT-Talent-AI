@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   CheckCircle2, Clock, Building2, MapPin,
-  Sparkles, Briefcase, AlertCircle, ChevronRight,
+  Compass, Briefcase, AlertCircle, ChevronRight,
   ExternalLink, RefreshCw
 } from "lucide-react";
 import { candidatePortalApi, type CandidateApplication } from "@/lib/api";
@@ -119,14 +119,14 @@ export default function CandidateApplicationsPage() {
                       Snapshot Match
                     </div>
                     <div className="text-base font-extrabold text-indigo-600 dark:text-indigo-400">
-                      {typeof app.match_score === "number" ? (app.match_score / 20).toFixed(1) : "—"}{" "}
+                      {typeof app.match_score === "number" ? (app.match_score / 20).toFixed(1) : "N/A"}{" "}
                       <span className="text-xs text-slate-400">/ 5.0</span>
                     </div>
                   </div>
 
                   <Link href={`/portal/interview-prep?jobId=${app.job_id}`}>
                     <Button variant="outline" size="sm" className="text-xs font-semibold text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/80 hover:bg-purple-50 dark:hover:bg-purple-950/40">
-                      <Sparkles className="w-3.5 h-3.5 mr-1" />
+                      <Compass className="w-3.5 h-3.5 mr-1" />
                       STAR Flashcards
                     </Button>
                   </Link>

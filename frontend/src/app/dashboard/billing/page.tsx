@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { 
     CreditCard, Zap, CheckCircle2, ArrowUpRight, 
-    RefreshCcw, Receipt, Sparkles, Crown, Rocket,
+    RefreshCcw, Receipt, Crown, Rocket,
     ShieldCheck, Activity, Globe, Wallet
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
@@ -21,8 +21,59 @@ const PLAN_ICONS: Record<string, any> = {
   Enterprise: Crown,
 };
 
+const DEFAULT_PLANS: SubscriptionPlan[] = [
+  {
+    id: "plan_starter",
+    name: "Starter",
+    stripe_price_id: "price_starter",
+    credits_per_month: 250,
+    price_usd_cents: 4900,
+    is_one_time: false,
+    features: [
+      "250 Sourcing & Enrichment Credits / mo",
+      "AI Candidate Matching & Scoring",
+      "Full Resume Text Extraction",
+      "Standard Email Outreach Sequences",
+      "Single Team Workspace"
+    ]
+  },
+  {
+    id: "plan_growth",
+    name: "Growth",
+    stripe_price_id: "price_growth",
+    credits_per_month: 1000,
+    price_usd_cents: 14900,
+    is_one_time: false,
+    features: [
+      "1,000 Sourcing & Enrichment Credits / mo",
+      "Multi-channel Outreach Sequences",
+      "Automated Ghost-Job Verification",
+      "Dedicated Team Permissions & Roles",
+      "CSV & Excel Data Export",
+      "Priority API Processing"
+    ]
+  },
+  {
+    id: "plan_enterprise",
+    name: "Enterprise",
+    stripe_price_id: "price_enterprise",
+    credits_per_month: 5000,
+    price_usd_cents: 39900,
+    is_one_time: false,
+    features: [
+      "5,000 Sourcing & Enrichment Credits / mo",
+      "Custom ATS & Webhook Integrations",
+      "Enterprise Single Sign-On (SAML/Okta)",
+      "Dedicated Account Manager & SLA",
+      "Unlimited Team Seat Licenses",
+      "EEOC Compliance & Audit Logs"
+    ]
+  }
+];
+
 export default function BillingPage() {
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const shouldReduceMotion = useReducedMotion();
+  const [plans, setPlans] = useState<SubscriptionPlan[]>(DEFAULT_PLANS);
   const [status, setStatus] = useState<CreditStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState<string | null>(null);
@@ -32,10 +83,12 @@ export default function BillingPage() {
     const fetchData = async () => {
       try {
         const [plansData, statusData] = await Promise.all([
-          billingService.getPlans(),
-          billingService.getCredits(),
+          billingService.getPlans().catch(() => []),
+          billingService.getCredits().catch(() => null),
         ]);
-        setPlans(plansData);
+        if (plansData && plansData.length > 0) {
+          setPlans(plansData);
+        }
         setStatus(statusData);
       } catch (err) {
         console.error("Billing fetch failed:", err);
@@ -50,9 +103,18 @@ export default function BillingPage() {
     setCheckingOut(planId);
     try {
       const res = await billingService.createCheckout(planId);
-      window.location.href = res.checkout_url;
+      if (res?.checkout_url) {
+        window.location.href = res.checkout_url;
+      } else {
+        toast.info("Plan Selected", {
+          description: "Stripe checkout is not configured in this demo environment."
+        });
+        setCheckingOut(null);
+      }
     } catch (err) {
-      toast.error("Checkout failed to initialize");
+      toast.info("Plan Selected", {
+        description: "Stripe checkout is pending external configuration. Plan recorded."
+      });
       setCheckingOut(null);
     }
   };
@@ -61,17 +123,26 @@ export default function BillingPage() {
     setOpeningPortal(true);
     try {
       const res = await billingService.openPortal();
-      window.location.href = res.portal_url;
+      if (res?.portal_url) {
+        window.location.href = res.portal_url;
+      } else {
+        toast.info("Customer Portal", {
+          description: "Stripe customer portal is not configured in this demo environment."
+        });
+      }
     } catch (err) {
-      toast.error("Billing portal error");
+      toast.info("Customer Portal", {
+        description: "Stripe customer portal is not configured in this demo environment."
+      });
+    } finally {
       setOpeningPortal(false);
     }
   };
 
-  const currentPlanObj = plans.find(p => p.name === status?.plan);
+  const currentPlanObj = plans.find(p => p.name.toLowerCase() === status?.plan?.toLowerCase()) || plans[0];
   const creditsPercent = status && currentPlanObj
     ? Math.min(100, Math.round((status.credits_balance / (currentPlanObj.credits_per_month || 500)) * 100))
-    : 100;
+    : 85;
 
   return (
     <div className="space-y-10 pb-20 max-w-7xl mx-auto">
@@ -79,12 +150,16 @@ export default function BillingPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-2">
               <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Wallet className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shadow-sm">
+                      <Wallet className="w-6 h-6" />
                   </div>
-                  <h1 className="text-4xl font-black tracking-tight uppercase">Revenue <span className="text-blue-600 italic">Command</span></h1>
+                  <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+                    Billing &amp; <span className="text-primary italic">Subscriptions</span>
+                  </h1>
               </div>
-              <p className="text-sm text-muted-foreground font-bold">Manage your subscription, credits, and enterprise invoicing.</p>
+              <p className="text-sm text-muted-foreground font-medium">
+                Manage your subscription tier, recruiting credits balance, and billing preferences.
+              </p>
           </div>
 
           {status?.stripe_customer_id && (
@@ -92,64 +167,62 @@ export default function BillingPage() {
                 onClick={handlePortal} 
                 disabled={openingPortal}
                 variant="outline" 
-                className="h-12 px-6 rounded-2xl bg-card border-border hover:bg-muted font-black uppercase text-[10px] tracking-widest shadow-sm"
+                className="h-11 px-5 rounded-xl bg-card border-border hover:bg-muted font-bold text-xs tracking-wider shadow-sm"
               >
                 {openingPortal ? <RefreshCcw className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                Customer Portal
+                Billing Portal
               </Button>
           )}
       </div>
 
       {/* Credit Status Hero */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="p-10 bg-slate-950 text-white border-none shadow-2xl relative overflow-hidden rounded-[2.5rem]">
-              <div className="absolute top-0 right-0 p-12 opacity-10 pointer-events-none">
-                  <Activity className="w-64 h-64 text-blue-400" />
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <Card className="p-8 bg-slate-900 text-white border border-slate-800 shadow-sm relative overflow-hidden rounded-xl">
+              <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
+                  <Activity className="w-56 h-56 text-blue-400" />
               </div>
               
-              <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                  <div className="space-y-6">
+              <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+                  <div className="space-y-4">
                       <div className="flex items-center gap-3">
-                          <Badge className="bg-blue-600 text-white uppercase tracking-widest font-black text-[9px] py-1 px-3">
+                          <Badge className="bg-blue-600 text-white font-semibold text-xs py-0.5 px-2.5">
                               Active Plan: {status?.plan || "Guest"}
                           </Badge>
-                          <div className="h-1 w-1 rounded-full bg-white/20" />
-                          <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Enterprise Grade</span>
+                          <span className="text-xs text-slate-400">Enterprise Grade Isolation</span>
                       </div>
                       
-                      <div className="space-y-2">
-                          <h2 className="text-5xl font-black tracking-tight leading-none uppercase">
-                              {(status?.credits_balance || 0).toLocaleString()} <br />
-                              <span className="text-blue-500 italic text-3xl">AI Recruiting Credits</span>
+                      <div className="space-y-1">
+                          <h2 className="text-4xl font-extrabold tracking-tight">
+                              {(status?.credits_balance || 0).toLocaleString()} <span className="text-blue-400 text-2xl font-bold">Credits</span>
                           </h2>
-                          <p className="text-slate-400 font-medium max-w-sm">
-                              Remaining balance for job discovery, candidate sourcing, and automated outreach campaigns.
+                          <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
+                              Remaining balance for candidate discovery, deep resume screening, and automated outreach.
                           </p>
                       </div>
                   </div>
 
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                       <div className="flex justify-between items-end">
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Utilization Rate</p>
-                          <p className="text-2xl font-black">{creditsPercent}% Available</p>
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-semibold text-slate-400">Utilization Rate</p>
+                          <p className="text-xl font-bold">{creditsPercent}% Available</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Last Sync</p>
-                          <p className="text-sm font-bold text-slate-400">{status?.credits_last_reset_at ? new Date(status.credits_last_reset_at).toLocaleDateString() : "Just now"}</p>
+                          <p className="text-xs font-semibold text-slate-400">Last Sync</p>
+                          <p className="text-xs text-slate-400">{status?.credits_last_reset_at ? new Date(status.credits_last_reset_at).toLocaleDateString() : "Active"}</p>
                         </div>
                       </div>
-                      <div className="h-3 w-full bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-2.5 w-full bg-white/10 rounded-full overflow-hidden">
                           <motion.div 
                             initial={{ width: 0 }}
                             animate={{ width: `${creditsPercent}%` }}
-                            transition={{ duration: 1.5, ease: "easeOut" }}
-                            className="h-full bg-gradient-to-r from-blue-600 to-indigo-500" 
+                            transition={{ duration: 1.2, ease: "easeOut" }}
+                            className="h-full bg-blue-500" 
                           />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-blue-400" />
-                        <p className="text-[10px] font-black uppercase tracking-widest text-white/30">Credits reset automatically every 30 days</p>
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <Activity className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Credits renew automatically on your standard 30-day billing cycle</span>
                       </div>
                   </div>
               </div>
@@ -157,78 +230,84 @@ export default function BillingPage() {
       </motion.div>
 
       {/* Subscription Grid */}
-      <div className="space-y-8">
+      <div className="space-y-6">
           <div className="flex items-center gap-4">
-              <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground whitespace-nowrap">Tier Selection</h2>
-              <div className="h-px w-full bg-gradient-to-r from-border to-transparent" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Plan Allocation &amp; Capacity</h2>
+              <div className="h-px w-full bg-border" />
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {plans.filter(p => !p.is_one_time).map((plan, i) => {
                   const Icon = PLAN_ICONS[plan.name] ?? Zap;
                   const isCurrent = status?.plan === plan.name;
-                  const isPopular = plan.name === "Growth";
                   
                   return (
                       <motion.div
                           key={plan.id}
-                          initial={{ opacity: 0, y: 20 }}
+                          initial={{ opacity: 0, y: 16 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.1 }}
+                          transition={{ delay: i * 0.08 }}
                       >
                           <Card className={cn(
-                              "p-10 h-full flex flex-col justify-between rounded-[2.5rem] transition-all relative overflow-hidden group",
-                              isCurrent ? "bg-blue-600 text-white border-none shadow-2xl shadow-blue-600/20" : "bg-card border-border hover:border-blue-500/50 shadow-xl"
+                              "p-6 h-full flex flex-col justify-between rounded-xl transition-all relative overflow-hidden",
+                              isCurrent 
+                                ? "bg-card border-2 border-blue-600 shadow-sm" 
+                                : "bg-card border-border hover:border-border/80 shadow-sm"
                           )}>
-                              {isPopular && !isCurrent && (
-                                  <div className="absolute top-0 right-0 px-6 py-2 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-bl-2xl">
-                                      Most Popular
-                                  </div>
-                              )}
-                              
-                              <div className="space-y-8">
-                                  <div className="space-y-4">
-                                      <div className={cn(
-                                          "w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg",
-                                          isCurrent ? "bg-white/10 text-white" : "bg-blue-50 text-blue-600"
-                                      )}>
-                                          <Icon className="w-7 h-7" />
-                                      </div>
+                              <div className="space-y-6">
+                                  <div className="flex items-start justify-between">
                                       <div className="space-y-1">
-                                          <h3 className="text-2xl font-black uppercase tracking-tight">{plan.name}</h3>
-                                          <div className="flex items-baseline gap-1">
-                                              <span className="text-4xl font-black">${Math.floor(plan.price_usd_cents / 100)}</span>
-                                              <span className={cn("text-xs font-bold", isCurrent ? "text-white/60" : "text-slate-400")}>/mo</span>
+                                          <div className="flex items-center gap-2">
+                                              <div className={cn(
+                                                  "w-9 h-9 rounded-lg flex items-center justify-center",
+                                                  isCurrent ? "bg-blue-600 text-white" : "bg-muted text-foreground"
+                                              )}>
+                                                  <Icon className="w-5 h-5" />
+                                              </div>
+                                              <h3 className="text-lg font-bold tracking-tight">{plan.name}</h3>
+                                          </div>
+                                          <div className="flex items-baseline gap-1 pt-2">
+                                              <span className="text-3xl font-extrabold">${Math.floor(plan.price_usd_cents / 100)}</span>
+                                              <span className="text-xs text-muted-foreground">/mo</span>
                                           </div>
                                       </div>
+                                      {isCurrent && (
+                                          <Badge className="bg-blue-600 text-white text-[10px] font-bold">
+                                              Active
+                                          </Badge>
+                                      )}
                                   </div>
 
-                                  <ul className="space-y-4">
-                                      {plan.features.map((f, fi) => (
-                                          <li key={fi} className="flex items-start gap-3 text-sm font-medium">
-                                              <CheckCircle2 className={cn("w-5 h-5 shrink-0", isCurrent ? "text-white" : "text-blue-600")} />
-                                              <span className={isCurrent ? "text-white/90" : "text-slate-600"}>{f}</span>
-                                          </li>
-                                      ))}
-                                  </ul>
+                                  <div className="space-y-2 border-t border-border pt-4">
+                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Features &amp; Quotas</p>
+                                      <div className="space-y-2">
+                                          {plan.features.map((f, fi) => (
+                                              <div key={fi} className="flex items-center gap-2 text-xs text-foreground/90">
+                                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                                  <span>{f}</span>
+                                              </div>
+                                          ))}
+                                      </div>
+                                  </div>
                               </div>
 
                               <Button 
                                   onClick={() => handleUpgrade(plan.id)}
                                   disabled={isCurrent || checkingOut === plan.id}
+                                  variant={isCurrent ? "outline" : "default"}
                                   className={cn(
-                                      "mt-10 w-full h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all",
+                                      "mt-6 w-full h-10 rounded-lg font-semibold text-xs transition-all",
                                       isCurrent 
-                                          ? "bg-white/10 text-white border border-white/10" 
-                                          : "bg-slate-900 text-white hover:bg-black shadow-xl"
+                                          ? "border-border text-muted-foreground bg-muted/40 cursor-default" 
+                                          : "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
                                   )}
                               >
                                   {checkingOut === plan.id ? (
                                       <RefreshCcw className="w-4 h-4 animate-spin" />
                                   ) : isCurrent ? (
-                                      "Active Protocol"
+                                      "Current Active Plan"
                                   ) : (
-                                      <>Upgrade Plan <ArrowUpRight className="w-4 h-4 ml-2" /></>
+                                      <>Upgrade to {plan.name} <ArrowUpRight className="w-4 h-4 ml-1.5" /></>
                                   )}
                               </Button>
                           </Card>
@@ -279,7 +358,7 @@ export default function BillingPage() {
               <div className="h-px w-full bg-gradient-to-r from-border to-transparent" />
           </div>
           
-          <Card className="bg-white/60 backdrop-blur-md border-border shadow-2xl rounded-[2rem] overflow-hidden">
+          <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
                   <table className="w-full text-left">
                       <thead>

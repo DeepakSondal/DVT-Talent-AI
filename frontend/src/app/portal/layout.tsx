@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Briefcase, Target, FileText, CheckCircle2,
-  Sparkles, Shield, LogOut, Search, User,
+  Compass, Shield, LogOut, Search, User,
   Award, ArrowUpRight, Zap, Menu, X, Sun, Moon
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -74,7 +74,7 @@ export default function CandidatePortalLayout({
     { label: "Dashboard", href: "/portal", icon: Target },
     { label: "Job Matches", href: "/portal/jobs", icon: Briefcase },
     { label: "Applications", href: "/portal/applications", icon: CheckCircle2 },
-    { label: "STAR Interview Prep", href: "/portal/interview-prep", icon: Sparkles },
+    { label: "STAR Interview Prep", href: "/portal/interview-prep", icon: Compass },
     { label: "Profile & Privacy", href: "/portal/profile", icon: Shield },
   ];
 
@@ -93,12 +93,12 @@ export default function CandidatePortalLayout({
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">Career-Ops</span>
+                  <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">DVT Talent AI</span>
                   <Badge variant="outline" className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/50 dark:bg-indigo-950/50 py-0 px-1.5">
-                    Talent Network
+                    Candidate Portal
                   </Badge>
                 </div>
-                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Zero-Fabrication Career Suite</span>
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Career &amp; Opportunity Network</span>
               </div>
             </Link>
 
@@ -218,9 +218,9 @@ export default function CandidatePortalLayout({
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p>© 2026 Career-Ops &bull; Built on the DVT Talent Zero-Fabrication Candidate Architecture</p>
           <div className="flex gap-4">
-            <Link href="/portal/profile" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Privacy &amp; Stealth</Link>
-            <Link href="/portal/interview-prep" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">STAR Prep</Link>
-            <Link href="/dashboard" className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">Recruiter Workspace →</Link>
+            <Link href="/privacy" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Terms of Service</Link>
+            <Link href="/dashboard" className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">Recruiter Workspace &rarr;</Link>
           </div>
         </div>
       </footer>

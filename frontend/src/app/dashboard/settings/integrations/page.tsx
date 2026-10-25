@@ -37,9 +37,9 @@ interface ExportLog {
   created_at: string;
 }
 
-const PROVIDERS: { id: Provider; name: string; logo: string; color: string }[] = [
-  { id: "greenhouse", name: "Greenhouse", logo: "🌿", color: "emerald" },
-  { id: "ceipal", name: "Ceipal", logo: "⚡", color: "blue" },
+const PROVIDERS: { id: Provider; name: string; tag: string; color: string }[] = [
+  { id: "greenhouse", name: "Greenhouse", tag: "GH", color: "emerald" },
+  { id: "ceipal", name: "Ceipal", tag: "CP", color: "blue" },
 ];
 
 function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
@@ -130,14 +130,16 @@ function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
         status?.connected ? colorClass : "border-muted bg-muted/30"
       )}>
         <div className="flex items-center gap-3">
-          <span className="text-2xl">{provider.logo}</span>
+          <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-xs text-primary">
+            {provider.tag}
+          </div>
           <div>
             <p className="font-semibold text-foreground">{provider.name}</p>
             <p className="text-xs text-muted-foreground">
               {status?.connected
                 ? status.last_sync_at
                   ? `Last synced ${new Date(status.last_sync_at).toLocaleString()}`
-                  : "Connected — never synced"
+                  : "Connected (never synced)"
                 : "Not connected"}
             </p>
           </div>
@@ -252,8 +254,8 @@ function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
           </div>
 
           {jobs.length === 0 ? (
-            <div className="text-center py-8 text-sm text-muted-foreground border border-dashed border-border rounded-2xl">
-              No jobs synced yet — click "Sync Now" to pull jobs from {provider.name}.
+            <div className="text-center py-8 text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+              No jobs synced yet. Select &quot;Sync Now&quot; to pull jobs from {provider.name}.
             </div>
           ) : (
             <div className="space-y-2">

@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { 
   ShieldCheck, AlertTriangle, ArrowRight, Lock, User, 
   Building2, CheckCircle2, Eye, EyeOff, Loader2 
@@ -13,11 +13,16 @@ import { toast } from "sonner";
 import { teamService, type ValidateInvitationResponse } from "@/services/team.service";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { cn } from "@/lib/utils";
+
+const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
 
 function AcceptInvitationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const hasInitializedRef = useRef(false);
+  const shouldReduceMotion = useReducedMotion();
 
   // Token is stored strictly in memory state, NEVER in localStorage or sessionStorage
   const [token, setToken] = useState<string | null>(null);
@@ -32,6 +37,8 @@ function AcceptInvitationContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  const transitionConfig = shouldReduceMotion ? { duration: 0 } : springPreset;
 
   useEffect(() => {
     if (hasInitializedRef.current) return;
@@ -81,23 +88,17 @@ function AcceptInvitationContent() {
     }
 
     if (!fullName.trim()) {
-      toast.error("Validation Error", {
-        description: "Please enter your full name.",
-      });
+      toast.error("Please enter your full name.");
       return;
     }
 
     if (password.length < 8) {
-      toast.error("Password Too Short", {
-        description: "Password must be at least 8 characters long.",
-      });
+      toast.error("Password must be at least 8 characters long.");
       return;
     }
 
     if (password !== confirmPassword) {
-      toast.error("Password Mismatch", {
-        description: "Passwords do not match. Please re-enter.",
-      });
+      toast.error("Passwords do not match. Please re-enter.");
       return;
     }
 
@@ -139,21 +140,18 @@ function AcceptInvitationContent() {
   // 1. Loading State
   if (isValidating) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-6 text-slate-900">
-        <head>
-          <meta name="referrer" content="no-referrer" />
-          <meta httpEquiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
-        </head>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-foreground">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white border border-slate-200 shadow-xl rounded-2xl p-8 max-w-[420px] w-full text-center space-y-4"
+          transition={transitionConfig}
+          className="bg-card border border-border shadow-xl rounded-3xl p-8 max-w-[420px] w-full text-center space-y-4"
         >
-          <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto">
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto">
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
-          <h2 className="text-lg font-bold">Verifying Team Invitation</h2>
-          <p className="text-xs text-slate-500">Checking invitation security credentials and tenant permissions...</p>
+          <h2 className="text-lg font-bold text-foreground">Verifying Team Invitation</h2>
+          <p className="text-xs text-muted-foreground">Checking invitation security credentials and tenant permissions...</p>
         </motion.div>
       </div>
     );
@@ -162,30 +160,31 @@ function AcceptInvitationContent() {
   // 2. Error / Invalid Token State
   if (validationError || !invitationData) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-6 text-slate-900">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-foreground">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white border border-rose-200 shadow-xl rounded-2xl p-8 max-w-[460px] w-full text-center space-y-6"
+          transition={transitionConfig}
+          className="bg-card border border-destructive/20 shadow-xl rounded-3xl p-8 max-w-[460px] w-full text-center space-y-6"
         >
-          <div className="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive flex items-center justify-center mx-auto">
             <AlertTriangle className="w-7 h-7" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-xl font-bold text-slate-900">Invitation Unavailable</h1>
-            <p className="text-sm text-slate-600 leading-relaxed">
+            <h1 className="text-xl font-bold text-foreground">Invitation Unavailable</h1>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               {validationError || "This invitation link is invalid or no longer active."}
             </p>
           </div>
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-500 text-left space-y-1">
-            <p className="font-semibold text-slate-700">What happened?</p>
-            <p>• Invitations expire 48 hours after being sent.</p>
-            <p>• Single-use tokens cannot be re-used after account creation.</p>
-            <p>• Administrators can revoke an invitation at any time.</p>
+          <div className="bg-muted/40 border border-border rounded-2xl p-4 text-xs text-muted-foreground text-left space-y-1.5">
+            <p className="font-semibold text-foreground">What happened?</p>
+            <p>&bull; Invitations expire 48 hours after being sent.</p>
+            <p>&bull; Single-use tokens cannot be re-used after account creation.</p>
+            <p>&bull; Workspace managers can revoke an invitation at any time.</p>
           </div>
           <div className="pt-2">
             <Link href="/auth/login">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full h-11 rounded-xl text-xs font-semibold">
                 Return to Sign In
               </Button>
             </Link>
@@ -198,22 +197,23 @@ function AcceptInvitationContent() {
   // 3. Success State
   if (isSuccess) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-6 text-slate-900">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-foreground">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white border border-emerald-200 shadow-2xl rounded-2xl p-10 max-w-[440px] w-full text-center space-y-6"
+          transition={transitionConfig}
+          className="bg-card border border-emerald-500/30 shadow-md rounded-xl p-10 max-w-[440px] w-full text-center space-y-6"
         >
-          <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-9 h-9" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-slate-900">Welcome to the Team!</h1>
-            <p className="text-sm text-slate-600">
-              Your account has been created for <strong className="text-slate-800">{invitationData.tenant_name}</strong>.
+            <h1 className="text-2xl font-bold text-foreground">Welcome to the Team!</h1>
+            <p className="text-sm text-muted-foreground">
+              Your account has been created for <strong className="text-foreground">{invitationData.tenant_name}</strong>.
             </p>
           </div>
-          <div className="flex items-center justify-center gap-2 text-xs text-indigo-600 font-semibold">
+          <div className="flex items-center justify-center gap-2 text-xs text-primary font-semibold">
             <Loader2 className="w-4 h-4 animate-spin" /> Redirecting to your dashboard...
           </div>
         </motion.div>
@@ -223,45 +223,46 @@ function AcceptInvitationContent() {
 
   // 4. Active Acceptance Form
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans text-slate-900">
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-100/50 rounded-full blur-[120px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-emerald-100/40 rounded-full blur-[120px]" />
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans text-foreground">
+      <div className="absolute top-6 right-6 z-20">
+        <ThemeToggle />
+      </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
+        transition={transitionConfig}
         className="w-full max-w-[480px] relative z-10"
       >
-        <Card className="bg-white border-slate-200 shadow-2xl p-8 md:p-10 space-y-6 rounded-2xl">
+        <Card className="bg-card border-border shadow-md p-6 sm:p-10 space-y-6 rounded-xl">
           {/* Header */}
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto font-bold text-lg">
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto font-bold text-lg">
               D
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Accept Team Invitation</h1>
-            <p className="text-xs text-slate-500">
-              You have been invited to join <strong className="text-slate-700">{invitationData.tenant_name}</strong> as a{" "}
-              <span className="font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Accept Team Invitation</h1>
+            <p className="text-xs text-muted-foreground">
+              You have been invited to join <strong className="text-foreground">{invitationData.tenant_name}</strong> as a{" "}
+              <span className="font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-md">
                 {invitationData.role}
               </span>
             </p>
           </div>
 
           {/* Invitation Badge */}
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3 text-xs text-slate-600">
-            <Building2 className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+          <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center gap-3 text-xs text-foreground">
+            <Building2 className="w-4 h-4 text-primary flex-shrink-0" />
             <div className="truncate">
-              <span className="text-slate-400">Account: </span>
-              <span className="font-medium text-slate-800">{invitationData.email}</span>
+              <span className="text-muted-foreground">Invited Email: </span>
+              <span className="font-medium text-foreground">{invitationData.email}</span>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Full Name */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-slate-400" /> Full Name
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5" htmlFor="fullName">
+                <User className="w-3.5 h-3.5 text-muted-foreground" /> Full Name
               </label>
               <input
                 id="fullName"
@@ -270,15 +271,15 @@ function AcceptInvitationContent() {
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="e.g. Jane Doe"
-                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-slate-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-900"
+                placeholder="Jane Doe"
+                className="w-full h-11 px-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
               />
             </div>
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-slate-400" /> Choose Password
+              <label htmlFor="password" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-muted-foreground" /> Create Password
               </label>
               <div className="relative">
                 <input
@@ -289,12 +290,13 @@ function AcceptInvitationContent() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Minimum 8 characters"
-                  className="w-full h-11 px-3.5 pr-10 rounded-xl border border-slate-200 bg-slate-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-900"
+                  className="w-full h-11 px-3.5 pr-10 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -303,8 +305,8 @@ function AcceptInvitationContent() {
 
             {/* Confirm Password */}
             <div className="space-y-1.5">
-              <label htmlFor="confirmPassword" className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-slate-400" /> Confirm Password
+              <label htmlFor="confirmPassword" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-muted-foreground" /> Confirm Password
               </label>
               <input
                 id="confirmPassword"
@@ -314,21 +316,22 @@ function AcceptInvitationContent() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter your password"
-                className={`w-full h-11 px-3.5 rounded-xl border bg-slate-50/50 text-sm focus:outline-none focus:ring-2 transition-all text-slate-900 ${
+                className={cn(
+                  "w-full h-11 px-3.5 rounded-xl border bg-muted/40 text-sm text-foreground focus:outline-none transition-colors",
                   confirmPassword && confirmPassword !== password
-                    ? "border-rose-300 focus:ring-rose-500/20 focus:border-rose-500"
-                    : "border-slate-200 focus:ring-indigo-500/20 focus:border-indigo-500"
-                }`}
+                    ? "border-destructive text-destructive focus:border-destructive"
+                    : "border-border focus:border-primary focus:bg-background"
+                )}
               />
               {confirmPassword && confirmPassword !== password && (
-                <p className="text-[11px] text-rose-500 font-medium">Passwords do not match</p>
+                <p className="text-[11px] text-destructive font-medium">Passwords do not match</p>
               )}
             </div>
 
             <Button
               type="submit"
               disabled={isSubmitting || password.length < 8 || password !== confirmPassword}
-              className="w-full h-12 mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
+              className="w-full h-11 mt-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-xs transition-all shadow-md shadow-primary/20 disabled:opacity-50"
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">
@@ -336,15 +339,15 @@ function AcceptInvitationContent() {
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
-                  Join Team <ArrowRight className="w-4 h-4" />
+                  Join Team Workspace <ArrowRight className="w-4 h-4" />
                 </span>
               )}
             </Button>
           </form>
 
-          <div className="pt-2 text-center text-xs text-slate-400">
+          <div className="pt-2 text-center text-xs text-muted-foreground">
             Already have an active account?{" "}
-            <Link href="/auth/login" className="text-indigo-600 font-medium hover:underline">
+            <Link href="/auth/login" className="text-primary font-medium hover:underline">
               Sign In
             </Link>
           </div>
@@ -358,8 +361,8 @@ export default function AcceptInvitationPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
       }
     >

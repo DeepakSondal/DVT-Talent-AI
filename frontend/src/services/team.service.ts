@@ -40,5 +40,9 @@ export const teamService = {
 
   acceptInvitation: (data: AcceptInvitationPayload): Promise<AcceptInvitationResponse> =>
     http.post("/team/invite/accept", data).then((r) => r.data),
+
+  inviteMember: (data: { email: string; role?: string; team_id?: string }): Promise<any> =>
+    http.post("/team/invite", data).then((r) => r.data),
 };
+
 

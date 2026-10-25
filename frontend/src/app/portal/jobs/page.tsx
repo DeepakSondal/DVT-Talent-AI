@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Search, Briefcase, Building2, MapPin, DollarSign,
   CheckCircle2, AlertTriangle, Shield, Check,
-  Sparkles, FileText, ChevronRight, X, ArrowRight,
+  Compass, FileText, ChevronRight, X, ArrowRight,
   Loader2, RefreshCw
 } from "lucide-react";
 import {
@@ -258,7 +258,7 @@ export default function CandidateJobsPage() {
                       href={`/portal/interview-prep?jobId=${job.id}`}
                       className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1"
                     >
-                      <Sparkles className="w-3 h-3" />
+                      <Compass className="w-3 h-3" />
                       STAR
                     </Link>
                   </div>
@@ -295,7 +295,7 @@ export default function CandidateJobsPage() {
       {/* 5-Dimension Audit Modal */}
       {selectedJobForModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
+          <div className="bg-card rounded-xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-sm border border-border text-foreground">
             <div className="flex items-start justify-between">
               <div>
                 <Badge variant="outline" className="text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/50 font-bold text-[10px] mb-1">
@@ -399,7 +399,7 @@ export default function CandidateJobsPage() {
             <div className="flex items-center justify-between pt-4 border-t border-slate-200">
               <Link href={`/portal/interview-prep?jobId=${selectedJobForModal.id}`}>
                 <Button variant="outline" size="sm" className="text-xs font-semibold">
-                  <Sparkles className="w-3.5 h-3.5 mr-1 text-purple-600" />
+                  <Compass className="w-3.5 h-3.5 mr-1 text-blue-600" />
                   Prep STAR Questions
                 </Button>
               </Link>
@@ -426,7 +426,7 @@ export default function CandidateJobsPage() {
       {/* ATS CV Tailoring Modal */}
       {tailorModalJob && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
+          <div className="bg-card rounded-xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-sm border border-border text-foreground">
             <div className="flex items-start justify-between">
               <div>
                 <Badge variant="outline" className="text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 font-bold text-[10px] mb-1">

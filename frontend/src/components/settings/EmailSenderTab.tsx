@@ -171,7 +171,7 @@ export function EmailSenderSettings() {
             <div>
               <p className="text-sm font-semibold text-foreground">Why set up your own sender?</p>
               <ul className="text-xs text-muted-foreground mt-1.5 space-y-1">
-                <li>• Candidates see <strong>your name</strong> in their inbox — not a generic AI platform</li>
+                <li>• Candidates receive messages directly from <strong>your verified domain</strong> to maximize trust</li>
                 <li>• Emails sent from your domain avoid spam filters</li>
                 <li>• Replies land in <strong>your</strong> inbox for direct follow-up</li>
                 <li>• Works with Gmail App Passwords, Outlook, or any SMTP provider</li>

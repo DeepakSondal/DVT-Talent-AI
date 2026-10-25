@@ -25,7 +25,7 @@ outreach_agent = Agent(
     get_pydantic_model(),
     retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
-    output_type=OutreachSynthesis,
+    result_type=OutreachSynthesis,
     system_prompt=(
         "You are an Elite Outreach Agent for DVT Talent AI. "
         "Your goal is to draft hyper-personalized outreach sequences that don't sound like AI. "

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { BarChart3, Briefcase, Sparkles } from "lucide-react";
+import { BarChart3, Briefcase, Activity } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 
 interface MarketIQPanelProps {
@@ -30,7 +30,7 @@ export function MarketIQPanel({ marketIq }: MarketIQPanelProps) {
         <ul className="space-y-1.5">
           {insights.slice(0, 4).map((insight: string, i: number) => (
             <li key={i} className="flex items-start gap-2 text-xs text-indigo-800 dark:text-indigo-300">
-              <Sparkles className="w-3 h-3 mt-0.5 shrink-0 text-indigo-500" />
+              <Activity className="w-3 h-3 mt-0.5 shrink-0 text-indigo-500" />
               {insight}
             </li>
           ))}

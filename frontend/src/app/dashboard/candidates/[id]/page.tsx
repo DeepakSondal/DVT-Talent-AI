@@ -12,25 +12,33 @@ import {
   Download, Upload, Eye, X, Copy, Check,
   Building, BookOpen, Clock
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import Link from "next/link";
+import { useRouter, useParams } from "next/navigation";
 import { candidatesApi, agentsApi, Candidate } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Skeleton, CardSkeleton } from "@/components/ui/Skeleton";
 import { IntelligenceSignals } from "@/components/candidates/intelligence-signals";
 import { IntegrityGuard } from "@/components/shared/integrity-guard";
 import { cn } from "@/lib/utils";
-import { useParams } from "next/navigation";
 import { toast } from "sonner";
 
 export default function CandidateDetailPage() {
   const { id } = useParams();
+  const router = useRouter();
+  const shouldReduceMotion = useReducedMotion();
   const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [candidateStatus, setCandidateStatus] = useState<string>("sourced");
   const [resumeDetails, setResumeDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleNotes, setScheduleNotes] = useState("");
   const [copied, setCopied] = useState(false);
   const [uploadingResume, setUploadingResume] = useState(false);
 
@@ -40,20 +48,53 @@ export default function CandidateDetailPage() {
     try {
       setBusy(true);
       await agentsApi.trigger("candidate_sourcing", { id: id as string });
-      toast.success("Re-Enrichment Started", { description: "AI Swarm is analyzing candidate DNA." });
+      toast.success("Profile Refresh Started", { 
+        description: "Checking updated skills and work credentials from public profiles." 
+      });
     } catch (err) {
-      toast.error("Failed to trigger enrichment.");
+      toast.error("Failed to trigger profile refresh.");
     } finally {
       setBusy(false);
     }
   };
 
-  const handleEngage = async () => {
-    toast.info("Preparing Outreach Sequence", { description: "Drafting personalized message using AI Signal engine." });
+  const handleStatusChange = async (newStatus: string) => {
+    if (!id) return;
+    const previousStatus = candidateStatus;
+    setCandidateStatus(newStatus);
+    try {
+      await candidatesApi.updateStatus(id as string, newStatus);
+      toast.success(`Candidate status changed to ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`);
+      setCandidate(prev => prev ? { ...prev, status: newStatus as any } : prev);
+    } catch (err: any) {
+      setCandidateStatus(previousStatus);
+      toast.error("Failed to update candidate status", {
+        description: err.response?.data?.detail || "Please try again or check permissions."
+      });
+    }
   };
 
-  const handleAction = (type: string) => {
-    toast.success(`${type} Scheduled`, { description: "Agent has updated candidate calendar." });
+  const handleEngage = () => {
+    if (!candidate) return;
+    router.push(`/dashboard/outreach?candidate_id=${candidate.id}&email=${encodeURIComponent(candidate.email || "")}`);
+  };
+
+  const handleConfirmSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleDate) {
+      toast.error("Please choose an interview date");
+      return;
+    }
+    try {
+      await handleStatusChange("interviewed");
+      toast.success("Interview Scheduled Successfully", {
+        description: `Confirmed for ${scheduleDate} ${scheduleTime ? `at ${scheduleTime}` : ""}. Status moved to Interviewed.`
+      });
+      setIsScheduleOpen(false);
+      setScheduleNotes("");
+    } catch (err) {
+      toast.error("Failed to record scheduled interview");
+    }
   };
 
   const handleDownloadResume = async () => {
@@ -123,6 +164,9 @@ export default function CandidateDetailPage() {
       ])
         .then(([candData, resumeData]) => {
           setCandidate(candData);
+          if (candData?.status) {
+            setCandidateStatus(candData.status.toLowerCase());
+          }
           setResumeDetails(resumeData);
         })
         .finally(() => setLoading(false));
@@ -130,9 +174,21 @@ export default function CandidateDetailPage() {
   }, [id]);
 
   if (loading) return (
-    <div className="h-[60vh] flex flex-col items-center justify-center space-y-3">
-      <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Loading Profile...</p>
+    <div className="space-y-8 pb-20 max-w-6xl mx-auto pt-6">
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-9 w-28 rounded-lg" />
+      </div>
+      <CardSkeleton />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+        <div>
+          <CardSkeleton />
+        </div>
+      </div>
     </div>
   );
 
@@ -151,7 +207,7 @@ export default function CandidateDetailPage() {
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 15 }}
+      initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-10 pb-20 max-w-6xl mx-auto"
     >
@@ -161,10 +217,26 @@ export default function CandidateDetailPage() {
           href="/dashboard/candidates" 
           className="group inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
         >
-           <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+           <ChevronLeft className="w-4 h-4" />
            <span>Back to Candidate Pipeline</span>
         </Link>
         <div className="flex flex-wrap items-center gap-3">
+           {/* Candidate Status Selector */}
+           <div className="flex items-center gap-2 bg-card border border-border px-3 py-1.5 rounded-xl shadow-sm">
+             <span className="text-[11px] font-bold text-muted-foreground uppercase">Status:</span>
+             <select
+               value={candidateStatus}
+               onChange={(e) => handleStatusChange(e.target.value)}
+               className="bg-transparent text-xs font-bold text-foreground capitalize outline-none cursor-pointer"
+             >
+               <option value="sourced" className="bg-card text-foreground">Sourced</option>
+               <option value="shortlisted" className="bg-card text-foreground">Shortlisted</option>
+               <option value="contacted" className="bg-card text-foreground">Contacted</option>
+               <option value="interviewed" className="bg-card text-foreground">Interviewed</option>
+               <option value="hired" className="bg-card text-foreground">Hired</option>
+             </select>
+           </div>
+
            <Button 
             variant="outline" 
             className="h-11 rounded-xl border-border text-foreground hover:bg-muted gap-2 font-bold text-xs"
@@ -173,7 +245,7 @@ export default function CandidateDetailPage() {
             isLoading={busy}
            >
               <RefreshCw className="w-4 h-4 transition-transform group-hover:rotate-180 duration-500" />
-              Re-Enrich Candidate
+              Refresh Profile
            </Button>
 
            {hasResume && (
@@ -310,7 +382,7 @@ export default function CandidateDetailPage() {
             {/* AI Summary Card */}
             <Card className="p-8 bg-card border-border shadow-sm rounded-3xl space-y-6 relative overflow-hidden">
                <div className="flex items-center gap-2.5 pb-2 border-b border-border/60">
-                  <Sparkles className="w-4 h-4 text-primary" />
+                  <Zap className="w-4 h-4 text-primary" />
                   <h2 className="text-xs font-black uppercase tracking-wider text-foreground">
                     AI Sourcing & Screening Analysis
                   </h2>
@@ -385,13 +457,13 @@ export default function CandidateDetailPage() {
                       { 
                         title: candidate.title || "Senior Distributed Systems Engineer", 
                         company: candidate.current_company || "Current Tech Organization", 
-                        period: "2021 — PRESENT", 
+                        period: "2021 - PRESENT", 
                         desc: "Spearheading high-throughput data infrastructure. Built low-latency RPC pipelines and microservices architecture." 
                       },
                       { 
                         title: "Software Engineer", 
                         company: "Previous Tech Enterprise", 
-                        period: "2018 — 2021", 
+                        period: "2018 - 2021", 
                         desc: "Engineered scalable cloud services, optimized CI/CD automated pipelines, and led team architecture reviews." 
                       },
                     ].map((exp, i) => (
@@ -539,23 +611,115 @@ export default function CandidateDetailPage() {
                   <Button 
                     variant="outline" 
                     className="h-16 rounded-2xl flex-col gap-1 items-start px-4 border-border hover:bg-muted group text-foreground font-bold"
-                    onClick={() => handleAction("Interview")}
+                    onClick={() => setIsScheduleOpen(true)}
                   >
                      <Calendar className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
-                     <span className="text-xs">Schedule</span>
+                     <span className="text-xs">Schedule Interview</span>
                   </Button>
                   <Button 
                     variant="outline" 
                     className="h-16 rounded-2xl flex-col gap-1 items-start px-4 border-border hover:bg-muted group text-foreground font-bold"
-                    onClick={() => handleAction("Message")}
+                    onClick={handleEngage}
                   >
                      <MessageSquare className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
-                     <span className="text-xs">Message</span>
+                     <span className="text-xs">Send Message</span>
                   </Button>
                </div>
             </Card>
          </div>
       </div>
+
+      {/* Schedule Interview Modal */}
+      <AnimatePresence>
+        {isScheduleOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+            <motion.div
+              initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-card border border-border rounded-xl p-6 sm:p-8 max-w-lg w-full shadow-sm space-y-6 relative"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-primary/10 text-primary rounded-2xl">
+                    <Calendar className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Schedule Interview</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Interview with {candidate?.first_name} {candidate?.last_name}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsScheduleOpen(false)} 
+                  className="p-2 text-muted-foreground hover:text-foreground rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmSchedule} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Interview Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Time (Optional)
+                  </label>
+                  <input
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Preparation & Agenda Notes
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Technical deep dive on distributed architecture & system scalability..."
+                    value={scheduleNotes}
+                    onChange={(e) => setScheduleNotes(e.target.value)}
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-border">
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    onClick={() => setIsScheduleOpen(false)}
+                    className="font-bold text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    variant="primary"
+                    className="font-bold text-xs px-6 rounded-xl"
+                  >
+                    Confirm & Update Status
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Full Extracted Resume Text Modal */}
       <AnimatePresence>
@@ -565,7 +729,7 @@ export default function CandidateDetailPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-card border border-border rounded-[2.5rem] p-8 max-w-4xl w-full shadow-2xl space-y-6 relative max-h-[90vh] flex flex-col"
+              className="bg-card border border-border rounded-xl p-6 sm:p-8 max-w-4xl w-full shadow-sm space-y-6 relative max-h-[90vh] flex flex-col"
             >
               <div className="flex items-center justify-between border-b border-border pb-4 shrink-0">
                 <div className="flex items-center gap-3">

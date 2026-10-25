@@ -27,6 +27,6 @@ analytics_agent = Agent(
     get_pydantic_model(),
     retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
-    output_type=AnalyticsReport,
+    result_type=AnalyticsReport,
     system_prompt="You are an Analytics Agent. Synthesize performance data into actionable hiring insights. Do NOT output preamble, internal thoughts, or chain of reasoning text."
 )

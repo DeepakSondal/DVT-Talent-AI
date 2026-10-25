@@ -30,6 +30,6 @@ test.describe('Authentication Flow', () => {
     await page.click('button[type="submit"]');
 
     // Should see an error message (assuming the app uses Sonner/Toast)
-    await expect(page.locator('text=Incorrect email or password')).toBeVisible();
+    await expect(page.locator('text=Incorrect email or password').first()).toBeVisible();
   });
 });

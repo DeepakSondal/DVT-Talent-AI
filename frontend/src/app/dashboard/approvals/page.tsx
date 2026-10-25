@@ -165,7 +165,7 @@ export default function ApprovalsPage() {
     return (
         <div className="space-y-10 pb-20 max-w-7xl mx-auto px-4 md:px-0">
             {/* Header banner */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-950 p-8 rounded-[2.5rem] border border-slate-800 text-white shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-900 p-8 rounded-xl border border-slate-800 text-white shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                     <Bot className="w-48 h-48 text-blue-400" />
                 </div>
@@ -341,7 +341,7 @@ export default function ApprovalsPage() {
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <h4 className="text-xs font-black uppercase tracking-widest text-blue-500 flex items-center gap-2">
-                                                        <Sparkles className="w-4 h-4" /> Recruiter Memory Calibration
+                                                        <Brain className="w-4 h-4" /> Recruiter Memory Calibration
                                                     </h4>
                                                     <span className="text-[10px] text-muted-foreground">Teaches agent swarm for future candidate evaluation</span>
                                                 </div>

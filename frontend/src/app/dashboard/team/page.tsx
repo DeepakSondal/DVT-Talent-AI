@@ -6,18 +6,19 @@ import {
   MoreVertical, Shield, ShieldCheck, ShieldAlert,
   Mail, Clock, Trash2, Loader2, AlertCircle,
   TrendingUp, UserCheck, CheckCircle2,
-  Lock, Fingerprint, Zap, Key
+  Lock, Fingerprint, Zap, Key, X, Copy, Check
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import api, { usersApi, type UserOut, type UserRole } from "@/lib/api";
+import api, { usersApi, teamApi, type UserOut, type UserRole } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { toast } from "sonner";
 
 export default function TeamPage() {
+  const shouldReduceMotion = useReducedMotion();
   const { data: me } = useQuery({
     queryKey: ["me"],
     queryFn: () => usersApi.me(),
@@ -25,6 +26,12 @@ export default function TeamPage() {
 
   const [keys, setKeys] = useState({ openai_key: "", serper_key: "" });
   const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("recruiter");
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteSuccessLink, setInviteSuccessLink] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const { data: teamData, isLoading, refetch, error } = useQuery({
     queryKey: ["team-members"],
@@ -70,6 +77,46 @@ export default function TeamPage() {
     }
   };
 
+  const handleSendInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    setIsInviting(true);
+    try {
+      const res = await teamApi.inviteMember({
+        email: inviteEmail.trim(),
+        role: inviteRole
+      });
+      toast.success("Invitation Created Successfully!", {
+        description: res.message || `Invitation ready for ${inviteEmail}`
+      });
+      const link = res.accept_url || res.recovery_accept_url;
+      if (link) {
+        setInviteSuccessLink(link);
+      } else {
+        setIsInviteOpen(false);
+        setInviteEmail("");
+      }
+      refetch();
+    } catch (err: any) {
+      toast.error("Invitation Failed", {
+        description: err.response?.data?.detail || "Could not create team invitation. Check if member already exists."
+      });
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  const handleCopyInviteLink = () => {
+    if (!inviteSuccessLink) return;
+    navigator.clipboard.writeText(inviteSuccessLink);
+    setCopiedLink(true);
+    toast.success("Invitation link copied to clipboard!");
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   if (error) {
      return (
         <div className="h-[60vh] flex flex-col items-center justify-center space-y-6">
@@ -93,7 +140,7 @@ export default function TeamPage() {
            <div className="space-y-3">
               <Badge variant="primary" className="py-1 px-4 text-xs font-semibold">
                  <ShieldCheck className="w-3.5 h-3.5 mr-2 inline" />
-                 Workspace Governance: Active
+                 Workspace Team Management
               </Badge>
               <h1 className="text-2xl font-bold text-foreground">
                  Team Directory
@@ -102,7 +149,14 @@ export default function TeamPage() {
                  Manage team members, access roles, and platform permissions.
               </p>
            </div>
-           <Button variant="primary" className="h-11 px-6 rounded-lg gap-2">
+           <Button 
+            variant="primary" 
+            onClick={() => {
+              setInviteSuccessLink(null);
+              setIsInviteOpen(true);
+            }} 
+            className="h-11 px-6 rounded-lg gap-2"
+           >
               <UserPlus className="w-4 h-4" />
               Invite Team Member
            </Button>
@@ -303,6 +357,135 @@ export default function TeamPage() {
            </div>
         </div>
       </div>
+
+      {/* Invite Team Member Modal */}
+      <AnimatePresence>
+        {isInviteOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+            <motion.div
+              initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-card border border-border rounded-xl p-6 sm:p-8 max-w-md w-full shadow-md space-y-6 relative"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-primary/10 text-primary rounded-2xl">
+                    <UserPlus className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Invite Team Member</h3>
+                    <p className="text-xs text-muted-foreground">Send an invitation to join your workspace</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsInviteOpen(false)} 
+                  className="p-2 text-muted-foreground hover:text-foreground rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {inviteSuccessLink ? (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 space-y-1">
+                    <p className="text-xs font-bold flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" />
+                      Invitation Link Created
+                    </p>
+                    <p className="text-[11px] opacity-90">
+                      Share this secure link directly with your new team member:
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-background border border-border">
+                    <input 
+                      readOnly
+                      value={inviteSuccessLink}
+                      className="bg-transparent text-xs font-mono text-foreground flex-1 px-2 outline-none select-all truncate"
+                    />
+                    <Button 
+                      size="sm" 
+                      onClick={handleCopyInviteLink}
+                      className="gap-1.5 h-8 text-xs font-bold rounded-lg shrink-0"
+                    >
+                      {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedLink ? "Copied" : "Copy"}</span>
+                    </Button>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setIsInviteOpen(false);
+                        setInviteSuccessLink(null);
+                        setInviteEmail("");
+                      }}
+                      className="text-xs font-bold"
+                    >
+                      Done
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleSendInvite} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="colleague@company.com"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Access Role
+                    </label>
+                    <select
+                      value={inviteRole}
+                      onChange={(e) => setInviteRole(e.target.value)}
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+                    >
+                      <option value="recruiter">Recruiter (Search, outreach & candidate pipeline)</option>
+                      <option value="admin">Administrator (Full workspace & billing control)</option>
+                      <option value="viewer">Viewer (Read-only candidate review)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-3 border-t border-border">
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      onClick={() => setIsInviteOpen(false)}
+                      disabled={isInviting}
+                      className="font-bold text-xs"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      variant="primary"
+                      disabled={isInviting}
+                      isLoading={isInviting}
+                      className="font-bold text-xs px-6 rounded-xl"
+                    >
+                      Send Invitation
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
+
 }

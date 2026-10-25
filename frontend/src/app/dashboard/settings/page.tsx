@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
 import { Badge } from "@/components/ui/Badge";
+import { Skeleton, CardSkeleton } from "@/components/ui/Skeleton";
 import {
   Settings, Users, Building, Save, Loader2, Info, Mail, Zap, ShieldCheck
 } from "lucide-react";
@@ -53,8 +54,15 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="p-8 text-muted-foreground animate-pulse flex items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Synchronizing Configuration...
+      <div className="space-y-8 pb-10">
+        <div className="flex items-center gap-4 bg-card p-8 rounded-xl shadow-sm border border-border">
+          <Skeleton className="w-12 h-12 rounded-xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+        </div>
+        <CardSkeleton />
       </div>
     );
   }
