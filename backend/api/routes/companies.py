@@ -10,10 +10,17 @@ from sqlalchemy import select, func, desc
 from pydantic import BaseModel, HttpUrl
 from datetime import datetime
 
-from db.models import Company, get_db
+from db.models import Company, UserRole, get_db
 from api.routes.auth import get_current_user, User
 
 router = APIRouter()
+
+
+def _require_companies_access(current_user: User, write: bool = False) -> None:
+    if not current_user.tenant_id or current_user.role == UserRole.CANDIDATE:
+        raise HTTPException(status_code=403, detail="Workspace permissions required to access company profiles.")
+    if write and current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(status_code=403, detail="Recruiter, manager, or admin permissions required to modify companies.")
 
 
 class CompanyCreate(BaseModel):
@@ -79,6 +86,7 @@ async def list_companies(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_companies_access(current_user, write=False)
     query = select(Company).where(Company.tenant_id == current_user.tenant_id)
     count_query = select(func.count(Company.id)).where(Company.tenant_id == current_user.tenant_id)
 
@@ -112,6 +120,7 @@ async def create_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_companies_access(current_user, write=True)
     company = Company(**data.model_dump(exclude_none=True), tenant_id=current_user.tenant_id)
     db.add(company)
     await db.commit()
@@ -128,6 +137,7 @@ async def get_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_companies_access(current_user, write=False)
     result = await db.execute(
         select(Company).where(Company.id == company_id, Company.tenant_id == current_user.tenant_id)
     )
@@ -144,6 +154,7 @@ async def update_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_companies_access(current_user, write=True)
     result = await db.execute(
         select(Company).where(Company.id == company_id, Company.tenant_id == current_user.tenant_id)
     )
@@ -165,6 +176,7 @@ async def delete_company(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_companies_access(current_user, write=True)
     result = await db.execute(
         select(Company).where(Company.id == company_id, Company.tenant_id == current_user.tenant_id)
     )
@@ -183,6 +195,7 @@ async def enrich_company(
     current_user: User = Depends(get_current_user),
 ):
     """Trigger AI enrichment for a company"""
+    _require_companies_access(current_user, write=True)
     result = await db.execute(
         select(Company).where(Company.id == company_id, Company.tenant_id == current_user.tenant_id)
     )

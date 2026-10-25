@@ -52,12 +52,19 @@ class ResumeParserService:
         """
         upload_path = cls.ensure_upload_dir()
         
-        # Sanitize extension and base name
-        ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ".pdf"
-        sanitized_name = re.sub(r"[^a-zA-Z0-9_\.-]", "_", filename)
-        safe_filename = f"{candidate_id}_{resume_id}_{sanitized_name}"
+        # Sanitize extension and base name, stripping any directory components or null bytes
+        clean_filename = os.path.basename((filename or "resume.pdf").replace("\x00", "").replace("\\", "/"))
+        ext = ("." + clean_filename.rsplit(".", 1)[-1].lower()) if "." in clean_filename else ".pdf"
+        allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".rtf"}
+        if ext not in allowed_exts:
+            ext = ".pdf"
+        base_stem = clean_filename.rsplit(".", 1)[0] if "." in clean_filename else clean_filename
+        sanitized_stem = re.sub(r"[^a-zA-Z0-9_-]", "_", base_stem)[:80].strip("_") or "resume"
+        safe_filename = f"{candidate_id}_{resume_id}_{sanitized_stem}{ext}"
         
-        target_path = upload_path / safe_filename
+        target_path = (upload_path / safe_filename).resolve()
+        if not target_path.is_relative_to(upload_path.resolve()):
+            raise ValueError("Invalid resume file destination")
         target_path.write_bytes(content_bytes)
         logger.info("resume_file_saved", filename=safe_filename, bytes=len(content_bytes))
         
@@ -105,13 +112,23 @@ class ResumeParserService:
             logger.warning("resume_path_resolution_error", error=str(err))
             return None
 
+    MAX_PDF_PAGES = 50
+    MAX_DOCX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024  # 25 MB zip-bomb cap
+    MAX_EXTRACTED_CHARS = 100_000
+
     @classmethod
     def extract_text(cls, content_bytes: bytes, filename: str) -> str:
         """
-        Extract complete text from PDF, DOCX, or TXT file bytes.
+        Extract complete text from PDF, DOCX, or TXT file bytes with resource-exhaustion
+        and prompt-injection sanitization safeguards.
         """
         ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
         text = ""
+
+        # Reject known executable / archive binary magic headers disguised with document extensions
+        if content_bytes.startswith((b"MZ", b"\x7fELF", b"\xca\xfe\xba\xbe", b"#!/")):
+            logger.warning("resume_executable_signature_blocked", filename=filename)
+            return ""
 
         # 1. PDF Extraction
         if ext == ".pdf":
@@ -121,29 +138,40 @@ class ResumeParserService:
         elif ext in {".docx", ".doc"}:
             text = cls._extract_from_docx(content_bytes)
             
-        # 3. Plain Text / Fallback
-        if not text.strip():
+        # 3. Plain Text / Fallback (only if not a failed binary container like %PDF or PK zip)
+        if not text.strip() and not content_bytes.startswith((b"%PDF", b"PK\x03\x04")):
             text = cls._extract_from_plain_text(content_bytes)
 
-        # Normalize line endings and whitespace
+        # Normalize line endings, sanitize prompt injection vectors, and bound size
         clean_text = cls._clean_text(text)
-        return clean_text
+        clean_text = re.sub(r"<\s*script[^>]*>.*?<\s*/\s*script\s*>", "", clean_text, flags=re.IGNORECASE | re.DOTALL)
+        clean_text = re.sub(r"<\s*/?\s*script[^>]*>", "", clean_text, flags=re.IGNORECASE)
+        try:
+            from services.sanitizer_service import sanitizer_service
+            sanitized_result = sanitizer_service.sanitize(clean_text)
+            clean_text = sanitized_result[0] if isinstance(sanitized_result, tuple) else sanitized_result
+        except Exception:
+            pass
+        return clean_text[:cls.MAX_EXTRACTED_CHARS]
 
     @classmethod
     def _extract_from_pdf(cls, content_bytes: bytes) -> str:
-        """Extract text from PDF using pypdf."""
+        """Extract text from PDF using pypdf with page count bounds."""
         try:
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(content_bytes))
+            total_pages = len(reader.pages)
+            if total_pages > cls.MAX_PDF_PAGES:
+                logger.warning("pdf_page_limit_exceeded", total_pages=total_pages, max_pages=cls.MAX_PDF_PAGES)
             pages_text = []
-            for i, page in enumerate(reader.pages):
-                page_content = page.extract_text() or ""
+            for i in range(min(total_pages, cls.MAX_PDF_PAGES)):
+                page_content = reader.pages[i].extract_text() or ""
                 if page_content.strip():
                     pages_text.append(page_content)
             
             extracted = "\n\n".join(pages_text)
             if extracted.strip():
-                logger.info("pdf_text_extracted", pages=len(reader.pages), chars=len(extracted))
+                logger.info("pdf_text_extracted", pages=min(total_pages, cls.MAX_PDF_PAGES), chars=len(extracted))
                 return extracted
         except Exception as e:
             logger.warning("pypdf_extraction_failed", error=str(e))
@@ -151,9 +179,16 @@ class ResumeParserService:
 
     @classmethod
     def _extract_from_docx(cls, content_bytes: bytes) -> str:
-        """Extract text from Word .docx file using python-docx."""
+        """Extract text from Word .docx file using python-docx with zip-bomb inspection."""
         try:
+            import zipfile
             import docx
+            if content_bytes.startswith(b"PK\x03\x04"):
+                with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
+                    total_uncompressed = sum(info.file_size for info in zf.infolist())
+                    if total_uncompressed > cls.MAX_DOCX_UNCOMPRESSED_BYTES or len(zf.infolist()) > 500:
+                        logger.warning("docx_zip_bomb_blocked", uncompressed_bytes=total_uncompressed, entries=len(zf.infolist()))
+                        return ""
             doc = docx.Document(io.BytesIO(content_bytes))
             paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
             

@@ -141,7 +141,11 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
     await db.refresh(user)
 
     # Generate JWT
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token = create_access_token(data={
+        "sub": str(user.id),
+        "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+        "tenant_id": str(user.tenant_id) if user.tenant_id else "",
+    })
     
     # ── Security Hardening [H-08]: Use HttpOnly Cookies ─────────────────────
     # Instead of passing the token in the URL, we set it as a secure cookie.

@@ -268,13 +268,19 @@ def compute_career_ops_score(
 # ── Helper: Resolve or Create Candidate Record for User ─────────────────────
 async def get_or_create_candidate_for_user(user: User, db: AsyncSession) -> Candidate:
     result = await db.execute(select(Candidate).where(Candidate.user_id == user.id))
-    cand = result.scalar_one_or_none()
+    cand = result.scalars().first()
     if cand:
         return cand
     
-    # Try finding by email
-    result = await db.execute(select(Candidate).where(Candidate.email == user.email))
-    cand = result.scalar_one_or_none()
+    # Try finding an unlinked B2C candidate record by email (never hijack a tenant-scoped recruiter record)
+    result = await db.execute(
+        select(Candidate).where(
+            Candidate.email == user.email,
+            Candidate.tenant_id.is_(None),
+            Candidate.user_id.is_(None),
+        )
+    )
+    cand = result.scalars().first()
     if cand:
         cand.user_id = user.id
         await db.commit()
@@ -648,10 +654,10 @@ async def apply_to_job(
     """
     cand = await get_or_create_candidate_for_user(current_user, db)
 
-    # Check job exists
+    # Check job exists and is published/active
     job_res = await db.execute(select(Job).where(Job.id == job_id))
     job = job_res.scalar_one_or_none()
-    if not job or not job.is_active:
+    if not job or not job.is_active or not job.is_published:
         raise HTTPException(status_code=404, detail="Job requisition not found or closed")
 
     # Check if already applied
@@ -743,7 +749,7 @@ async def generate_interview_prep(
 
     job_res = await db.execute(select(Job).where(Job.id == job_id))
     job = job_res.scalar_one_or_none()
-    if not job:
+    if not job or not job.is_active or not job.is_published:
         raise HTTPException(status_code=404, detail="Job requisition not found")
 
     comp_res = await db.execute(select(Company.name).where(Company.id == job.company_id))
@@ -809,7 +815,7 @@ async def generate_tailored_resume_advice(
 
     job_res = await db.execute(select(Job).where(Job.id == job_id))
     job = job_res.scalar_one_or_none()
-    if not job:
+    if not job or not job.is_active or not job.is_published:
         raise HTTPException(status_code=404, detail="Job requisition not found")
 
     comp_res = await db.execute(select(Company.name).where(Company.id == job.company_id))

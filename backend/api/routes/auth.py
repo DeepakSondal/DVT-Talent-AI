@@ -192,14 +192,19 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.flush()
 
     if is_candidate:
-        # Check if an existing candidate record was previously sourced with this email
-        cand_res = await db.execute(select(Candidate).where(Candidate.email == user_data.email))
-        existing_cand = cand_res.scalar_one_or_none()
+        # Check if an existing B2C candidate record was previously created with this email
+        cand_res = await db.execute(
+            select(Candidate).where(
+                Candidate.email == user_data.email,
+                Candidate.tenant_id.is_(None),
+            )
+        )
+        existing_cand = cand_res.scalars().first()
         name_parts = user_data.full_name.strip().split(" ", 1)
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else ""
 
-        if existing_cand:
+        if existing_cand and existing_cand.user_id is None:
             existing_cand.user_id = user.id
             if not existing_cand.first_name:
                 existing_cand.first_name = first_name
@@ -313,6 +318,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
 async def refresh_token_route(dvt_refresh_token: Optional[str] = Cookie(None), db: AsyncSession = Depends(get_db)):
     if not dvt_refresh_token:
         raise HTTPException(status_code=401, detail="Refresh token missing")
+
+    # Check refresh token revocation blocklist in Redis
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(settings.redis_url)
+        if await r.get(f"blacklist:{dvt_refresh_token}"):
+            raise HTTPException(status_code=401, detail="Refresh token has been revoked")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
     try:
         payload = jwt.decode(dvt_refresh_token, settings.secret_key, algorithms=[settings.algorithm])
         user_id_val: str = payload.get("sub")
@@ -328,16 +345,32 @@ async def refresh_token_route(dvt_refresh_token: Optional[str] = Cookie(None), d
 
     result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="User not found or account disabled")
 
-    token_data = {"sub": str(user.id), "tenant_id": str(user.tenant_id)}
+    # Rotate refresh token: blacklist the consumed refresh token if Redis is available
+    try:
+        exp = payload.get("exp")
+        remaining = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 86400
+        if remaining > 0:
+            import redis.asyncio as aioredis
+            r = aioredis.from_url(settings.redis_url)
+            await r.setex(f"blacklist:{dvt_refresh_token}", remaining, "rotated")
+    except Exception:
+        pass
+
+    token_data = {
+        "sub": str(user.id),
+        "role": user.role.value,
+        "tenant_id": str(user.tenant_id) if user.tenant_id else "",
+    }
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
     
     content = {
         "access_token": access_token,
         "user_id": str(user.id),
+        "tenant_id": str(user.tenant_id) if user.tenant_id else None,
         "email": user.email,
         "full_name": user.full_name,
         "role": user.role.value,
@@ -374,7 +407,7 @@ async def logout(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Log out user, clear authentication cookies, and blacklist the current access token in Redis.
+    Log out user, clear authentication cookies, and blacklist the current access & refresh tokens in Redis.
     """
     raw_token = None
     auth_header = request.headers.get("Authorization")
@@ -385,17 +418,20 @@ async def logout(
         if cookie_token and cookie_token.startswith("Bearer "):
             raw_token = cookie_token.split(" ")[1]
 
-    if raw_token:
-        try:
-            payload = jwt.decode(raw_token, settings.secret_key, algorithms=[settings.algorithm])
-            exp = payload.get("exp")
-            remaining = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 3600
-            if remaining > 0:
-                import redis.asyncio as aioredis
-                r = aioredis.from_url(settings.redis_url)
-                await r.setex(f"blacklist:{raw_token}", remaining, "revoked")
-        except Exception:
-            pass
+    refresh_cookie = request.cookies.get("dvt_refresh_token")
+
+    for tok in (raw_token, refresh_cookie):
+        if tok:
+            try:
+                payload = jwt.decode(tok, settings.secret_key, algorithms=[settings.algorithm])
+                exp = payload.get("exp")
+                remaining = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 3600
+                if remaining > 0:
+                    import redis.asyncio as aioredis
+                    r = aioredis.from_url(settings.redis_url)
+                    await r.setex(f"blacklist:{tok}", remaining, "revoked")
+            except Exception:
+                pass
 
     response = JSONResponse(content={"message": "Logged out successfully"})
     response.delete_cookie(key="dvt_token", path="/", samesite="lax")

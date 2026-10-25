@@ -11,31 +11,44 @@ from typing import List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from db.models import get_db, User
-from api.routes.auth import require_admin
+from db.models import get_db, User, UserRole
+from api.routes.auth import get_current_user, require_admin
+from fastapi import HTTPException
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
 
 
 @router.get("/signals/recent", summary="Get recent agent broadcast signals")
-async def get_recent_signals(limit: int = 50):
-    """Fetches the last N signals from the Redis history list."""
+async def get_recent_signals(
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+):
+    """Fetches the last N signals from the Redis history list, filtered to the caller's tenant."""
+    if not current_user.tenant_id or current_user.role == UserRole.CANDIDATE:
+        raise HTTPException(status_code=403, detail="Workspace permissions required")
     try:
         r = aioredis.from_url(settings.redis_url, decode_responses=True)
-        signals = await r.lrange("dvt_signals_history", 0, limit - 1)
+        signals = await r.lrange("dvt_signals_history", 0, min(max(1, limit), 100) - 1)
         await r.aclose()
-        return [json.loads(s) for s in signals]
+        parsed = [json.loads(s) for s in signals]
+        tenant_str = str(current_user.tenant_id)
+        return [
+            s for s in parsed
+            if not s.get("tenant_id") or str(s.get("tenant_id")) == tenant_str
+        ]
     except Exception as e:
         log.error("signals_fetch_failed", error=str(e))
         return []
 
 
 @router.get("/mediations", summary="Get active distributed locks from Redis (real data)")
-async def get_active_mediations():
+async def get_active_mediations(
+    current_user: User = Depends(require_admin),
+):
     """
     Scans Redis for active distributed locks (lock:*) and score histories.
-    Returns REAL data from Redis SCAN — no hardcoded values.
+    Returns REAL data from Redis SCAN — restricted to admins.
     """
     try:
         r = aioredis.from_url(settings.redis_url, decode_responses=True)
@@ -80,15 +93,17 @@ async def get_active_mediations():
             "active_locks": 0,
             "active_lock_keys": [],
             "score_histories_tracked": 0,
-            "latest_reconciliation": f"Redis unavailable: {str(e)}",
+            "latest_reconciliation": "Redis unavailable",
         }
 
 
 @router.get("/celery/workers", summary="Inspect live Celery workers (real data)")
-async def get_celery_workers():
+async def get_celery_workers(
+    current_user: User = Depends(require_admin),
+):
     """
     Uses Celery inspect to get live worker status, active tasks, and reserved tasks.
-    Replaces any static worker data.
+    Restricted to admins.
     """
     try:
         from workers.celery_app import celery_app
@@ -130,20 +145,30 @@ async def get_audit_logs(
     limit: int = 100,
     offset: int = 0,
 ):
-    """Fetch structured audit logs from the database. Admin only."""
+    """Fetch structured audit logs from the database, strictly scoped to the caller's tenant. Admin only."""
     from sqlalchemy import select
     from db.models import AuditLog
 
-    query = select(AuditLog).order_by(AuditLog.created_at.desc()).offset(offset).limit(limit)
+    if not current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Workspace tenant context required")
+
+    query = (
+        select(AuditLog)
+        .where(AuditLog.tenant_id == current_user.tenant_id)
+        .order_by(AuditLog.created_at.desc())
+        .offset(max(0, offset))
+        .limit(min(max(1, limit), 200))
+    )
     result = await db.execute(query)
     logs = result.scalars().all()
     return [
         {
             "id": str(entry.id),
+            "tenant_id": str(entry.tenant_id) if entry.tenant_id else None,
             "user_id": str(entry.user_id) if entry.user_id else None,
             "action": entry.action,
-            "resource_type": entry.resource_type,
-            "resource_id": str(entry.resource_id) if entry.resource_id else None,
+            "resource_type": getattr(entry, "entity_type", None),
+            "resource_id": str(getattr(entry, "entity_id", "")) if getattr(entry, "entity_id", None) else None,
             "ip_address": entry.ip_address,
             "created_at": entry.created_at,
         }

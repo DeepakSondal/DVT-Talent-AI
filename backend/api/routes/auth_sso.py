@@ -105,12 +105,18 @@ async def sso_acs(request: Request, db: AsyncSession = Depends(get_db)):
                     is_active=True,
                     tenant_id=tenant.id,
                     provider="saml",
+                    hashed_password="saml_managed_no_password",
                 )
                 db.add(user)
             await db.commit()
+            await db.refresh(user)
             
             # Generate JWT and Redirect to Dashboard
-            token = create_access_token({"sub": str(user.id)})
+            token = create_access_token({
+                "sub": str(user.id),
+                "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+                "tenant_id": str(user.tenant_id) if user.tenant_id else "",
+            })
             response = RedirectResponse(url=f"{settings.cors_origins[0]}/dashboard")
             response.set_cookie(
                 key="dvt_token",
@@ -149,7 +155,7 @@ async def sso_metadata():
 
 
 from pydantic import BaseModel
-from api.routes.auth import get_current_user
+from api.routes.auth import get_current_user, require_admin
 
 
 class SSOConfigPayload(BaseModel):
@@ -194,12 +200,15 @@ async def get_sso_config(
 @router.post("/config")
 async def update_sso_config(
     payload: SSOConfigPayload,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """ Updates self-service SAML IdP configuration for the tenant """
+    """ Updates self-service SAML IdP configuration for the tenant (Admin only) """
     if not current_user.tenant_id:
         raise HTTPException(status_code=400, detail="User is not associated with an enterprise tenant.")
+
+    if payload.idp_sso_url and not payload.idp_sso_url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="IdP SSO URL must start with https://")
 
     tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
     tenant = tenant_res.scalar_one_or_none()
@@ -227,13 +236,13 @@ async def update_sso_config(
 @router.post("/test")
 async def test_sso_config(
     payload: SSOConfigPayload,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
-    """ Validates SAML IdP inputs without persisting """
+    """ Validates SAML IdP inputs without persisting (Admin only) """
     if not payload.idp_sso_url and not payload.metadata_url:
         raise HTTPException(status_code=400, detail="Please provide either an IdP SSO URL or IdP Metadata URL.")
 
-    if payload.idp_sso_url and not (payload.idp_sso_url.startswith("https://") or payload.idp_sso_url.startswith("http://")):
+    if payload.idp_sso_url and not payload.idp_sso_url.startswith("https://"):
         raise HTTPException(status_code=400, detail="IdP SSO URL must start with https://")
 
     return {

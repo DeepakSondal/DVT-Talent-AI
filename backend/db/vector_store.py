@@ -161,10 +161,10 @@ class VectorStore:
 
         ids_to_delete = [str(i) for i in (resume_ids or []) if i]
         
-        # 1. Delete by IDs if provided
+        # 1. Delete by IDs if provided (strictly scoped by tenant_id metadata)
         if ids_to_delete:
             try:
-                self.resumes.delete(ids=ids_to_delete)
+                self.resumes.delete(ids=ids_to_delete, where={"tenant_id": str(tenant_id)})
             except Exception as e:
                 log.warning("chroma_delete_by_ids_failed", error=str(e), ids=ids_to_delete)
                 raise e
@@ -186,23 +186,33 @@ class VectorStore:
         return True
 
     # ── Jobs ────────────────────────────────────────────────────────────────
-    def upsert_job(self, job_id: str, text: str, metadata: dict):
-        """Add or update a job post in the vector store"""
+    def upsert_job(self, job_id: str, text: str, metadata: dict, tenant_id: Optional[str] = None):
+        """Add or update a job post in the vector store with tenant isolation metadata"""
+        if not CHROMA_AVAILABLE or not self.client or not getattr(self, "jobs", None):
+            return
+        extended_metadata = {k: str(v) for k, v in (metadata or {}).items()}
+        if tenant_id:
+            extended_metadata["tenant_id"] = str(tenant_id)
         embedding = self.embed_text(text)
         self.jobs.upsert(
             ids=[job_id],
             embeddings=[embedding],
             documents=[text[:2000]],
-            metadatas=[{k: str(v) for k, v in metadata.items()}]
+            metadatas=[extended_metadata]
         )
 
-    def search_jobs(self, query_text: str, limit: int = 10) -> List[dict]:
-        """Find most similar jobs to a candidate profile / text"""
+    def search_jobs(self, query_text: str, limit: int = 10, tenant_id: Optional[str] = None) -> List[dict]:
+        """Find most similar jobs to a candidate profile / text, optionally scoped to tenant_id"""
+        if not CHROMA_AVAILABLE or not self.client or not getattr(self, "jobs", None):
+            return []
         query_embedding = self.embed_text(query_text)
-        results = self.jobs.query(
-            query_embeddings=[query_embedding],
-            n_results=limit
-        )
+        query_kwargs: Dict[str, Any] = {
+            "query_embeddings": [query_embedding],
+            "n_results": limit,
+        }
+        if tenant_id:
+            query_kwargs["where"] = {"tenant_id": str(tenant_id)}
+        results = self.jobs.query(**query_kwargs)
         
         formatted = []
         if results["ids"]:

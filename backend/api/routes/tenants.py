@@ -2,10 +2,12 @@
 DVT Talent AI — Tenants API
 Manages enterprise client profiles, team members, and branding.
 """
+from datetime import datetime
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
+from typing import List, Optional
 from db.models import get_db, Tenant, User
 from api.routes.auth import get_current_user, require_admin
 from pydantic import BaseModel
@@ -19,12 +21,48 @@ class TenantUpdate(BaseModel):
     address: str | None = None
     onboarded: bool | None = None
 
-@router.get("/me", response_model=None)
+class TenantOut(BaseModel):
+    id: UUID
+    name: str
+    domain: Optional[str] = None
+    logo_url: Optional[str] = None
+    industry: Optional[str] = None
+    address: Optional[str] = None
+    is_active: bool = True
+    onboarded: Optional[bool] = False
+    plan: Optional[str] = "starter"
+    sender_name: Optional[str] = None
+    sender_email: Optional[str] = None
+    sender_verified: Optional[bool] = False
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class TeamMemberOut(BaseModel):
+    id: UUID
+    tenant_id: Optional[UUID] = None
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    is_verified: Optional[bool] = False
+    avatar_url: Optional[str] = None
+    last_login: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+@router.get("/me", response_model=TenantOut)
 async def get_my_tenant(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """ Fetch the tenant associated with the current user """
+    if not current_user.tenant_id:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
     query = select(Tenant).filter(Tenant.id == current_user.tenant_id)
     result = await db.execute(query)
     tenant = result.scalar_one_or_none()
@@ -33,16 +71,15 @@ async def get_my_tenant(
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant
 
-@router.patch("/me", response_model=None)
+@router.patch("/me", response_model=TenantOut)
 async def update_my_tenant(
     payload: TenantUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """ Update tenant branding and profile (Admin only) """
-    # Check if role has admin/recruiter permission for tenant branding
+    """ Update tenant branding and profile (Admin/Manager/Recruiter only) """
     role_val = getattr(current_user.role, "value", current_user.role)
-    if role_val not in ["admin", "recruiter", "manager"]:
+    if role_val not in ["admin", "recruiter", "manager"] or not current_user.tenant_id:
          raise HTTPException(status_code=403, detail="Insufficient permissions")
          
     query = select(Tenant).filter(Tenant.id == current_user.tenant_id)
@@ -52,19 +89,23 @@ async def update_my_tenant(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    for key, value in payload.dict(exclude_unset=True).items():
+    for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(tenant, key, value)
     
     await db.commit()
     await db.refresh(tenant)
     return tenant
 
-@router.get("/team", response_model=None)
+@router.get("/team", response_model=List[TeamMemberOut])
 async def get_team_members(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """ List all users within the current tenant scope """
+    role_val = getattr(current_user.role, "value", current_user.role)
+    if not current_user.tenant_id or role_val == "candidate":
+        raise HTTPException(status_code=403, detail="Workspace membership required to view team members")
+
     query = select(User).filter(User.tenant_id == current_user.tenant_id)
     result = await db.execute(query)
     return result.scalars().all()
@@ -76,7 +117,7 @@ async def complete_onboarding(
 ):
     """ Mark the current tenant as onboarded (First Run Wizard complete) """
     role_val = getattr(current_user.role, "value", current_user.role)
-    if role_val not in ["admin", "recruiter", "manager"]:
+    if role_val not in ["admin", "recruiter", "manager"] or not current_user.tenant_id:
          raise HTTPException(status_code=403, detail="Insufficient permissions")
          
     query = select(Tenant).filter(Tenant.id == current_user.tenant_id)

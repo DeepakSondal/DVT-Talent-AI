@@ -68,9 +68,11 @@ class ConnectionManager:
 
     async def broadcast_to_tenant(self, message: dict, tenant_id: str | None):
         """Send to all WebSocket connections belonging to a specific tenant."""
+        if not tenant_id or tenant_id == "default":
+            return
         payload = json.dumps(message)
         for uid, sockets in list(self.active_connections.items()):
-            if tenant_id and self.user_tenants.get(uid) != tenant_id:
+            if self.user_tenants.get(uid) != tenant_id:
                 continue
             for ws in list(sockets):
                 try:
@@ -92,8 +94,18 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-def _verify_ws_token(token: str) -> tuple[str, str] | tuple[None, None]:
-    """Validate JWT and return (user_id, tenant_id), or (None, None) if invalid."""
+async def _verify_ws_token(token: str) -> tuple[str, str] | tuple[None, None]:
+    """Validate JWT and return (user_id, tenant_id), or (None, None) if invalid or revoked."""
+    if not token:
+        return None, None
+    try:
+        r = redis.from_url(settings.redis_url)
+        is_revoked = await r.get(f"blacklist:{token}")
+        await r.aclose()
+        if is_revoked:
+            return None, None
+    except Exception:
+        pass
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         user_id: str = payload.get("sub")
@@ -114,7 +126,7 @@ async def pipeline_events_endpoint(
     Dedicated endpoint for real-time AI pipeline activity notifications.
     Used by the dashboard 'Live Feed' component. Supports multi-tab concurrency.
     """
-    user_id, tenant_id = _verify_ws_token(token)
+    user_id, tenant_id = await _verify_ws_token(token)
     if not user_id:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return

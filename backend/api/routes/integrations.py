@@ -10,7 +10,9 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from db.models import get_db, User, IntegrationConnection, ATSExportLog
+import ipaddress
+from urllib.parse import urlparse
+from db.models import get_db, User, UserRole, IntegrationConnection, ATSExportLog
 from api.routes.auth import get_current_user
 from services.security_service import encrypt_pii, decrypt_pii
 from integrations.unified_ats import sync_jobs, export_candidate, get_ats_client, SUPPORTED_PROVIDERS
@@ -19,6 +21,34 @@ log = structlog.get_logger(__name__)
 router = APIRouter()
 
 ATSProvider = Literal["greenhouse", "ceipal"]
+
+
+def _validate_safe_outbound_url(raw_url: str) -> str:
+    """Validate external integration base_url against SSRF (blocks non-HTTPS, loopback, link-local, RFC1918, and internal service names)."""
+    cleaned = (raw_url or "").strip()
+    parsed = urlparse(cleaned)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise HTTPException(status_code=400, detail="Integration base_url must use https:// and include a valid public hostname.")
+    host = parsed.hostname.lower().strip("[]")
+    blocked_names = {"localhost", "redis", "postgres", "db", "chromadb", "api", "frontend", "worker", "scheduler", "metadata.google.internal"}
+    if host in blocked_names or host.endswith(".local") or host.endswith(".internal"):
+        raise HTTPException(status_code=400, detail="Integration base_url cannot target internal or local hosts.")
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+            raise HTTPException(status_code=400, detail="Integration base_url cannot target private, loopback, or link-local IP addresses.")
+    except ValueError:
+        pass
+    return cleaned
+
+
+def _require_integration_access(current_user: User, admin_only: bool = False) -> None:
+    if not current_user.tenant_id or current_user.role == UserRole.CANDIDATE:
+        raise HTTPException(status_code=403, detail="Workspace permissions required.")
+    if admin_only and current_user.role not in (UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(status_code=403, detail="Admin or manager permissions required to configure ATS integrations.")
+    if not admin_only and current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(status_code=403, detail="Recruiter, manager, or admin permissions required.")
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -52,6 +82,7 @@ async def connect_integration(
     Saves (or updates) the ATS API key for the tenant, encrypted at rest.
     Tests the connection before saving.
     """
+    _require_integration_access(current_user, admin_only=True)
     if provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
@@ -60,11 +91,13 @@ async def connect_integration(
     from integrations.ceipal.client import CeipalClient
     from config import settings
 
+    validated_base_url = None
     if provider == "greenhouse":
         client = GreenhouseClient(api_key=req.api_key, tenant_id=str(current_user.tenant_id))
     else:
-        base_url = req.base_url or settings.ceipal_api_base_url or "https://api.ceipal.com/v1"
-        client = CeipalClient(api_key=req.api_key, base_url=base_url, tenant_id=str(current_user.tenant_id))
+        raw_base_url = req.base_url or settings.ceipal_api_base_url or "https://api.ceipal.com/v1"
+        validated_base_url = _validate_safe_outbound_url(raw_base_url)
+        client = CeipalClient(api_key=req.api_key, base_url=validated_base_url, tenant_id=str(current_user.tenant_id))
 
     is_valid = await client.test_connection()
     if not is_valid:
@@ -86,7 +119,7 @@ async def connect_integration(
 
     if conn:
         conn.api_key_encrypted = encrypted_key
-        conn.base_url = req.base_url
+        conn.base_url = validated_base_url
         conn.auto_export_enabled = req.auto_export_enabled
         conn.is_active = True
     else:
@@ -94,7 +127,7 @@ async def connect_integration(
             tenant_id=current_user.tenant_id,
             provider=provider,
             api_key_encrypted=encrypted_key,
-            base_url=req.base_url,
+            base_url=validated_base_url,
             auto_export_enabled=req.auto_export_enabled,
             is_active=True,
         )
@@ -111,6 +144,7 @@ async def disconnect_integration(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_integration_access(current_user, admin_only=True)
     result = await db.execute(
         select(IntegrationConnection).where(
             IntegrationConnection.tenant_id == current_user.tenant_id,
@@ -131,6 +165,7 @@ async def get_integration_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_integration_access(current_user, admin_only=False)
     result = await db.execute(
         select(IntegrationConnection).where(
             IntegrationConnection.tenant_id == current_user.tenant_id,
@@ -157,6 +192,7 @@ async def get_synced_jobs(
     limit: int = 50,
 ):
     """Returns jobs that were last pulled from the ATS (cached in Job table)."""
+    _require_integration_access(current_user, admin_only=False)
     from db.models import Job
     result = await db.execute(
         select(Job).where(
@@ -184,6 +220,7 @@ async def trigger_sync_jobs(
     current_user: User = Depends(get_current_user),
 ):
     """Triggers a background sync of jobs from the ATS. Returns immediately."""
+    _require_integration_access(current_user, admin_only=False)
     background_tasks.add_task(sync_jobs, str(current_user.tenant_id), provider)
     return {"status": "sync_queued", "provider": provider}
 
@@ -200,6 +237,7 @@ async def export_candidate_route(
     Pushes a scored DVT candidate to a job in the specified ATS.
     Runs in the background — returns immediately.
     """
+    _require_integration_access(current_user, admin_only=False)
     background_tasks.add_task(
         export_candidate,
         str(current_user.tenant_id),
@@ -219,6 +257,7 @@ async def get_export_logs(
     current_user: User = Depends(get_current_user),
     limit: int = 20,
 ):
+    _require_integration_access(current_user, admin_only=False)
     result = await db.execute(
         select(ATSExportLog).where(
             ATSExportLog.tenant_id == current_user.tenant_id,

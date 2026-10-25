@@ -8,10 +8,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.models import EmailCampaign, EmailSent, EmailStatus, get_db
+from db.models import EmailCampaign, EmailSent, EmailStatus, UserRole, get_db
 from api.routes.auth import get_current_user, User
 
 router = APIRouter()
+
+
+def _require_campaign_access(current_user: User, write: bool = False) -> None:
+    if not current_user.tenant_id or current_user.role == UserRole.CANDIDATE:
+        raise HTTPException(status_code=403, detail="Workspace permissions required to access campaigns.")
+    if write and current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(status_code=403, detail="Recruiter, manager, or admin permissions required to modify campaigns.")
 
 class CampaignCreate(BaseModel):
     name: str
@@ -58,6 +65,7 @@ async def list_campaigns(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_campaign_access(current_user, write=False)
     query = select(EmailCampaign).where(EmailCampaign.owner_id == current_user.id)
     count_q = select(func.count(EmailCampaign.id)).where(EmailCampaign.owner_id == current_user.id)
     total = (await db.execute(count_q)).scalar()
@@ -71,6 +79,7 @@ async def create_campaign(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_campaign_access(current_user, write=True)
     campaign = EmailCampaign(**data.model_dump(exclude_none=True), owner_id=current_user.id)
     db.add(campaign)
     await db.commit()
@@ -83,6 +92,7 @@ async def get_campaign(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_campaign_access(current_user, write=False)
     result = await db.execute(select(EmailCampaign).where(
         EmailCampaign.id == campaign_id, EmailCampaign.owner_id == current_user.id
     ))
@@ -97,6 +107,7 @@ async def toggle_campaign(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_campaign_access(current_user, write=True)
     result = await db.execute(select(EmailCampaign).where(
         EmailCampaign.id == campaign_id, EmailCampaign.owner_id == current_user.id
     ))
@@ -115,6 +126,7 @@ async def send_campaign(
     current_user: User = Depends(get_current_user),
 ):
     """Trigger sending all pending emails for this campaign"""
+    _require_campaign_access(current_user, write=True)
     result = await db.execute(select(EmailCampaign).where(
         EmailCampaign.id == campaign_id, EmailCampaign.owner_id == current_user.id
     ))
@@ -135,12 +147,25 @@ async def get_campaign_emails(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_campaign_access(current_user, write=False)
+    camp_res = await db.execute(
+        select(EmailCampaign)
+        .join(User, EmailCampaign.owner_id == User.id)
+        .where(
+            EmailCampaign.id == campaign_id,
+            User.tenant_id == current_user.tenant_id,
+        )
+    )
+    campaign = camp_res.scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
     query = select(EmailSent).where(EmailSent.campaign_id == campaign_id)
+    count_q = select(func.count(EmailSent.id)).where(EmailSent.campaign_id == campaign_id)
     if status:
         query = query.where(EmailSent.status == status)
-    total = (await db.execute(
-        select(func.count(EmailSent.id)).where(EmailSent.campaign_id == campaign_id)
-    )).scalar()
+        count_q = count_q.where(EmailSent.status == status)
+    total = (await db.execute(count_q)).scalar() or 0
     query = query.order_by(desc(EmailSent.created_at)).offset((page - 1) * page_size).limit(page_size)
     emails = (await db.execute(query)).scalars().all()
     return {

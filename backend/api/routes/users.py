@@ -9,7 +9,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import User, UserRole, get_db
-from api.routes.auth import get_current_user, require_admin, hash_password
+from api.routes.auth import get_current_user, require_admin, hash_password, verify_password
 
 router = APIRouter()
 
@@ -58,28 +58,42 @@ async def change_password(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    if not pwd_context.verify(data.current_password, current_user.hashed_password):
+    if len(data.new_password or "") < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters long")
+    if not await verify_password(data.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
-    current_user.hashed_password = hash_password(data.new_password)
+    current_user.hashed_password = await hash_password(data.new_password)
     await db.commit()
     return {"message": "Password updated successfully"}
 
-# Admin-only endpoints
-@router.get("", dependencies=[Depends(require_admin)])
-async def list_users(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).order_by(User.created_at.desc()))
+# Admin-only endpoints (strictly scoped to caller's tenant)
+@router.get("")
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if not current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Workspace tenant context required")
+    result = await db.execute(
+        select(User)
+        .where(User.tenant_id == current_user.tenant_id)
+        .order_by(User.created_at.desc())
+    )
     users = result.scalars().all()
     return {"items": [UserOut.model_validate(u) for u in users], "total": len(users)}
 
-@router.patch("/{user_id}/role", dependencies=[Depends(require_admin)])
+@router.patch("/{user_id}/role")
 async def update_user_role(
     user_id: UUID,
     role: UserRole,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
-    result = await db.execute(select(User).where(User.id == user_id))
+    if not current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Workspace tenant context required")
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id)
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -87,9 +101,19 @@ async def update_user_role(
     await db.commit()
     return {"message": f"Role updated to {role.value}", "user_id": str(user_id)}
 
-@router.patch("/{user_id}/deactivate", dependencies=[Depends(require_admin)])
-async def deactivate_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.id == user_id))
+@router.patch("/{user_id}/deactivate")
+async def deactivate_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if not current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Workspace tenant context required")
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot deactivate your own administrator account")
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id)
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

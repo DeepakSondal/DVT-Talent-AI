@@ -151,19 +151,40 @@ async def list_candidates(
     return CandidateList(items=paged_items, total=total, page=page, page_size=page_size)
 
 
+def _require_recruiter_workspace_access(current_user: User) -> None:
+    """Enforce that the caller is an authorized recruiter/manager/admin associated with a tenant workspace."""
+    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER) or not current_user.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Recruiter or administrative workspace permissions required."
+        )
+
+
+def _sanitize_csv_cell(value: object) -> str:
+    """Prevent CSV formula injection (DDE/Excel formula execution) when exporting untrusted strings."""
+    if value is None:
+        return ""
+    text = str(value)
+    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return f"'{text}"
+    return text
+
+
 @router.post("", response_model=CandidateOut, status_code=201)
 async def create_candidate(
     data: CandidateCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_recruiter_workspace_access(current_user)
+
     # Check duplicate within this workspace tenant
     existing = (await db.execute(
         select(Candidate).where(
             Candidate.tenant_id == current_user.tenant_id,
             Candidate.email == data.email
         )
-    )).scalar_one_or_none()
+    )).scalars().first()
     if existing:
         raise HTTPException(status_code=409, detail="Candidate with this email already exists in your workspace")
 
@@ -181,11 +202,7 @@ async def export_candidates(
     current_user: User = Depends(get_current_user)
 ):
     """Export the candidate shortlist as a professional CSV for stakeholders."""
-    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Recruiter or administrative permissions required to export candidate records."
-        )
+    _require_recruiter_workspace_access(current_user)
 
     tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
 
@@ -225,16 +242,16 @@ async def export_candidates(
         alignment = c.scoring_reasoning.get("alignment", "") if c.scoring_reasoning else ""
         
         writer.writerow([
-            f"{c.first_name} {c.last_name}",
-            c.title or "N/A",
-            c.current_company or "N/A",
-            f"{c.score}%",
-            c.location or "N/A",
-            c.email,
-            c.linkedin_url or "N/A",
-            strengths,
-            weaknesses,
-            alignment,
+            _sanitize_csv_cell(f"{c.first_name} {c.last_name}"),
+            _sanitize_csv_cell(c.title or "N/A"),
+            _sanitize_csv_cell(c.current_company or "N/A"),
+            _sanitize_csv_cell(f"{c.score}%"),
+            _sanitize_csv_cell(c.location or "N/A"),
+            _sanitize_csv_cell(c.email),
+            _sanitize_csv_cell(c.linkedin_url or "N/A"),
+            _sanitize_csv_cell(strengths),
+            _sanitize_csv_cell(weaknesses),
+            _sanitize_csv_cell(alignment),
             c.created_at.strftime("%Y-%m-%d") if c.created_at else ""
         ])
     
@@ -254,11 +271,7 @@ async def get_candidate(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Recruiter or administrative permissions required to view candidate records."
-        )
+    _require_recruiter_workspace_access(current_user)
 
     result = await db.execute(
         select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
@@ -287,6 +300,8 @@ async def update_candidate_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_recruiter_workspace_access(current_user)
+
     result = await db.execute(
         select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
     )
@@ -312,6 +327,8 @@ async def upload_resume(
     parse structured career history (work experience, education, skills), persist the file,
     and update candidate profile fields.
     """
+    _require_recruiter_workspace_access(current_user)
+
     filename = (file.filename or "").strip()
     allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".rtf"}
     ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
@@ -543,6 +560,8 @@ async def intake_candidate_resume(
     Extracts 100% full text, structures candidate profile, creates Candidate + Resume records,
     and returns the fully populated candidate.
     """
+    _require_recruiter_workspace_access(current_user)
+
     filename = (file.filename or "").strip()
     allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".rtf"}
     ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
@@ -586,9 +605,12 @@ async def intake_candidate_resume(
     candidate = None
     if email:
         res = await db.execute(
-            select(Candidate).where(Candidate.email == email)
+            select(Candidate).where(
+                Candidate.email == email,
+                Candidate.tenant_id == current_user.tenant_id,
+            )
         )
-        candidate = res.scalar_one_or_none()
+        candidate = res.scalars().first()
 
     cand_id = candidate.id if candidate else _uuid.uuid4()
     if not candidate:
@@ -692,6 +714,15 @@ async def score_candidate(
     current_user: User = Depends(get_current_user),
 ):
     """Trigger AI scoring for a candidate"""
+    _require_recruiter_workspace_access(current_user)
+
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    )
+    candidate = result.scalar_one_or_none()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
     if background_tasks is None:
         background_tasks = BackgroundTasks()
     background_tasks.add_task(score_candidate_background, str(candidate_id), str(job_id) if job_id else None)

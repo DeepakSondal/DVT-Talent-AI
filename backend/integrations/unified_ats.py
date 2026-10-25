@@ -114,14 +114,16 @@ async def export_candidate(
         if not conn:
             return {"error": f"No active {provider} connection for tenant {tenant_id}"}
 
-        # Fetch candidate
+        # Fetch candidate (strictly scoped to tenant_id)
         candidate: Optional[Candidate] = await session.get(Candidate, uuid.UUID(candidate_id))
-        if not candidate:
+        if not candidate or str(candidate.tenant_id) != str(tenant_id):
             return {"error": f"Candidate {candidate_id} not found"}
 
-        # Get the external job_id from the Job's metadata
+        # Get the external job_id from the Job's metadata (strictly scoped to tenant_id)
         job: Optional[Job] = await session.get(Job, uuid.UUID(job_id))
-        external_job_id = str(job.meta_data.get("external_id", job_id)) if job else job_id
+        if job and str(job.tenant_id) != str(tenant_id):
+            return {"error": f"Job {job_id} not found"}
+        external_job_id = str(job.meta_data.get("external_id", job_id)) if (job and job.meta_data) else job_id
 
         candidate_data = {
             "name": f"{candidate.first_name} {candidate.last_name}",

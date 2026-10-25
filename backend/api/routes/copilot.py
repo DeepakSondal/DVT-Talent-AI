@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
-from db.models import AgentTask, AgentTaskStatus, get_db
+from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
+from api.routes.auth import get_current_user, User
 from sqlalchemy.ext.asyncio import AsyncSession
 from agents.orchestrator import AgentOrchestrator
 from workers.tasks import copilot_discovery_task, copilot_sourcing_task, copilot_outreach_task
@@ -20,20 +21,27 @@ router = APIRouter(prefix="/copilot", tags=["copilot"])
 class DiscoveryRequest(BaseModel):
     industry: str
     location: str
-    tenant_id: str
+    tenant_id: Optional[str] = None
 
 class SourcingRequest(BaseModel):
     task_id: str
     approved_jd: str
     location: str
-    tenant_id: str
+    tenant_id: Optional[str] = None
 
 class OutreachRequest(BaseModel):
     task_id: str
     approved_candidates: List[Dict[str, Any]]
     job_context: Dict[str, Any]
-    tenant_id: str
+    tenant_id: Optional[str] = None
     enable_screening: bool = False
+
+
+def _require_copilot_access(current_user: User) -> uuid.UUID:
+    """Ensure only authenticated workspace recruiters/managers/admins can trigger Copilot workflows."""
+    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER) or not current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Workspace recruiter or administrative permissions required.")
+    return current_user.tenant_id
 
 # ── Background Task Wrappers ─────────────────────────────────────────────────
 async def execute_discovery_bg(task_id: uuid.UUID, req: DiscoveryRequest, db: AsyncSession):
@@ -97,12 +105,22 @@ async def execute_outreach_bg(task_id: uuid.UUID, req: OutreachRequest, db: Asyn
 # ── API Routes ───────────────────────────────────────────────────────────────
 
 @router.post("/discovery")
-async def start_copilot_discovery(req: DiscoveryRequest, bg_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def start_copilot_discovery(
+    req: DiscoveryRequest,
+    bg_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Phase 1: Generates Market IQ and draft JD, then PAUSES for human review."""
+    tenant_uuid = _require_copilot_access(current_user)
+    if req.tenant_id and str(req.tenant_id) != str(tenant_uuid):
+        raise HTTPException(status_code=403, detail="Cross-tenant task execution is forbidden.")
+
     task_id = uuid.uuid4()
     new_task = AgentTask(
         id=task_id,
-        tenant_id=uuid.UUID(req.tenant_id),
+        tenant_id=tenant_uuid,
+        user_id=current_user.id,
         agent_name="orchestrator",
         task_type="copilot_pipeline",
         status=AgentTaskStatus.RUNNING,
@@ -113,19 +131,31 @@ async def start_copilot_discovery(req: DiscoveryRequest, bg_tasks: BackgroundTas
     await db.commit()
     
     # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
-    copilot_discovery_task.delay(str(task_id), req.industry, req.location, req.tenant_id)
+    try:
+        copilot_discovery_task.delay(str(task_id), req.industry, req.location, str(tenant_uuid))
+    except Exception as e:
+        log.warning("copilot_discovery_dispatch_warning", error=str(e))
     return {"status": "accepted", "task_id": str(task_id), "phase": "discovery"}
 
 @router.post("/sourcing")
-async def start_copilot_sourcing(req: SourcingRequest, bg_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def start_copilot_sourcing(
+    req: SourcingRequest,
+    bg_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Phase 2: Takes the MANUALLY EDITED Job Description and sources candidates."""
+    tenant_uuid = _require_copilot_access(current_user)
+    if req.tenant_id and str(req.tenant_id) != str(tenant_uuid):
+        raise HTTPException(status_code=403, detail="Cross-tenant task execution is forbidden.")
+
     try:
         task_uuid = uuid.UUID(req.task_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Task ID")
         
     task = await db.get(AgentTask, task_uuid)
-    if not task:
+    if not task or task.tenant_id != tenant_uuid:
         raise HTTPException(status_code=404, detail="Task not found")
         
     task.status = AgentTaskStatus.RUNNING
@@ -133,19 +163,31 @@ async def start_copilot_sourcing(req: SourcingRequest, bg_tasks: BackgroundTasks
     await db.commit()
 
     # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
-    copilot_sourcing_task.delay(str(task_uuid), req.approved_jd, req.location, req.tenant_id)
+    try:
+        copilot_sourcing_task.delay(str(task_uuid), req.approved_jd, req.location, str(tenant_uuid))
+    except Exception as e:
+        log.warning("copilot_sourcing_dispatch_warning", error=str(e))
     return {"status": "accepted", "task_id": str(task_uuid), "phase": "sourcing"}
 
 @router.post("/outreach")
-async def start_copilot_outreach(req: OutreachRequest, bg_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def start_copilot_outreach(
+    req: OutreachRequest,
+    bg_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Phase 3: Takes the MANUALLY CURATED list of candidates and emails them."""
+    tenant_uuid = _require_copilot_access(current_user)
+    if req.tenant_id and str(req.tenant_id) != str(tenant_uuid):
+        raise HTTPException(status_code=403, detail="Cross-tenant task execution is forbidden.")
+
     try:
         task_uuid = uuid.UUID(req.task_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid Task ID")
         
     task = await db.get(AgentTask, task_uuid)
-    if not task:
+    if not task or task.tenant_id != tenant_uuid:
         raise HTTPException(status_code=404, detail="Task not found")
         
     task.status = AgentTaskStatus.RUNNING
@@ -153,5 +195,8 @@ async def start_copilot_outreach(req: OutreachRequest, bg_tasks: BackgroundTasks
     await db.commit()
 
     # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
-    copilot_outreach_task.delay(str(task_uuid), req.approved_candidates, req.job_context, req.tenant_id, req.enable_screening)
+    try:
+        copilot_outreach_task.delay(str(task_uuid), req.approved_candidates, req.job_context, str(tenant_uuid), req.enable_screening)
+    except Exception as e:
+        log.warning("copilot_outreach_dispatch_warning", error=str(e))
     return {"status": "accepted", "task_id": str(task_uuid), "phase": "outreach"}

@@ -11,10 +11,17 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import AgentTask, AgentTaskStatus, get_db
+from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
 from api.routes.auth import get_current_user, User
 
 router = APIRouter()
+
+
+def _require_agent_access(current_user: User) -> uuid.UUID:
+    """Enforce workspace recruiter/manager/admin role and valid tenant scope."""
+    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER) or not current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Workspace recruiter or administrative permissions required.")
+    return current_user.tenant_id
 
 
 class SwarmTriggerSchema(BaseModel):
@@ -51,14 +58,16 @@ async def trigger_agent(
     current_user: User = Depends(get_current_user),
 ):
     """Manually trigger an AI agent"""
+    tenant_uuid = _require_agent_access(current_user)
     if trigger.agent not in VALID_AGENTS:
         raise HTTPException(status_code=400, detail=f"Unknown agent. Valid: {VALID_AGENTS}")
 
     from workers.tasks import run_agent_task
-    task = run_agent_task.delay(trigger.agent, trigger.params)
+    task = run_agent_task.delay(trigger.agent, trigger.params, tenant_id=str(tenant_uuid))
 
     # Log to DB
     agent_task = AgentTask(
+        tenant_id=tenant_uuid,
         agent_name=trigger.agent,
         task_type="manual_trigger",
         status=AgentTaskStatus.PENDING,
@@ -80,11 +89,13 @@ async def trigger_agent(
 async def trigger_dag(
     industry: str = "AI",
     location: str = "SF",
-    background_tasks: BackgroundTasks = BackgroundTasks(),
+    background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    tenant_uuid = _require_agent_access(current_user)
     from agents.orchestrator import AgentOrchestrator
-    orchestrator = AgentOrchestrator()
+    orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
     if background_tasks:
         background_tasks.add_task(orchestrator.run_full_swarm, industry=industry, location=location)
     return {"status": "initiated", "industry": industry, "location": location}
@@ -97,11 +108,12 @@ async def run_swarm_pipeline(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    tenant_uuid = _require_agent_access(current_user)
     print(f"🚀 [SWARM TRACE] Received initiation request for industry: {config.industry}")
     """Trigger the unified swarm pipeline via native background tasks (No Celery required)"""
     from agents.orchestrator import AgentOrchestrator
     
-    orchestrator = AgentOrchestrator(tenant_id=str(current_user.tenant_id))
+    orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
     
     # Fire and forget via native background task
     background_tasks.add_task(
@@ -127,12 +139,13 @@ async def run_swarm_phase(
     current_user: User = Depends(get_current_user),
 ):
     """Trigger a specific phase of the swarm (discovery, sourcing, outreach)"""
+    tenant_uuid = _require_agent_access(current_user)
     if phase not in ["discovery", "sourcing", "outreach"]:
         raise HTTPException(status_code=400, detail="Invalid phase")
 
     from agents.orchestrator import AgentOrchestrator
     # Pass user/tenant context to the orchestrator for notifications
-    orchestrator = AgentOrchestrator(tenant_id=str(current_user.tenant_id))
+    orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
     
     # Run the phase async
     # In a real production env, this would be a Celery task, 
@@ -154,10 +167,14 @@ async def list_agent_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List recent agent task executions"""
+    """List recent agent task executions scoped strictly to the caller's tenant"""
+    tenant_uuid = _require_agent_access(current_user)
     from sqlalchemy import select, desc
     result = await db.execute(
-        select(AgentTask).order_by(desc(AgentTask.created_at)).limit(limit)
+        select(AgentTask)
+        .where(AgentTask.tenant_id == tenant_uuid)
+        .order_by(desc(AgentTask.created_at))
+        .limit(min(max(1, limit), 100))
     )
     tasks = result.scalars().all()
     return {
@@ -183,9 +200,10 @@ async def get_task_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get the status of a specific agent task"""
+    """Get the status of a specific agent task scoped strictly to the caller's tenant"""
+    tenant_uuid = _require_agent_access(current_user)
     task = await db.get(AgentTask, task_id)
-    if not task:
+    if not task or task.tenant_id != tenant_uuid:
         raise HTTPException(status_code=404, detail="Task not found")
 
     return {

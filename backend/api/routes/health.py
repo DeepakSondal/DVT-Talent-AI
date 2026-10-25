@@ -4,8 +4,10 @@ Provides deep health checks for all critical infrastructure components.
 """
 import time
 import structlog
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
+from api.routes.auth import require_admin
+from db.models import User
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -33,7 +35,7 @@ async def health_db():
     except Exception as e:
         log.error("health_db_failed", error=str(e))
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                            content={"status": "unhealthy", "database": "postgresql", "error": str(e)})
+                            content={"status": "unhealthy", "database": "postgresql", "error": "Database connectivity check failed"})
 
 
 @router.get("/health/redis", tags=["Health"], summary="Redis connectivity check")
@@ -54,12 +56,12 @@ async def health_redis():
     except Exception as e:
         log.error("health_redis_failed", error=str(e))
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                            content={"status": "unhealthy", "service": "redis", "error": str(e)})
+                            content={"status": "unhealthy", "service": "redis", "error": "Redis connectivity check failed"})
 
 
-@router.get("/health/llm", tags=["Health"], summary="LLM API key & connectivity check")
-async def health_llm():
-    """Calls the configured LLM with a minimal prompt to verify API key works."""
+@router.get("/health/llm", tags=["Health"], summary="LLM API key & connectivity check (Admin only)")
+async def health_llm(current_user: User = Depends(require_admin)):
+    """Calls the configured LLM with a minimal prompt to verify API key works. Restricted to admins to prevent cost exhaustion."""
     try:
         from config import settings
         from openai import AsyncOpenAI
@@ -84,7 +86,7 @@ async def health_llm():
     except Exception as e:
         log.error("health_llm_failed", error=str(e))
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                            content={"status": "unhealthy", "service": "llm", "error": str(e)})
+                            content={"status": "unhealthy", "service": "llm", "error": "LLM connectivity check failed"})
 
 
 @router.get("/health/all", tags=["Health"], summary="Composite health check for all systems")

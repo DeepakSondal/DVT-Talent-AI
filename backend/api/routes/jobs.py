@@ -8,10 +8,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy import select, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.models import Job, get_db
+from db.models import Job, Company, UserRole, get_db
 from api.routes.auth import get_current_user, User
 
 router = APIRouter()
+
+
+def _require_jobs_access(current_user: User, write: bool = False) -> None:
+    if not current_user.tenant_id or current_user.role == UserRole.CANDIDATE:
+        raise HTTPException(status_code=403, detail="Workspace permissions required to access job requisitions.")
+    if write and current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
+        raise HTTPException(status_code=403, detail="Recruiter, manager, or admin permissions required to modify jobs.")
 
 class JobCreate(BaseModel):
     company_id: UUID
@@ -56,6 +63,7 @@ async def list_jobs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_jobs_access(current_user, write=False)
     query = select(Job).where(and_(Job.tenant_id == current_user.tenant_id, Job.is_active == True))
     count_q = select(func.count(Job.id)).where(and_(Job.tenant_id == current_user.tenant_id, Job.is_active == True))
     if company_id:
@@ -79,6 +87,14 @@ async def create_job(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_jobs_access(current_user, write=True)
+    if data.company_id:
+        comp_res = await db.execute(
+            select(Company).where(Company.id == data.company_id, Company.tenant_id == current_user.tenant_id)
+        )
+        if not comp_res.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Company not found in your workspace")
+
     job = Job(**data.model_dump(exclude_none=True), tenant_id=current_user.tenant_id)
     db.add(job)
     await db.commit()
@@ -90,6 +106,7 @@ async def create_job(
 
 @router.get("/{job_id}")
 async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _require_jobs_access(current_user, write=False)
     result = await db.execute(select(Job).where(Job.id == job_id, Job.tenant_id == current_user.tenant_id))
     job = result.scalar_one_or_none()
     if not job:
@@ -98,6 +115,7 @@ async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db), current_user
 
 @router.patch("/{job_id}/deactivate", status_code=200)
 async def deactivate_job(job_id: UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _require_jobs_access(current_user, write=True)
     result = await db.execute(select(Job).where(Job.id == job_id, Job.tenant_id == current_user.tenant_id))
     job = result.scalar_one_or_none()
     if not job:

@@ -191,17 +191,25 @@ metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
 
-# ── Health ────────────────────────────────────────────────────────────────
+# ── Health & Safe Click Tracking ──────────────────────────────────────────
 @app.get("/api/v1/track/{tracking_id}/click", include_in_schema=False)
 async def track_link_click(tracking_id: _uuid.UUID, url: str, db=Depends(get_db)):
     """
     Tracks clicks on personalized links (e.g. Microsites).
-    Increments click count and redirects to target.
+    Increments click count and redirects ONLY to validated safe origins or the recorded microsite URL.
     """
-    from sqlalchemy import update
+    from urllib.parse import urlparse
+    from sqlalchemy import update, select
     from db.models import EmailSent
+    from fastapi import HTTPException
     
+    stored_microsite_url = None
     try:
+        res = await db.execute(select(EmailSent).where(EmailSent.tracking_id == str(tracking_id)))
+        email_rec = res.scalar_one_or_none()
+        if email_rec and getattr(email_rec, "microsite_url", None):
+            stored_microsite_url = email_rec.microsite_url
+
         await db.execute(
             update(EmailSent)
             .where(EmailSent.tracking_id == str(tracking_id))
@@ -210,8 +218,34 @@ async def track_link_click(tracking_id: _uuid.UUID, url: str, db=Depends(get_db)
         await db.commit()
     except Exception as e:
         log.error("click_track_failed", error=str(e))
-        
-    return RedirectResponse(url=url)
+
+    # Validate redirect target against open-redirect abuse
+    raw_url = (url or "").strip()
+    if not raw_url or "\\" in raw_url or "\x00" in raw_url or "\r" in raw_url or "\n" in raw_url:
+        raise HTTPException(status_code=400, detail="Invalid redirect URL")
+
+    if raw_url.startswith("/") and not raw_url.startswith("//"):
+        return RedirectResponse(url=raw_url)
+
+    parsed = urlparse(raw_url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="Invalid redirect URL scheme")
+
+    allowed_hosts = set()
+    for base in [settings.frontend_url, settings.app_base_url, *settings.cors_origins]:
+        try:
+            h = urlparse(base).hostname
+            if h:
+                allowed_hosts.add(h.lower())
+        except Exception:
+            pass
+    allowed_hosts.update({"dvttalent.com", "www.dvttalent.com"})
+
+    target_host = (parsed.hostname or "").lower()
+    if raw_url == stored_microsite_url or target_host in allowed_hosts:
+        return RedirectResponse(url=raw_url)
+
+    raise HTTPException(status_code=400, detail="Untrusted redirect destination blocked")
 
 
 # Basic liveness (also defined in health_routes but kept here for backwards compat with load balancers)

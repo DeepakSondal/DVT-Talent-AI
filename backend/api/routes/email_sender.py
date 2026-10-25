@@ -72,8 +72,30 @@ def _mask_password(encrypted: Optional[str]) -> Optional[str]:
         return "••••"
 
 
+import ipaddress
+
+
+def _validate_smtp_target(host: str, port: int) -> None:
+    """Reject internal/private/loopback SMTP hosts and non-SMTP ports to prevent SSRF port scanning."""
+    cleaned = (host or "").strip().lower().strip("[]")
+    if not cleaned or "/" in cleaned or ":" in cleaned or " " in cleaned:
+        raise HTTPException(status_code=400, detail="Invalid SMTP hostname")
+    blocked_names = {"localhost", "redis", "postgres", "db", "chromadb", "api", "frontend", "worker", "scheduler", "metadata.google.internal"}
+    if cleaned in blocked_names or cleaned.endswith(".local") or cleaned.endswith(".internal"):
+        raise HTTPException(status_code=400, detail="SMTP host cannot be a local or internal service address")
+    try:
+        ip = ipaddress.ip_address(cleaned)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+            raise HTTPException(status_code=400, detail="SMTP host cannot be a private, loopback, or link-local IP address")
+    except ValueError:
+        pass
+    if port not in (25, 465, 587, 2525):
+        raise HTTPException(status_code=400, detail="SMTP port must be a standard mail submission port (25, 465, 587, or 2525)")
+
+
 def _test_smtp(host: str, port: int, user: str, password: str) -> tuple[bool, str]:
     """Attempt a live SMTP login to validate credentials. Returns (success, error_msg)."""
+    _validate_smtp_target(host, port)
     try:
         with smtplib.SMTP(host, port, timeout=10) as server:
             server.ehlo()

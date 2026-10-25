@@ -36,7 +36,8 @@ async def consult_swarm_memory(ctx: RunContext[AgentDeps], candidate_summary: st
     Queries the Vectorless RAG Memory Tree to check if this specific candidate violates
     any historical rejection rules set by the human executive.
     """
-    memory_result = await query_memory_tree(candidate_summary)
+    tenant_id = getattr(ctx.deps, "tenant_id", "default") or "default"
+    memory_result = await query_memory_tree(candidate_summary, tenant_id=str(tenant_id))
     
     if memory_result == "NO_CONFLICT":
         return "CLEAR: No historical rejection rules apply to this candidate."
