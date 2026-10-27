@@ -135,8 +135,7 @@ app.include_router(auth_sso.router,    prefix=f"{PREFIX}/auth/sso",   tags=["Ent
 app.include_router(tenants.router,    prefix=f"{PREFIX}/tenants",    tags=["Tenants"])
 app.include_router(users.router,      prefix=f"{PREFIX}/users",      tags=["Users"])
 app.include_router(companies.router,  prefix=f"{PREFIX}/companies",  tags=["Companies"])
-# Sales Lead generation deactivated per product pivot to Recruiter + Candidate talent operations
-# app.include_router(leads.router,      prefix=f"{PREFIX}/leads",      tags=["Leads"])
+app.include_router(leads.router,      prefix=f"{PREFIX}/leads",      tags=["Leads"])
 app.include_router(candidates.router, prefix=f"{PREFIX}/candidates", tags=["Candidates"])
 app.include_router(jobs.router,       prefix=f"{PREFIX}/jobs",       tags=["Jobs"])
 app.include_router(campaigns.router,  prefix=f"{PREFIX}/campaigns",  tags=["Campaigns"])
@@ -239,10 +238,15 @@ async def track_link_click(tracking_id: _uuid.UUID, url: str, db=Depends(get_db)
                 allowed_hosts.add(h.lower())
         except Exception:
             pass
-    allowed_hosts.update({"dvttalent.com", "www.dvttalent.com"})
+    allowed_hosts.update({"dvttalent.com", "www.dvttalent.com", "dvt.com", "talent-ai.dvt.com"})
 
     target_host = (parsed.hostname or "").lower()
-    if raw_url == stored_microsite_url or target_host in allowed_hosts:
+    is_trusted_host = (
+        target_host in allowed_hosts
+        or target_host.endswith(".dvttalent.com")
+        or target_host.endswith(".dvt.com")
+    )
+    if raw_url == stored_microsite_url or is_trusted_host:
         return RedirectResponse(url=raw_url)
 
     raise HTTPException(status_code=400, detail="Untrusted redirect destination blocked")

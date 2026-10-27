@@ -104,8 +104,9 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
             const submitBtn = page.locator('#publish-requisition-btn');
             await submitBtn.click();
 
-            // Wait for redirect to jobs list
-            await expect(page).toHaveURL(/.*\/dashboard\/jobs/, { timeout: 25000 });
+            // Wait for redirect to jobs list (anchor with $ so /dashboard/jobs/create does not falsely match)
+            await expect(page).toHaveURL(/\/dashboard\/jobs$/, { timeout: 25000 });
+            await expect(page.locator('h1')).toContainText('Job Requisitions', { timeout: 20000 });
 
             // Refresh to verify persistence
             await page.reload();

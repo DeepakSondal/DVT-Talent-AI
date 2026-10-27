@@ -58,11 +58,11 @@ class CompanyOut(BaseModel):
     description: Optional[str]
     tech_stack: Optional[List[str]]
     hiring_signals: Optional[List]
-    open_roles_count: int
-    score: float
-    is_client: bool
-    created_at: datetime
-    updated_at: datetime
+    open_roles_count: Optional[int] = 0
+    score: Optional[float] = 0.0
+    is_client: Optional[bool] = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
