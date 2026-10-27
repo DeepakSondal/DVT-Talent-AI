@@ -294,7 +294,7 @@ export default function BillingPage() {
                               <Button 
                                   onClick={() => handleUpgrade(plan.id)}
                                   disabled={isCurrent || checkingOut === plan.id}
-                                  variant={isCurrent ? "outline" : "default"}
+                                  variant={isCurrent ? "outline" : "primary"}
                                   className={cn(
                                       "mt-6 w-full h-10 rounded-lg font-semibold text-xs transition-all",
                                       isCurrent 

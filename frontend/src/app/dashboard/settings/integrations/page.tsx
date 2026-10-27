@@ -337,7 +337,7 @@ export default function IntegrationsPage() {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
-            <span>{p.logo}</span> {p.name}
+            <span>{p.tag}</span> {p.name}
           </button>
         ))}
       </div>

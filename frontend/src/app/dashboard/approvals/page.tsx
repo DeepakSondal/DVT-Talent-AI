@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     ShieldCheck, Bot, CheckCircle2, XCircle, AlertTriangle, Sparkles,
     UserCheck, ThumbsUp, ThumbsDown, MessageSquare, ExternalLink, RefreshCw,
-    Filter, FileText, Check, ArrowRight, ShieldAlert, Cpu, Award
+    Filter, FileText, Check, ArrowRight, ShieldAlert, Cpu, Award, Brain
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
