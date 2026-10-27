@@ -132,7 +132,7 @@ export default function CandidateDashboardPage() {
               <Target className="w-3.5 h-3.5 mr-1.5 inline text-blue-300" />
               Candidate Opportunity Network &bull; 100% Free
             </Badge>
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white break-words">
               Welcome back, {profile?.first_name || "Job Seeker"}!
             </h1>
             <p className="text-slate-300 text-sm md:text-base leading-relaxed">
@@ -147,7 +147,7 @@ export default function CandidateDashboardPage() {
                 <Upload className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white">
+                <h4 className="text-sm font-bold text-white break-words">
                   {profile?.has_resume ? "Update Resume" : "Upload Resume"}
                 </h4>
                 <p className="text-[11px] text-indigo-200">
@@ -176,7 +176,7 @@ export default function CandidateDashboardPage() {
             <Briefcase className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white">{jobs.length}</div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white break-words">{jobs.length}</div>
             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Evaluated Opportunities</div>
           </div>
         </Card>
@@ -186,7 +186,7 @@ export default function CandidateDashboardPage() {
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white">{applications.length}</div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white break-words">{applications.length}</div>
             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Active Applications</div>
           </div>
         </Card>
@@ -196,7 +196,7 @@ export default function CandidateDashboardPage() {
             <Zap className="w-6 h-6" />
           </div>
           <div>
-            <div className="text-2xl font-black text-slate-900 dark:text-white">{profile?.skills?.length || 0}</div>
+            <div className="text-2xl font-black text-slate-900 dark:text-white break-words">{profile?.skills?.length || 0}</div>
             <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Parsed Skills in Profile</div>
           </div>
         </Card>
@@ -218,7 +218,7 @@ export default function CandidateDashboardPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white break-words">
               Top Career-Ops Matches
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
@@ -236,7 +236,7 @@ export default function CandidateDashboardPage() {
         {isJobsError ? (
           <div className="p-8 text-center bg-white rounded-2xl border border-rose-200 space-y-3">
             <AlertTriangle className="w-8 h-8 text-rose-500 mx-auto" />
-            <h3 className="text-base font-bold text-slate-800">Failed to load vacancies</h3>
+            <h3 className="text-base font-bold text-slate-800 break-words">Failed to load vacancies</h3>
             <p className="text-xs text-slate-500">Could not retrieve live job requisitions. Please try again.</p>
             <Button
               variant="outline"
@@ -253,7 +253,7 @@ export default function CandidateDashboardPage() {
             {topJobs.length === 0 ? (
               <div className="col-span-2 p-12 text-center bg-white rounded-2xl border border-slate-200">
                 <Briefcase className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <h3 className="text-base font-bold text-slate-800">No active vacancies available</h3>
+                <h3 className="text-base font-bold text-slate-800 break-words">No active vacancies available</h3>
                 <p className="text-xs text-slate-500 mt-1">Check back shortly as new requisitions are published.</p>
               </div>
             ) : (
@@ -264,7 +264,7 @@ export default function CandidateDashboardPage() {
                 const ghostRisk = job.scoring.ghost_job_risk;
 
                 return (
-                  <Card key={job.id} className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all rounded-2xl space-y-4 flex flex-col justify-between">
+                  <Card key={job.id} className="p-6 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-colors duration-150 rounded-2xl space-y-4 flex flex-col justify-between">
                     <div>
                       {/* Header: Title, Company, Score */}
                       <div className="flex items-start justify-between gap-3">
@@ -404,7 +404,7 @@ export default function CandidateDashboardPage() {
           <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
             <Compass className="w-5 h-5" />
           </div>
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">STAR Flashcard Rehearsal</h3>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white break-words">STAR Flashcard Rehearsal</h3>
           <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
             Rehearse behavioral interview responses formatted in Situation, Task, Action, and Result without fabricating unearned experience.
           </p>
@@ -417,7 +417,7 @@ export default function CandidateDashboardPage() {
           <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-800/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
             <FileText className="w-5 h-5" />
           </div>
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">Zero-Fabrication ATS Audit</h3>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white break-words">Zero-Fabrication ATS Audit</h3>
           <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
             Scan your CV against target job requisitions to identify missing keywords and rephrase achievements truthfully for ATS scanners.
           </p>
@@ -430,7 +430,7 @@ export default function CandidateDashboardPage() {
           <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-800/60 flex items-center justify-center text-blue-600 dark:text-blue-400">
             <Shield className="w-5 h-5" />
           </div>
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">Employer Privacy Shield</h3>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white break-words">Employer Privacy Shield</h3>
           <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
             Blacklist your current employer or subsidiary companies so your profile and job hunt activity remain 100% invisible to them.
           </p>

@@ -61,7 +61,7 @@ export default function JobsPage() {
             </Badge>
             <span className="text-xs text-muted-foreground">Automated Sourcing Active</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground break-words">
             Job Requisitions
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -70,7 +70,7 @@ export default function JobsPage() {
         </div>
 
         <Link href="/dashboard/jobs/create" id="create-requisition-header-btn">
-          <Button size="lg" className="h-11 px-6 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-md shadow-primary/20 gap-2">
+          <Button size="lg" className="h-11 px-6 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-md shadow-primary/20 gap-2 whitespace-nowrap">
             <Plus className="w-4 h-4" />
             Create Job Requisition
           </Button>
@@ -91,7 +91,7 @@ export default function JobsPage() {
             <div>
               <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-2xl font-bold text-foreground">{stat.value}</span>
+                <span className="text-2xl font-bold text-foreground break-words">{stat.value}</span>
                 <TrendingUp className="w-4 h-4 text-emerald-500" />
               </div>
             </div>
@@ -186,7 +186,7 @@ export default function JobsPage() {
       {error && !isLoading && (
         <Card className="p-8 text-center bg-card border-destructive/20 rounded-2xl space-y-3">
           <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
-          <h3 className="text-base font-bold text-foreground">Could not load job requisitions</h3>
+          <h3 className="text-base font-bold text-foreground break-words">Could not load job requisitions</h3>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
             Please check your network connection or try refreshing the list.
           </p>
@@ -203,7 +203,7 @@ export default function JobsPage() {
             <Briefcase className="w-7 h-7" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-foreground">No job requisitions found</h3>
+            <h3 className="text-base font-bold text-foreground break-words">No job requisitions found</h3>
             <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
               {search || filterType !== "all"
                 ? "No roles match your current search or filter criteria. Try clearing filters to see all requisitions."
@@ -239,7 +239,7 @@ export default function JobsPage() {
           {filteredJobs.map((job) => (
             <Card
               key={job.id}
-              className="p-5 bg-card border-border hover:border-primary/50 hover:shadow-md transition-all rounded-2xl flex flex-col justify-between space-y-4"
+              className="p-5 bg-card border-border hover:border-primary/50 hover:shadow-md transition-colors duration-150 rounded-2xl flex flex-col justify-between space-y-4"
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
@@ -247,7 +247,7 @@ export default function JobsPage() {
                     <Badge variant="outline" className="border-border text-[10px] font-semibold text-muted-foreground mb-1">
                       {job.job_type || "Full-time"}
                     </Badge>
-                    <h3 className="text-base font-bold text-foreground leading-snug line-clamp-1">
+                    <h3 className="text-base font-bold text-foreground leading-snug line-clamp-1 break-words">
                       {job.title}
                     </h3>
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -279,7 +279,7 @@ export default function JobsPage() {
                   {(job.salary_min || job.salary_max) && (
                     <span className="flex items-center gap-1 text-foreground font-medium">
                       <DollarSign className="w-3.5 h-3.5 text-slate-400" />
-                      ${(job.salary_min || 0) / 1000}k – ${(job.salary_max || 0) / 1000}k
+                      ${(job.salary_min || 0) / 1000}k to ${(job.salary_max || 0) / 1000}k
                     </span>
                   )}
                 </div>
@@ -314,7 +314,7 @@ export default function JobsPage() {
                   Source Candidates
                 </Link>
                 <Link href={`/dashboard/jobs/${job.id}`}>
-                  <Button variant="outline" size="sm" className="h-8 px-3 rounded-lg text-xs font-semibold gap-1">
+                  <Button variant="outline" size="sm" className="h-8 px-3 rounded-lg text-xs font-semibold gap-1 whitespace-nowrap">
                     <span>Manage</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </Button>
@@ -330,7 +330,7 @@ export default function JobsPage() {
         <Card className="bg-card border-border rounded-2xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-foreground">
-              <thead className="bg-muted/50 border-b border-border text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              <thead className="bg-muted/50 border-b border-border text-[11px] font-bold font-semibold text-muted-foreground">
                 <tr>
                   <th className="py-3 px-4">Role Title</th>
                   <th className="py-3 px-4">Company</th>
@@ -378,12 +378,12 @@ export default function JobsPage() {
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Link href={`/dashboard/sourcing?title=${encodeURIComponent(job.title)}`}>
-                          <Button variant="ghost" size="sm" className="h-8 px-2.5 text-xs text-primary font-semibold">
+                          <Button variant="ghost" size="sm" className="h-8 px-2.5 text-xs text-primary font-semibold whitespace-nowrap">
                             Source
                           </Button>
                         </Link>
                         <Link href={`/dashboard/jobs/${job.id}`}>
-                          <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold">
+                          <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold whitespace-nowrap">
                             Details
                           </Button>
                         </Link>

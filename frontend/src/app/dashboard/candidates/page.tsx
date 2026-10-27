@@ -350,15 +350,15 @@ export default function CandidatesPage() {
 
                 <div className="relative z-10 space-y-3 max-w-3xl">
                     <div className="flex items-center gap-3">
-                        <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 uppercase text-[10px] font-black tracking-widest px-3 py-1">
+                        <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] font-black px-3 py-1">
                             Talent Master Repository
                         </Badge>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <span className="text-[10px] font-bold text-slate-400 font-semibold">
                             Auto-Synced from Sourcing Lab & Resume Uploads
                         </span>
                     </div>
 
-                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight">
+                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight break-words">
                         Candidate Talent Directory & <br />
                         <span className="text-emerald-400 italic">Resume Vault.</span>
                     </h1>
@@ -372,7 +372,7 @@ export default function CandidatesPage() {
                     <Button 
                         onClick={handleExportExcel}
                         variant="outline"
-                        className="h-12 px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 border-slate-700 text-white font-black uppercase text-[11px] tracking-widest shadow-md transition-all"
+                        className="h-12 px-6 rounded-2xl bg-slate-900 hover:bg-slate-800 border-slate-700 text-white font-black text-[11px] shadow-md transition-colors duration-150 whitespace-nowrap"
                     >
                         <Download className="w-4 h-4 mr-2 text-emerald-400" />
                         Export Talent Directory (.xlsx)
@@ -380,7 +380,7 @@ export default function CandidatesPage() {
 
                     <Button 
                         onClick={() => setIsUploadOpen(true)}
-                        className="h-12 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-widest shadow-xl shadow-emerald-500/20 transition-all"
+                        className="h-12 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] shadow-xl shadow-emerald-500/20 transition-colors duration-150"
                     >
                         <Upload className="w-4 h-4 mr-2" />
                         Import Resume Document
@@ -398,7 +398,7 @@ export default function CandidatesPage() {
                             placeholder="Search candidates by name, job title, email, or technical skills..." 
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full bg-muted/40 border-transparent focus:bg-card focus:ring-2 focus:ring-emerald-500/20 rounded-2xl py-3 pl-12 pr-4 text-xs font-bold transition-all text-foreground"
+                            className="w-full bg-muted/40 border-transparent focus:bg-card focus:ring-2 focus:ring-emerald-500/20 rounded-2xl py-3 pl-12 pr-4 text-xs font-bold transition-colors duration-150 text-foreground"
                         />
                     </div>
                     <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
@@ -419,8 +419,8 @@ export default function CandidatesPage() {
 
                 <Card className="p-4 bg-emerald-500/5 border-emerald-500/20 flex items-center justify-between px-6 rounded-2xl">
                     <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 opacity-80">Total Candidates</p>
-                        <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{filteredCandidates.length}</p>
+                        <p className="text-[10px] font-black font-semibold text-emerald-600 dark:text-emerald-400 opacity-80">Total Candidates</p>
+                        <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 break-words">{filteredCandidates.length}</p>
                     </div>
                     <Activity className="w-8 h-8 text-emerald-500/30" />
                 </Card>
@@ -437,11 +437,11 @@ export default function CandidatesPage() {
                                         {selectedIds.length === filteredCandidates.length && filteredCandidates.length > 0 ? <CheckSquare className="w-5 h-5 text-emerald-500" /> : <Square className="w-5 h-5" />}
                                     </button>
                                 </th>
-                                <th className="p-6 text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">Candidate Profile</th>
-                                <th className="p-6 text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">AI Match Score</th>
-                                <th className="p-6 text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">Status & Source</th>
-                                <th className="p-6 text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">Resume File</th>
-                                <th className="p-6 w-32 text-right text-[11px] font-black uppercase text-muted-foreground tracking-[0.2em]">Actions</th>
+                                <th className="p-6 text-xs font-semibold text-muted-foreground">Candidate Profile</th>
+                                <th className="p-6 text-xs font-semibold text-muted-foreground">AI Match Score</th>
+                                <th className="p-6 text-xs font-semibold text-muted-foreground">Status & Source</th>
+                                <th className="p-6 text-xs font-semibold text-muted-foreground">Resume File</th>
+                                <th className="p-6 w-32 text-right text-xs font-semibold text-muted-foreground">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -451,7 +451,7 @@ export default function CandidatesPage() {
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     className={cn(
-                                        "group hover:bg-muted/40 transition-all cursor-pointer",
+                                        "group hover:bg-muted/40 transition-colors duration-150 cursor-pointer",
                                         selectedIds.includes(can.id) && "bg-emerald-500/[0.04]"
                                     )}
                                     onClick={() => setSelectedCandidate(can)}
@@ -466,7 +466,7 @@ export default function CandidatesPage() {
                                     </td>
                                     <td className="p-6">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-sm group-hover:bg-emerald-600 transition-all shadow-md">
+                                            <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-sm group-hover:bg-emerald-600 transition-colors duration-150 shadow-md">
                                                 {can.first_name[0]}{can.last_name[0]}
                                             </div>
                                             <div className="space-y-1">
@@ -474,12 +474,12 @@ export default function CandidatesPage() {
                                                     <p className="text-sm font-black text-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                                                         {can.first_name} {can.last_name}
                                                     </p>
-                                                    <span className="text-xs font-semibold text-muted-foreground">• {can.experience_years} Yrs Exp</span>
+                                                    <span className="text-xs font-semibold text-muted-foreground">, {can.experience_years} Yrs Exp</span>
                                                 </div>
                                                 <p className="text-xs font-bold text-muted-foreground">{can.title} at <span className="text-foreground">{can.company}</span></p>
                                                 <div className="flex items-center gap-2 pt-1">
                                                     {can.skills.slice(0, 3).map((skill, i) => (
-                                                        <span key={i} className="text-[9px] font-black uppercase px-2 py-0.5 bg-muted rounded-md text-foreground">
+                                                        <span key={i} className="text-[9px] font-black px-2 py-0.5 bg-muted rounded-md text-foreground">
                                                             {skill}
                                                         </span>
                                                     ))}
@@ -500,7 +500,7 @@ export default function CandidatesPage() {
                                     <td className="p-6 space-y-1.5">
                                         <Badge 
                                             variant={can.status === "shortlisted" ? "success" : "secondary"}
-                                            className="uppercase tracking-[0.1em] font-black text-[9px] py-0.5 px-2.5 rounded-lg"
+                                            className="font-semibold font-black text-[9px] py-0.5 px-2.5 rounded-lg"
                                         >
                                             {can.status}
                                         </Badge>
@@ -523,7 +523,7 @@ export default function CandidatesPage() {
                                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                                             <Link
                                                 href={`/dashboard/candidates/${can.id}`}
-                                                className="inline-flex items-center justify-center h-8 px-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-border hover:bg-muted text-foreground transition-colors"
+                                                className="inline-flex items-center justify-center h-8 px-2.5 rounded-lg text-[10px] font-bold font-semibold border border-border hover:bg-muted text-foreground transition-colors"
                                             >
                                                 View Profile
                                             </Link>
@@ -565,7 +565,7 @@ export default function CandidatesPage() {
                                 size="sm"
                                 variant="outline"
                                 onClick={handleBulkShortlist}
-                                className="h-9 rounded-xl text-xs font-bold border-slate-700 bg-slate-900 text-white hover:bg-slate-800 dark:border-border dark:bg-muted dark:text-foreground"
+                                className="h-9 rounded-xl text-xs font-bold border-slate-700 bg-slate-900 text-white hover:bg-slate-800 dark:border-border dark:bg-muted dark:text-foreground whitespace-nowrap"
                             >
                                 <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-emerald-400" />
                                 Shortlist
@@ -573,7 +573,7 @@ export default function CandidatesPage() {
                             <Button
                                 size="sm"
                                 onClick={handleBulkOutreach}
-                                className="h-9 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-white"
+                                className="h-9 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-white whitespace-nowrap"
                             >
                                 <Mail className="w-3.5 h-3.5 mr-1.5" />
                                 Outreach
@@ -607,7 +607,7 @@ export default function CandidatesPage() {
                                         <Upload className="w-6 h-6" />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-black uppercase text-foreground">Import Resume Document</h3>
+                                        <h3 className="text-xl font-black uppercase text-foreground break-words">Import Resume Document</h3>
                                         <p className="text-xs font-bold text-muted-foreground">Full multi-format extraction (PDF, DOCX, TXT)</p>
                                     </div>
                                 </div>
@@ -627,7 +627,7 @@ export default function CandidatesPage() {
                                 }}
                                 onClick={() => !isUploading && fileInputRef.current?.click()}
                                 className={cn(
-                                    "border-2 border-dashed rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4 transition-all",
+                                    "border-2 border-dashed rounded-3xl p-10 text-center flex flex-col items-center justify-center gap-4 transition-colors duration-150",
                                     isUploading ? "opacity-50 pointer-events-none border-emerald-500/50 bg-emerald-500/5" :
                                     dragActive ? "border-emerald-500 bg-emerald-500/10 cursor-pointer" : "border-border hover:border-emerald-500/50 bg-muted/20 cursor-pointer"
                                 )}
@@ -683,8 +683,8 @@ export default function CandidatesPage() {
                                         {selectedCandidate.first_name[0]}{selectedCandidate.last_name[0]}
                                     </div>
                                     <div>
-                                        <h3 className="text-2xl font-black text-foreground">{selectedCandidate.first_name} {selectedCandidate.last_name}</h3>
-                                        <p className="text-xs font-bold text-muted-foreground">{selectedCandidate.title} • {selectedCandidate.company}</p>
+                                        <h3 className="text-2xl font-black text-foreground break-words">{selectedCandidate.first_name} {selectedCandidate.last_name}</h3>
+                                        <p className="text-xs font-bold text-muted-foreground">{selectedCandidate.title} , {selectedCandidate.company}</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setSelectedCandidate(null)} className="p-2 text-muted-foreground hover:text-foreground">
@@ -695,28 +695,28 @@ export default function CandidatesPage() {
                             <div className="space-y-6">
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                     <div className="p-4 bg-muted/40 rounded-2xl">
-                                        <p className="text-[10px] font-black uppercase text-muted-foreground">Email</p>
+                                        <p className="text-[10px] font-black text-muted-foreground">Email</p>
                                         <p className="text-xs font-bold text-foreground truncate">{selectedCandidate.email}</p>
                                     </div>
                                     <div className="p-4 bg-muted/40 rounded-2xl">
-                                        <p className="text-[10px] font-black uppercase text-muted-foreground">Phone</p>
+                                        <p className="text-[10px] font-black text-muted-foreground">Phone</p>
                                         <p className="text-xs font-bold text-foreground">{selectedCandidate.phone}</p>
                                     </div>
                                     <div className="p-4 bg-muted/40 rounded-2xl col-span-2 md:col-span-1">
-                                        <p className="text-[10px] font-black uppercase text-muted-foreground">AI Match Score</p>
+                                        <p className="text-[10px] font-black text-muted-foreground">AI Match Score</p>
                                         <p className="text-xs font-black text-emerald-500">{selectedCandidate.score}% Match</p>
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <h4 className="text-xs font-black uppercase text-muted-foreground">AI Reasoning & Summary</h4>
+                                    <h4 className="text-xs font-black text-muted-foreground break-words">AI Reasoning & Summary</h4>
                                     <div className="p-4 bg-slate-950 text-white rounded-2xl text-xs leading-relaxed font-medium">
                                         "{selectedCandidate.ai_summary}"
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <h4 className="text-xs font-black uppercase text-muted-foreground">Technical Skills</h4>
+                                    <h4 className="text-xs font-black text-muted-foreground break-words">Technical Skills</h4>
                                     <div className="flex flex-wrap gap-2">
                                         {selectedCandidate.skills.map((skill, i) => (
                                             <Badge key={i} className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold text-xs py-1 px-3">
@@ -735,7 +735,7 @@ export default function CandidatesPage() {
                                         Download Original Resume
                                     </Button>
                                     <Link href={`/dashboard/candidates/${selectedCandidate.id}`} className="w-full sm:flex-1">
-                                        <Button variant="outline" className="w-full font-bold text-xs rounded-xl h-11 gap-2 border-border text-foreground hover:bg-muted">
+                                        <Button variant="outline" className="w-full font-bold text-xs rounded-xl h-11 gap-2 border-border text-foreground hover:bg-muted whitespace-nowrap">
                                             <ExternalLink className="w-4 h-4" />
                                             Full Career &amp; Resume View
                                         </Button>

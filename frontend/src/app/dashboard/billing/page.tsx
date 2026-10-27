@@ -153,7 +153,7 @@ export default function BillingPage() {
                   <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shadow-sm">
                       <Wallet className="w-6 h-6" />
                   </div>
-                  <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+                  <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight break-words">
                     Billing &amp; <span className="text-primary italic">Subscriptions</span>
                   </h1>
               </div>
@@ -167,7 +167,7 @@ export default function BillingPage() {
                 onClick={handlePortal} 
                 disabled={openingPortal}
                 variant="outline" 
-                className="h-11 px-5 rounded-xl bg-card border-border hover:bg-muted font-bold text-xs tracking-wider shadow-sm"
+                className="h-11 px-5 rounded-xl bg-card border-border hover:bg-muted font-bold text-xs shadow-sm whitespace-nowrap"
               >
                 {openingPortal ? <RefreshCcw className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
                 Billing Portal
@@ -188,12 +188,12 @@ export default function BillingPage() {
                           <Badge className="bg-blue-600 text-white font-semibold text-xs py-0.5 px-2.5">
                               Active Plan: {status?.plan || "Guest"}
                           </Badge>
-                          <span className="text-xs text-slate-400">Enterprise Grade Isolation</span>
+                          <span className="text-xs text-slate-400">Dedicated Tenant Isolation</span>
                       </div>
                       
                       <div className="space-y-1">
-                          <h2 className="text-4xl font-extrabold tracking-tight">
-                              {(status?.credits_balance || 0).toLocaleString()} <span className="text-blue-400 text-2xl font-bold">Credits</span>
+                          <h2 className="text-4xl font-extrabold tracking-tight break-words">
+                              {(status?.credits_balance || 0).toLocaleString()} <span className="text-blue-400 text-2xl font-bold break-words">Credits</span>
                           </h2>
                           <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
                               Remaining balance for candidate discovery, deep resume screening, and automated outreach.
@@ -205,7 +205,7 @@ export default function BillingPage() {
                       <div className="flex justify-between items-end">
                         <div className="space-y-0.5">
                           <p className="text-xs font-semibold text-slate-400">Utilization Rate</p>
-                          <p className="text-xl font-bold">{creditsPercent}% Available</p>
+                          <p className="text-xl font-bold break-words">{creditsPercent}% Available</p>
                         </div>
                         <div className="text-right">
                           <p className="text-xs font-semibold text-slate-400">Last Sync</p>
@@ -232,7 +232,7 @@ export default function BillingPage() {
       {/* Subscription Grid */}
       <div className="space-y-6">
           <div className="flex items-center gap-4">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Plan Allocation &amp; Capacity</h2>
+              <h2 className="text-xs font-bold font-semibold text-muted-foreground whitespace-nowrap break-words">Plan Allocation &amp; Capacity</h2>
               <div className="h-px w-full bg-border" />
           </div>
           
@@ -249,7 +249,7 @@ export default function BillingPage() {
                           transition={{ delay: i * 0.08 }}
                       >
                           <Card className={cn(
-                              "p-6 h-full flex flex-col justify-between rounded-xl transition-all relative overflow-hidden",
+                              "p-6 h-full flex flex-col justify-between rounded-xl transition-colors duration-150 relative overflow-hidden",
                               isCurrent 
                                 ? "bg-card border-2 border-blue-600 shadow-sm" 
                                 : "bg-card border-border hover:border-border/80 shadow-sm"
@@ -264,10 +264,10 @@ export default function BillingPage() {
                                               )}>
                                                   <Icon className="w-5 h-5" />
                                               </div>
-                                              <h3 className="text-lg font-bold tracking-tight">{plan.name}</h3>
+                                              <h3 className="text-lg font-bold tracking-tight break-words">{plan.name}</h3>
                                           </div>
                                           <div className="flex items-baseline gap-1 pt-2">
-                                              <span className="text-3xl font-extrabold">${Math.floor(plan.price_usd_cents / 100)}</span>
+                                              <span className="text-3xl font-extrabold break-words">${Math.floor(plan.price_usd_cents / 100)}</span>
                                               <span className="text-xs text-muted-foreground">/mo</span>
                                           </div>
                                       </div>
@@ -279,7 +279,7 @@ export default function BillingPage() {
                                   </div>
 
                                   <div className="space-y-2 border-t border-border pt-4">
-                                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Features &amp; Quotas</p>
+                                      <p className="text-xs font-semibold text-muted-foreground font-semibold">Features &amp; Quotas</p>
                                       <div className="space-y-2">
                                           {plan.features.map((f, fi) => (
                                               <div key={fi} className="flex items-center gap-2 text-xs text-foreground/90">
@@ -296,7 +296,7 @@ export default function BillingPage() {
                                   disabled={isCurrent || checkingOut === plan.id}
                                   variant={isCurrent ? "outline" : "primary"}
                                   className={cn(
-                                      "mt-6 w-full h-10 rounded-lg font-semibold text-xs transition-all",
+                                      "mt-6 w-full h-10 rounded-lg font-semibold text-xs transition-colors duration-150",
                                       isCurrent 
                                           ? "border-border text-muted-foreground bg-muted/40 cursor-default" 
                                           : "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
@@ -320,28 +320,28 @@ export default function BillingPage() {
       {/* Top-ups Section */}
       <div className="space-y-8">
           <div className="flex items-center gap-4">
-              <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground whitespace-nowrap">Credit Top-Ups</h2>
-              <div className="h-px w-full bg-gradient-to-r from-border to-transparent" />
+              <h2 className="text-xs font-semibold text-muted-foreground whitespace-nowrap break-words">Credit Top-Ups</h2>
+              <div className="h-px w-full bg-emerald-600" />
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {plans.filter(p => p.is_one_time).map((plan) => (
-                  <Card key={plan.id} className="p-8 bg-white border-border shadow-xl hover:border-blue-500/30 transition-all rounded-[2rem] flex items-center justify-between group">
+                  <Card key={plan.id} className="p-8 bg-white border-border shadow-xl hover:border-blue-500/30 transition-colors duration-150 rounded-[2rem] flex items-center justify-between group">
                       <div className="space-y-1">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">{plan.name}</p>
+                          <p className="text-[10px] font-black font-semibold text-blue-600">{plan.name}</p>
                           <div className="flex items-baseline gap-2">
-                              <span className="text-3xl font-black">{plan.credits_per_month.toLocaleString()}</span>
+                              <span className="text-3xl font-black break-words">{plan.credits_per_month.toLocaleString()}</span>
                               <span className="text-xs font-bold text-slate-400">Credits</span>
                           </div>
                       </div>
                       <div className="flex items-center gap-4">
-                          <span className="text-xl font-black">${Math.floor(plan.price_usd_cents / 100)}</span>
+                          <span className="text-xl font-black break-words">${Math.floor(plan.price_usd_cents / 100)}</span>
                           <Button 
                             onClick={() => handleUpgrade(plan.id)}
                             disabled={checkingOut === plan.id}
                             variant="secondary" 
                             size="icon" 
-                            className="h-12 w-12 rounded-xl bg-slate-900 text-white hover:bg-black group-hover:scale-110 transition-all"
+                            className="h-12 w-12 rounded-xl bg-slate-900 text-white hover:bg-black group-hover:scale-110 transition-colors duration-150"
                           >
                             {checkingOut === plan.id ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <ArrowUpRight className="w-4 h-4" />}
                           </Button>
@@ -354,8 +354,8 @@ export default function BillingPage() {
       {/* Transactions Section */}
       <div className="space-y-8">
           <div className="flex items-center gap-4">
-              <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted-foreground whitespace-nowrap">Transaction Ledger</h2>
-              <div className="h-px w-full bg-gradient-to-r from-border to-transparent" />
+              <h2 className="text-xs font-semibold text-muted-foreground whitespace-nowrap break-words">Transaction Ledger</h2>
+              <div className="h-px w-full bg-emerald-600" />
           </div>
           
           <Card className="bg-card border-border shadow-sm rounded-xl overflow-hidden">
@@ -363,21 +363,21 @@ export default function BillingPage() {
                   <table className="w-full text-left">
                       <thead>
                           <tr className="bg-slate-50/50 border-b border-border/50">
-                              <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-500">Operation</th>
-                              <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-500">Vector</th>
-                              <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Magnitude</th>
-                              <th className="p-6 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Timestamp</th>
+                              <th className="p-6 text-[10px] font-black font-semibold text-slate-500">Operation</th>
+                              <th className="p-6 text-[10px] font-black font-semibold text-slate-500">Vector</th>
+                              <th className="p-6 text-[10px] font-black font-semibold text-slate-500 text-right">Magnitude</th>
+                              <th className="p-6 text-[10px] font-black font-semibold text-slate-500 text-right">Timestamp</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                           {status?.transactions?.map((tx) => (
                               <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
                                   <td className="p-6">
-                                      <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{tx.description}</p>
+                                      <p className="text-sm font-black text-slate-900 tracking-tight">{tx.description}</p>
                                   </td>
                                   <td className="p-6">
                                       <Badge className={cn(
-                                          "font-black uppercase tracking-widest text-[9px]",
+                                          "font-black font-semibold text-[9px]",
                                           tx.type === "credit" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-red-50 text-red-600 border-red-100"
                                       )}>
                                           {tx.type}
@@ -386,14 +386,14 @@ export default function BillingPage() {
                                   <td className={cn("p-6 text-right font-black", tx.type === "credit" ? "text-emerald-600" : "text-red-600")}>
                                       {tx.type === "credit" ? "+" : "-"}{Math.abs(tx.amount).toLocaleString()}
                                   </td>
-                                  <td className="p-6 text-right text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                  <td className="p-6 text-right text-[10px] font-black text-slate-400">
                                       {new Date(tx.created_at).toLocaleDateString()}
                                   </td>
                               </tr>
                           ))}
                           {(!status?.transactions || status.transactions.length === 0) && (
                               <tr>
-                                  <td colSpan={4} className="p-20 text-center text-[10px] font-black uppercase text-slate-400 tracking-[0.3em]">
+                                  <td colSpan={4} className="p-20 text-center text-xs font-semibold text-slate-400">
                                       No ledger entries found.
                                   </td>
                               </tr>

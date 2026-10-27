@@ -76,7 +76,7 @@ export default function SettingsPage() {
             <Settings className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Workspace Settings</h1>
+            <h1 className="text-2xl font-bold text-foreground break-words">Workspace Settings</h1>
             <p className="text-sm text-muted-foreground mt-1">
               Configure identity, email sender, and team access.
             </p>
@@ -122,7 +122,7 @@ export default function SettingsPage() {
         <TabsContent value="general" className="space-y-6">
           <Card className="bg-card border-border shadow-sm rounded-xl">
             <CardHeader className="border-b border-border bg-muted/20">
-              <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              <CardTitle className="text-sm font-bold font-semibold text-muted-foreground">
                 Organization Profile
               </CardTitle>
             </CardHeader>
@@ -181,7 +181,7 @@ export default function SettingsPage() {
         <TabsContent value="team">
           <Card className="bg-card border-border shadow-sm rounded-xl">
             <CardHeader className="border-b border-border bg-muted/20 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              <CardTitle className="text-sm font-bold font-semibold text-muted-foreground">
                 Authorized Users
               </CardTitle>
             </CardHeader>

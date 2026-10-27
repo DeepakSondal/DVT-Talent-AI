@@ -1,6 +1,18 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand · redesign: restyle
+ * paper: oklch(14% 0.015 250) · accent: oklch(64% 0.17 160) · display: Inter · body: Inter
+ * nav: kept · signature: kept · states: hover, focus-visible, active
+ * axes: dark/grotesk-sans/chromatic-emerald · posture: Settled · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H5 E5 S4 R4 V4 · weakest: R, unified design tokens across dashboard */
+@import url("./tokens.css");
+@import url("./base.css");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html, body {
+  overflow-x: clip;
+}
 
 @layer base {
   :root {

@@ -172,12 +172,12 @@ export default function ApprovalsPage() {
                 
                 <div className="relative z-10 space-y-3 max-w-2xl">
                     <div className="flex items-center gap-3">
-                        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 uppercase text-[10px] font-black tracking-widest px-3 py-1">
+                        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] font-black px-3 py-1">
                             Human-in-the-Loop Protocol
                         </Badge>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">NYC LL144 & EEOC Safeguarded</span>
+                        <span className="text-[10px] font-bold font-semibold text-slate-400">NYC LL144 & EEOC Safeguarded</span>
                     </div>
-                    <h1 className="text-3xl md:text-5xl font-black tracking-tight">
+                    <h1 className="text-3xl md:text-5xl font-black tracking-tight break-words">
                         Recruiter Approval <span className="text-blue-500">Workspace</span>
                     </h1>
                     <p className="text-sm md:text-base text-slate-400 font-medium">
@@ -188,13 +188,13 @@ export default function ApprovalsPage() {
                 <div className="relative z-10 flex flex-col items-start md:items-end gap-3 shrink-0">
                     <div className="flex items-center gap-4 bg-slate-900/80 backdrop-blur-md px-6 py-4 rounded-2xl border border-slate-800">
                         <div className="text-center">
-                            <p className="text-[10px] font-black uppercase text-slate-400">Queue Active</p>
-                            <p className="text-2xl font-black text-blue-400">{pendingCount}</p>
+                            <p className="text-[10px] font-black text-slate-400">Queue Active</p>
+                            <p className="text-2xl font-black text-blue-400 break-words">{pendingCount}</p>
                         </div>
                         <div className="h-8 w-px bg-slate-800" />
                         <div className="text-center">
-                            <p className="text-[10px] font-black uppercase text-slate-400">AI Alignment</p>
-                            <p className="text-2xl font-black text-emerald-400">98.4%</p>
+                            <p className="text-[10px] font-black text-slate-400">AI Alignment</p>
+                            <p className="text-2xl font-black text-emerald-400 break-words">98.4%</p>
                         </div>
                     </div>
                     <Button onClick={fetchLedgers} variant="outline" size="sm" className="bg-slate-900 border-slate-800 text-white hover:bg-slate-800 text-xs font-bold rounded-xl">
@@ -207,12 +207,12 @@ export default function ApprovalsPage() {
             {/* Approval Items */}
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
+                    <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-3 break-words">
                         <UserCheck className="w-5 h-5 text-blue-500" />
                         Pending Action Items ({items.length})
                     </h2>
                     <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[10px] font-bold tracking-widest uppercase bg-muted">
+                        <Badge variant="outline" className="text-[10px] font-bold font-semibold bg-muted">
                             Sorted by Risk & Match Confidence
                         </Badge>
                     </div>
@@ -226,7 +226,7 @@ export default function ApprovalsPage() {
                 ) : items.length === 0 ? (
                     <Card className="p-16 text-center rounded-[2.5rem] bg-card border-dashed">
                         <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-                        <h3 className="text-lg font-black uppercase">All Approval Items Cleared!</h3>
+                        <h3 className="text-lg font-black uppercase break-words">All Approval Items Cleared!</h3>
                         <p className="text-sm text-muted-foreground max-w-md mx-auto mt-2">
                             The agent swarm is executing autonomously within your set policy confidence bounds.
                         </p>
@@ -242,7 +242,7 @@ export default function ApprovalsPage() {
                                     exit={{ opacity: 0, scale: 0.95 }}
                                 >
                                     <Card className={cn(
-                                        "p-8 rounded-[2.5rem] border transition-all shadow-xl relative overflow-hidden",
+                                        "p-8 rounded-[2.5rem] border transition-colors duration-150 shadow-xl relative overflow-hidden",
                                         item.status === "APPROVED" ? "border-emerald-500/30 bg-emerald-500/[0.02]" :
                                         item.status === "REJECTED" ? "border-rose-500/30 bg-rose-500/[0.02]" :
                                         "border-border bg-card hover:border-blue-500/30"
@@ -251,26 +251,26 @@ export default function ApprovalsPage() {
                                             {/* Candidate & Role Header */}
                                             <div className="space-y-2">
                                                 <div className="flex flex-wrap items-center gap-3">
-                                                    <h3 className="text-2xl font-black tracking-tight text-foreground">{item.candidate_name}</h3>
-                                                    <Badge className="bg-blue-600/10 text-blue-600 dark:text-blue-400 border-blue-500/20 font-black text-[10px] uppercase tracking-widest px-3 py-1">
+                                                    <h3 className="text-2xl font-black tracking-tight text-foreground break-words">{item.candidate_name}</h3>
+                                                    <Badge className="bg-blue-600/10 text-blue-600 dark:text-blue-400 border-blue-500/20 font-black text-[10px] font-semibold px-3 py-1">
                                                         {(item.confidence_score * 100).toFixed(0)}% Match Confidence
                                                     </Badge>
                                                     {item.sanitization_status === "NEUTRALIZED" && (
-                                                        <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-black text-[10px] uppercase tracking-widest px-3 py-1 flex items-center gap-1">
+                                                        <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-black text-[10px] font-semibold px-3 py-1 flex items-center gap-1">
                                                             <ShieldAlert className="w-3 h-3" /> Injection Neutralized
                                                         </Badge>
                                                     )}
                                                     {item.email_deliverability === "DISPOSABLE_BLOCKED" && (
-                                                        <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 font-black text-[10px] uppercase tracking-widest px-3 py-1 flex items-center gap-1">
+                                                        <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 font-black text-[10px] font-semibold px-3 py-1 flex items-center gap-1">
                                                             <AlertTriangle className="w-3 h-3" /> Disposable Domain Blocked
                                                         </Badge>
                                                     )}
                                                 </div>
                                                 <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-muted-foreground">
                                                     <span className="text-foreground font-bold">{item.candidate_role}</span>
-                                                    <span>•</span>
+                                                    <span>,</span>
                                                     <span>{item.candidate_email}</span>
-                                                    <span>•</span>
+                                                    <span>,</span>
                                                     <span>ID: <code className="bg-muted px-2 py-0.5 rounded font-mono text-[10px]">{item.id}</code></span>
                                                 </div>
                                             </div>
@@ -278,7 +278,7 @@ export default function ApprovalsPage() {
                                             {/* Status Badge or Override Actions */}
                                             {item.status !== "PENDING" ? (
                                                 <div className="flex items-center gap-3 shrink-0">
-                                                    <Badge variant={item.status === "APPROVED" ? "success" : "destructive"} className="px-4 py-2 font-black uppercase text-xs tracking-widest rounded-xl">
+                                                    <Badge variant={item.status === "APPROVED" ? "success" : "destructive"} className="px-4 py-2 font-black text-xs rounded-xl">
                                                         {item.status === "APPROVED" ? "Approved & Enrolled" : "Decision Rejected"}
                                                     </Badge>
                                                 </div>
@@ -286,21 +286,21 @@ export default function ApprovalsPage() {
                                                 <div className="flex flex-wrap items-center gap-3 shrink-0 w-full lg:w-auto">
                                                     <Button
                                                         onClick={() => handleOverride(item.id, "APPROVED")}
-                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs tracking-widest px-6 h-12 rounded-xl shadow-lg shadow-emerald-500/20"
+                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-6 h-12 rounded-xl shadow-lg shadow-emerald-500/20"
                                                     >
                                                         <ThumbsUp className="w-4 h-4 mr-2" /> Approve & Enrol
                                                     </Button>
                                                     <Button
                                                         onClick={() => handleOverride(item.id, "REJECTED")}
                                                         variant="outline"
-                                                        className="border-rose-500/30 text-rose-500 hover:bg-rose-500/10 font-black uppercase text-xs tracking-widest px-5 h-12 rounded-xl"
+                                                        className="border-rose-500/30 text-rose-500 hover:bg-rose-500/10 font-black text-xs px-5 h-12 rounded-xl"
                                                     >
                                                         <ThumbsDown className="w-4 h-4 mr-2" /> Reject
                                                     </Button>
                                                     <Button
                                                         onClick={() => setCalibratingId(calibratingId === item.id ? null : item.id)}
                                                         variant="ghost"
-                                                        className="text-xs font-black uppercase tracking-widest h-12 px-4 rounded-xl"
+                                                        className="text-xs font-black font-semibold h-12 px-4 rounded-xl"
                                                     >
                                                         <MessageSquare className="w-4 h-4 mr-2 text-blue-500" /> Calibrate
                                                     </Button>
@@ -312,7 +312,7 @@ export default function ApprovalsPage() {
                                         <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
                                             {/* AI Reasoning */}
                                             <div className="lg:col-span-7 space-y-4">
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">AI Rationale & Decision Record</p>
+                                                <p className="text-[10px] font-black font-semibold text-muted-foreground">AI Rationale & Decision Record</p>
                                                 <div className="p-5 bg-muted/40 dark:bg-slate-900/60 rounded-2xl border border-border text-sm leading-relaxed font-medium">
                                                     "{item.decision_reasoning}"
                                                 </div>
@@ -320,7 +320,7 @@ export default function ApprovalsPage() {
 
                                             {/* Security & Evidence Checks */}
                                             <div className="lg:col-span-5 space-y-4">
-                                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Compliance Signals</p>
+                                                <p className="text-[10px] font-black font-semibold text-muted-foreground">Compliance Signals</p>
                                                 <div className="space-y-2">
                                                     {item.evidence_items.map((ev, idx) => (
                                                         <div key={idx} className="flex items-start gap-2.5 text-xs text-foreground/80 font-semibold bg-card p-3 rounded-xl border border-border/60">
@@ -340,7 +340,7 @@ export default function ApprovalsPage() {
                                                 className="mt-6 pt-6 border-t border-border space-y-4"
                                             >
                                                 <div className="flex items-center justify-between">
-                                                    <h4 className="text-xs font-black uppercase tracking-widest text-blue-500 flex items-center gap-2">
+                                                    <h4 className="text-xs font-black font-semibold text-blue-500 flex items-center gap-2 break-words">
                                                         <Brain className="w-4 h-4" /> Recruiter Memory Calibration
                                                     </h4>
                                                     <span className="text-[10px] text-muted-foreground">Teaches agent swarm for future candidate evaluation</span>
@@ -353,7 +353,7 @@ export default function ApprovalsPage() {
                                                         onChange={(e) => setCalibrationNote(e.target.value)}
                                                         className="flex-1 bg-background border border-border rounded-xl px-4 py-3 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
                                                     />
-                                                    <Button onClick={() => submitCalibration(item.id)} className="bg-blue-600 text-white font-black text-xs uppercase px-6 rounded-xl">
+                                                    <Button onClick={() => submitCalibration(item.id)} className="bg-blue-600 text-white font-black text-xs px-6 rounded-xl">
                                                         Save to Memory
                                                     </Button>
                                                 </div>

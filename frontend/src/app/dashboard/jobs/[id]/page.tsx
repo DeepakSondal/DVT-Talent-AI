@@ -88,7 +88,7 @@ export default function JobDetailPage() {
     return (
       <div className="py-20 text-center space-y-4">
         <Briefcase className="w-10 h-10 text-muted-foreground mx-auto" />
-        <h2 className="text-lg font-bold text-foreground">Requisition Not Found</h2>
+        <h2 className="text-lg font-bold text-foreground break-words">Requisition Not Found</h2>
         <p className="text-xs text-muted-foreground">The job requisition you are looking for may have been deleted.</p>
         <Link href="/dashboard/jobs">
           <Button variant="outline" size="sm" className="text-xs font-semibold">
@@ -120,7 +120,7 @@ export default function JobDetailPage() {
 
         <div className="flex items-center gap-2.5">
           <Link href={`/dashboard/sourcing?title=${encodeURIComponent(job.title)}`}>
-            <Button size="sm" className="h-9 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold gap-1.5 shadow-sm">
+            <Button size="sm" className="h-9 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold gap-1.5 shadow-sm whitespace-nowrap">
               <Target className="w-3.5 h-3.5" />
               Source Candidates
             </Button>
@@ -149,7 +149,7 @@ export default function JobDetailPage() {
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="text-sm font-bold text-foreground">Confirm Role Deactivation</h4>
+              <h4 className="text-sm font-bold text-foreground break-words">Confirm Role Deactivation</h4>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                 Deactivating this role will pause all automated AI candidate sourcing swarms for &ldquo;{job.title}&rdquo;. You can review existing matched applicants at any time.
               </p>
@@ -194,7 +194,7 @@ export default function JobDetailPage() {
               </Badge>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground break-words">
               {job.title}
             </h1>
 
@@ -217,7 +217,7 @@ export default function JobDetailPage() {
 
           <div className="bg-muted/50 p-4 rounded-2xl border border-border/80 text-left sm:text-right min-w-[180px]">
             <span className="text-[11px] font-semibold text-muted-foreground block">Salary Band</span>
-            <span className="text-xl font-bold text-foreground block mt-0.5">
+            <span className="text-xl font-bold text-foreground block mt-0.5 break-words">
               {job.salary_min || job.salary_max
                 ? `$${((job.salary_min || 0) / 1000).toLocaleString()}k – $${((job.salary_max || 0) / 1000).toLocaleString()}k`
                 : "Market Competitive"}
@@ -249,7 +249,7 @@ export default function JobDetailPage() {
         <div className="space-y-4 pt-4 border-t border-border">
           {job.description && (
             <div className="space-y-1.5">
-              <h3 className="text-sm font-semibold text-foreground">Role Description</h3>
+              <h3 className="text-sm font-semibold text-foreground break-words">Role Description</h3>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
                 {job.description}
               </p>
@@ -258,7 +258,7 @@ export default function JobDetailPage() {
 
           {job.requirements && (
             <div className="space-y-1.5 pt-2">
-              <h3 className="text-sm font-semibold text-foreground">Requirements &amp; Qualifications</h3>
+              <h3 className="text-sm font-semibold text-foreground break-words">Requirements &amp; Qualifications</h3>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
                 {job.requirements}
               </p>
@@ -271,7 +271,7 @@ export default function JobDetailPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-foreground">
+            <h2 className="text-lg font-bold text-foreground break-words">
               Candidate Pool Matches ({matches.length})
             </h2>
             <p className="text-xs text-muted-foreground">
@@ -295,7 +295,7 @@ export default function JobDetailPage() {
         ) : matches.length === 0 ? (
           <Card className="p-8 text-center bg-card border-border rounded-2xl space-y-2">
             <Users className="w-8 h-8 text-muted-foreground mx-auto" />
-            <h3 className="text-sm font-bold text-foreground">No candidate matches found yet</h3>
+            <h3 className="text-sm font-bold text-foreground break-words">No candidate matches found yet</h3>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
               Run an automated talent search to discover candidates matching this role across GitHub, LinkedIn, and your candidate archive.
             </p>
@@ -310,10 +310,10 @@ export default function JobDetailPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {matches.map((cand) => (
-              <Card key={cand.id} className="p-5 bg-card border-border hover:border-primary/50 transition-all rounded-2xl space-y-3">
+              <Card key={cand.id} className="p-5 bg-card border-border hover:border-primary/50 transition-colors duration-150 rounded-2xl space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h4 className="text-sm font-bold text-foreground">
+                    <h4 className="text-sm font-bold text-foreground break-words">
                       {cand.first_name} {cand.last_name}
                     </h4>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -340,7 +340,7 @@ export default function JobDetailPage() {
                 <div className="pt-2 border-t border-border flex items-center justify-between text-xs">
                   <span className="text-muted-foreground capitalize">Status: {cand.status || "Sourced"}</span>
                   <Link href={`/dashboard/candidates/${cand.id}`}>
-                    <Button variant="ghost" size="sm" className="h-8 text-xs font-semibold text-primary hover:underline p-0">
+                    <Button variant="ghost" size="sm" className="h-8 text-xs font-semibold text-primary hover:underline p-0 whitespace-nowrap">
                       View Profile <ExternalLink className="w-3 h-3 ml-1" />
                     </Button>
                   </Link>

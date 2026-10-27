@@ -61,7 +61,7 @@ function InterviewPrepContent() {
             <Compass className="w-3.5 h-3.5 mr-1 inline" />
             Career-Ops Behavioral Engine
           </Badge>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white break-words">
             STAR Interview Flashcards
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
@@ -94,7 +94,7 @@ function InterviewPrepContent() {
       {isError ? (
         <div className="p-16 text-center bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-900/60 space-y-3">
           <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">Failed to generate flashcards</h3>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white break-words">Failed to generate flashcards</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
             Unable to connect to the interview prep service. Please check your connection and try again.
           </p>
@@ -111,7 +111,7 @@ function InterviewPrepContent() {
       ) : !prepData || prepData.cards.length === 0 ? (
         <div className="p-16 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
           <BookOpen className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No active job selected</h3>
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 break-words">No active job selected</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Select a job from the dropdown above or browse your matched vacancies to launch interview prep.
           </p>
@@ -125,7 +125,7 @@ function InterviewPrepContent() {
                 <Target className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-purple-950 dark:text-purple-200">{prepData.job_title}</h3>
+                <h3 className="text-sm font-bold text-purple-950 dark:text-purple-200 break-words">{prepData.job_title}</h3>
                 <p className="text-xs text-purple-700 dark:text-purple-300">{prepData.company_name} &bull; Archetype: {prepData.archetype}</p>
               </div>
             </div>
@@ -140,7 +140,7 @@ function InterviewPrepContent() {
               <button
                 key={idx}
                 onClick={() => setActiveCardIndex(idx)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors duration-150 border ${
                   safeIndex === idx
                     ? "bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-600/20"
                     : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -159,7 +159,7 @@ function InterviewPrepContent() {
                 <Badge className="bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800 font-bold text-[10px]">
                   {currentCard.category}
                 </Badge>
-                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white leading-snug">
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white leading-snug break-words">
                   &ldquo;{currentCard.question}&rdquo;
                 </h2>
               </div>
@@ -167,7 +167,7 @@ function InterviewPrepContent() {
               {/* S-T-A-R Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                  <div className="text-[10px] font-black font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
                     <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs">S</span>
                     Situation (Context &amp; Challenge)
                   </div>
@@ -177,7 +177,7 @@ function InterviewPrepContent() {
                 </div>
 
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                  <div className="text-[10px] font-black font-semibold text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
                     <span className="w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold text-xs">T</span>
                     Task (Your Objective)
                   </div>
@@ -187,7 +187,7 @@ function InterviewPrepContent() {
                 </div>
 
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                  <div className="text-[10px] font-black font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                     <span className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs">A</span>
                     Action (Your Concrete Steps)
                   </div>
@@ -197,7 +197,7 @@ function InterviewPrepContent() {
                 </div>
 
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                  <div className="text-[10px] font-black font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                     <span className="w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs">R</span>
                     Result (Quantified Outcome)
                   </div>

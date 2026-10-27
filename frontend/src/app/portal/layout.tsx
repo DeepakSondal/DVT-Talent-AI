@@ -111,7 +111,7 @@ export default function CandidatePortalLayout({
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors duration-150 ${
                       isActive
                         ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 shadow-sm border border-indigo-100 dark:border-indigo-800/60"
                         : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/60 dark:hover:bg-slate-800"
@@ -134,7 +134,7 @@ export default function CandidatePortalLayout({
                     {profile.first_name} {profile.last_name}
                   </span>
                   <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" />
                     {profile.is_searchable ? "Searchable by Verified Agencies" : "Stealth Mode"}
                   </span>
                 </div>
@@ -192,7 +192,7 @@ export default function CandidatePortalLayout({
                     key={item.href}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors duration-150 ${
                       isActive
                         ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300"
                         : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -216,11 +216,11 @@ export default function CandidatePortalLayout({
       {/* Portal Footer */}
       <footer className="border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 transition-colors">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© 2026 Career-Ops &bull; Built on the DVT Talent Zero-Fabrication Candidate Architecture</p>
+          <p>© 2026 Career-Ops, Built on the DVT Talent Zero-Fabrication Candidate Architecture</p>
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">Terms of Service</Link>
-            <Link href="/dashboard" className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">Recruiter Workspace &rarr;</Link>
+            <Link href="/dashboard" className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">Recruiter Workspace</Link>
           </div>
         </div>
       </footer>

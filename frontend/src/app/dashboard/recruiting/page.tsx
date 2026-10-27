@@ -58,7 +58,7 @@ export default function RecruitingPage() {
                  <Users className="w-3.5 h-3.5 mr-2 inline" />
                  Recruiting Engine: Pulse Active
               </Badge>
-              <h1 className="text-4xl lg:text-6xl font-black tracking-tighter text-foreground leading-none">
+              <h1 className="text-4xl lg:text-6xl font-black tracking-tighter text-foreground leading-none break-words">
                  Talent <span className="text-primary italic">Synthesis</span>
               </h1>
               <p className="text-muted-foreground font-bold text-lg max-w-xl">
@@ -66,12 +66,12 @@ export default function RecruitingPage() {
               </p>
            </div>
            <div className="flex gap-4">
-              <Button variant="outline" className="gap-2 h-14 px-8 bg-white shadow-sm font-black uppercase text-[10px] tracking-widest">
+              <Button variant="outline" className="gap-2 h-14 px-8 bg-white shadow-sm font-black text-[10px] whitespace-nowrap">
                  <FileText className="w-4 h-4 text-primary/40" />
                  Analyze Batch
               </Button>
-              <Button variant="primary" className="gap-3 h-14 px-10 rounded-2xl shadow-primary/20" onClick={handleRun} isLoading={isRunning}>
-                 <Zap className={cn("w-4 h-4 fill-current", !isRunning && "animate-pulse")} />
+              <Button variant="primary" className="gap-3 h-14 px-10 rounded-2xl shadow-primary/20 whitespace-nowrap" onClick={handleRun} isLoading={isRunning}>
+                 <Zap className={cn("w-4 h-4 fill-current", !isRunning && "animate-pulse motion-reduce:animate-none")} />
                  Refresh AI Ranking
               </Button>
            </div>
@@ -81,21 +81,21 @@ export default function RecruitingPage() {
            {/* Left: Target Role & Market Intel */}
            <div className="col-span-12 lg:col-span-4 space-y-8">
               <Card className="bg-white/80 border-border/50 p-8 shadow-xl shadow-primary/5">
-                 <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground opacity-40 mb-8 flex items-center gap-3">
+                 <h3 className="text-xs font-semibold text-muted-foreground/60 mb-8 flex items-center gap-3 break-words">
                     <Target className="w-3.5 h-3.5" />
                     Target Role
                  </h3>
                  <div className="space-y-8">
-                    <div className="p-6 rounded-[2rem] bg-primary/5 border border-transparent hover:border-primary/20 hover:bg-white transition-all duration-500 cursor-pointer group">
-                       <h4 className="text-lg font-black text-foreground group-hover:text-primary transition-colors italic leading-none">Senior Architect</h4>
-                       <p className="text-[9px] text-muted-foreground font-black uppercase tracking-widest mt-2">STATUS: ACTIVE VACANCY</p>
-                       <div className="absolute top-6 right-6 text-primary/20 group-hover:text-primary transition-all">
+                    <div className="p-6 rounded-[2rem] bg-primary/5 border border-transparent hover:border-primary/20 hover:bg-white transition-colors duration-150 duration-500 cursor-pointer group">
+                       <h4 className="text-lg font-black text-foreground group-hover:text-primary transition-colors italic leading-none break-words">Senior Architect</h4>
+                       <p className="text-[9px] text-muted-foreground font-black font-semibold mt-2">STATUS: ACTIVE VACANCY</p>
+                       <div className="absolute top-6 right-6 text-primary/20 group-hover:text-primary transition-colors duration-150">
                           <ChevronRight className="w-5 h-5" />
                        </div>
                     </div>
                     
                     <div className="space-y-4">
-                       <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                       <div className="flex justify-between items-center text-[10px] font-black font-semibold text-muted-foreground">
                           <span>Synthesis Goal</span>
                           <span className="text-foreground">Top 1% Talent</span>
                        </div>
@@ -119,7 +119,7 @@ export default function RecruitingPage() {
 
               <Card className="bg-secondary/5 border-border/50 p-8 space-y-8">
                  <div className="flex items-center justify-between">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-muted-foreground opacity-40">Market Signal</h4>
+                    <h4 className="text-xs font-semibold text-muted-foreground/60 break-words">Market Signal</h4>
                     <Globe className="w-4 h-4 text-primary/40" />
                  </div>
                  <div className="space-y-6">
@@ -129,7 +129,7 @@ export default function RecruitingPage() {
                       { label: "Velocity Index", value: "Extreme" },
                     ].map((s, i) => (
                       <div key={i} className="flex justify-between items-end border-b border-border/20 pb-4">
-                         <span className="text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground italic">{s.label}</span>
+                         <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
                          <span className="text-sm font-black text-foreground italic">{s.value}</span>
                       </div>
                     ))}
@@ -141,17 +141,17 @@ export default function RecruitingPage() {
            <div className="col-span-12 lg:col-span-8 space-y-8">
               <Card className="p-0 border-border/50 bg-card border-border shadow-sm min-h-[800px] flex flex-col rounded-xl overflow-hidden">
                  <div className="p-8 border-b border-border/20 flex items-center justify-between bg-card sticky top-0 z-10 rounded-t-xl text-foreground">
-                    <div className="flex items-center gap-4 bg-primary/5 border border-transparent focus-within:border-primary/20 focus-within:bg-white rounded-2xl px-6 py-3 w-[450px] transition-all">
+                    <div className="flex items-center gap-4 bg-primary/5 border border-transparent focus-within:border-primary/20 focus-within:bg-white rounded-2xl px-6 py-3 w-[450px] transition-colors duration-150">
                        <Search className="w-4 h-4 text-primary/40" />
                        <input 
                          type="text" 
                          placeholder="Filter synthetic matches..." 
-                         className="bg-transparent border-none outline-none text-[11px] uppercase tracking-widest font-black placeholder:lowercase placeholder:tracking-normal w-full placeholder:text-muted-foreground/40"
+                         className="bg-transparent border-none outline-none text-[11px] font-semibold font-black placeholder:lowercase placeholder:tracking-normal w-full placeholder:text-muted-foreground/40"
                        />
                     </div>
                     <div className="flex gap-4">
-                       <Button variant="ghost" size="icon" className="w-12 h-12 rounded-2xl bg-primary/5 hover:bg-primary/10"><Filter className="w-5 h-5 text-primary" /></Button>
-                       <Button variant="ghost" size="icon" className="w-12 h-12 rounded-2xl bg-primary/5 hover:bg-primary/10"><Plus className="w-5 h-5 text-primary" /></Button>
+                       <Button variant="ghost" size="icon" className="w-12 h-12 rounded-2xl bg-primary/5 hover:bg-primary/10 whitespace-nowrap"><Filter className="w-5 h-5 text-primary" /></Button>
+                       <Button variant="ghost" size="icon" className="w-12 h-12 rounded-2xl bg-primary/5 hover:bg-primary/10 whitespace-nowrap"><Plus className="w-5 h-5 text-primary" /></Button>
                     </div>
                  </div>
 
@@ -159,7 +159,7 @@ export default function RecruitingPage() {
                     {isLoading && (
                        <div className="absolute inset-0 bg-white/40 backdrop-blur-sm flex flex-col items-center justify-center z-20 gap-4">
                           <Loader2 className="w-10 h-10 text-primary animate-spin" />
-                          <span className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.3em] opacity-40">Syncing Talent Grid</span>
+                          <span className="text-xs font-medium text-muted-foreground">Syncing Talent Grid</span>
                        </div>
                     )}
                     <AnimatePresence mode="popLayout">
@@ -169,12 +169,12 @@ export default function RecruitingPage() {
                            initial={{ opacity: 0, scale: 0.98 }}
                            animate={{ opacity: 1, scale: 1 }}
                            transition={{ delay: i * 0.05 }}
-                           className="p-10 hover:bg-primary/[0.02] transition-all duration-500 group relative"
+                           className="p-10 hover:bg-primary/[0.02] transition-colors duration-150 duration-500 group relative"
                          >
                             <div className="flex items-start justify-between">
                                <div className="flex items-center gap-8">
                                   <div className="relative">
-                                     <div className="w-20 h-20 rounded-[2.5rem] bg-gradient-to-br from-primary to-primary-foreground flex items-center justify-center text-xl font-black text-white shadow-xl shadow-primary/20 group-hover:scale-105 transition-transform duration-700">
+                                     <div className="w-20 h-20 rounded-[2.5rem] bg-emerald-600 flex items-center justify-center text-xl font-black text-white shadow-xl shadow-primary/20 group-hover:scale-105 transition-transform duration-700 break-words">
                                         {can.first_name?.[0]}{can.last_name?.[0]}
                                      </div>
                                      <div className="absolute -top-2 -right-2 w-10 h-10 rounded-full bg-white border border-border/50 flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform">
@@ -182,42 +182,42 @@ export default function RecruitingPage() {
                                      </div>
                                   </div>
                                   <div className="space-y-1">
-                                     <h4 className="text-3xl font-black text-foreground group-hover:text-primary transition-colors tracking-tighter italic leading-none">
+                                     <h4 className="text-3xl font-black text-foreground group-hover:text-primary transition-colors tracking-tighter italic leading-none break-words">
                                        {can.first_name} {can.last_name}
                                      </h4>
-                                     <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] opacity-40 mt-2">{can.title || "Fullstack Infrastructure Engineer"}</p>
+                                     <p className="text-[10px] font-black text-muted-foreground font-semibold opacity-40 mt-2">{can.title || "Fullstack Infrastructure Engineer"}</p>
                                   </div>
                                </div>
                                <div className="text-right space-y-1">
-                                  <div className="text-5xl font-black text-foreground group-hover:text-primary transition-all duration-700 tracking-tighter">{can.score}%</div>
-                                  <span className="text-[9px] font-black text-muted-foreground/40 uppercase tracking-[0.25em] italic">MATCH SCORE</span>
+                                  <div className="text-5xl font-black text-foreground group-hover:text-primary transition-colors duration-150 duration-700 tracking-tighter">{can.score}%</div>
+                                  <span className="text-xs font-semibold text-muted-foreground">Match Score</span>
                                </div>
                             </div>
 
                             <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-8">
                                <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-xl bg-primary/5 flex items-center justify-center text-primary/40"><MapPin className="w-4 h-4" /></div>
-                                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{can.location || "Remote"}</span>
+                                  <span className="text-[9px] font-black font-semibold text-muted-foreground">{can.location || "Remote"}</span>
                                </div>
                                <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-xl bg-primary/5 flex items-center justify-center text-primary/40"><Zap className="w-4 h-4 shadow-primary/20" /></div>
-                                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{can.experience_years || 5}+ Years Exp</span>
+                                  <span className="text-[9px] font-black font-semibold text-muted-foreground">{can.experience_years || 5}+ Years Exp</span>
                                </div>
                                <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-xl bg-primary/5 flex items-center justify-center text-primary/40"><UserCheck className="w-4 h-4" /></div>
-                                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{can.status}</span>
+                                  <span className="text-[9px] font-black font-semibold text-muted-foreground">{can.status}</span>
                                </div>
                                <div className="flex justify-end gap-2">
                                   {can.skills?.slice(0, 3).map(s => (
-                                    <Badge key={s} variant="secondary" className="text-[8px] font-black uppercase bg-secondary/5 border-border/50">{s}</Badge>
-                                  )) || <Badge variant="secondary" className="text-[8px] font-black uppercase">Generalist</Badge>}
+                                    <Badge key={s} variant="secondary" className="text-[10px] font-medium bg-secondary/5 border-border/50">{s}</Badge>
+                                  )) || <Badge variant="secondary" className="text-[10px] font-medium">Generalist</Badge>}
                                </div>
                             </div>
 
                             <motion.div 
                                initial={{ opacity: 0 }}
                                whileInView={{ opacity: 1 }}
-                               className="mt-10 p-8 rounded-xl bg-secondary/5 border border-border/20 group-hover:bg-primary/[0.04] group-hover:border-primary/20 transition-all duration-700"
+                               className="mt-10 p-8 rounded-xl bg-secondary/5 border border-border/20 group-hover:bg-primary/[0.04] group-hover:border-primary/20 transition-colors duration-150 duration-700"
                             >
                                <p className="text-[11px] font-black text-muted-foreground/80 leading-loose italic opacity-60">
                                   <Activity className="w-4 h-4 text-primary mr-2 inline" />
@@ -227,15 +227,15 @@ export default function RecruitingPage() {
 
                             <div className="mt-10 flex items-center justify-between">
                                <div className="flex gap-4">
-                                  <Button variant="primary" className="gap-3 h-12 px-8 bg-white border-primary/20 text-primary hover:bg-primary hover:text-white shadow-none hover:shadow-lg hover:shadow-primary/20 transition-all duration-500 font-black uppercase text-[10px] tracking-widest">
+                                  <Button variant="primary" className="gap-3 h-12 px-8 bg-white border-primary/20 text-primary hover:bg-primary hover:text-white shadow-none hover:shadow-lg hover:shadow-primary/20 transition-colors duration-150 duration-500 font-black text-[10px] whitespace-nowrap">
                                      <MessageSquare className="w-4 h-4" />
                                      Contact Candidate
                                   </Button>
-                                  <Button variant="outline" className="gap-3 h-12 px-8 bg-white border-border/40 text-muted-foreground hover:bg-secondary font-black uppercase text-[10px] tracking-widest">
+                                  <Button variant="outline" className="gap-3 h-12 px-8 bg-white border-border/40 text-muted-foreground hover:bg-secondary font-black text-[10px] whitespace-nowrap">
                                      View Resume
                                   </Button>
                                </div>
-                               <Button size="icon" variant="ghost" className="w-12 h-12 rounded-2xl opacity-0 group-hover:opacity-100 transition-all bg-primary/5">
+                               <Button size="icon" variant="ghost" className="w-12 h-12 rounded-2xl opacity-0 group-hover:opacity-100 transition-colors duration-150 bg-primary/5 whitespace-nowrap">
                                   <ExternalLink className="w-5 h-5 text-primary" />
                                 </Button>
                             </div>

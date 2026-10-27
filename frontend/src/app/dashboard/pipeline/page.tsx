@@ -8,7 +8,7 @@ export default function PipelinePage() {
     <div className="flex h-full flex-col overflow-hidden px-6">
       <div className="flex items-center justify-between py-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Talent Pipeline</h1>
+          <h1 className="text-3xl font-bold tracking-tight break-words">Talent Pipeline</h1>
           <p className="text-muted-foreground">
             Manage your candidates and leads across the recruitment funnel.
           </p>

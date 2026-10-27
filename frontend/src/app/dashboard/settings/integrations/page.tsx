@@ -154,7 +154,7 @@ function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
           {status?.connected && (
             <button
               onClick={handleDisconnect}
-              className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 font-medium px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-all"
+              className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 font-medium px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition-colors duration-150"
             >
               <Unplug className="w-3 h-3" /> Disconnect
             </button>
@@ -181,7 +181,7 @@ function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
       {/* Connect Form */}
       {!status?.connected && (
         <Card className="bg-card border-border rounded-2xl p-6 space-y-4">
-          <h3 className="font-semibold text-foreground text-sm">Connect {provider.name}</h3>
+          <h3 className="font-semibold text-foreground text-sm break-words">Connect {provider.name}</h3>
 
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">API Key</label>
@@ -231,9 +231,9 @@ function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
 
           <button
             onClick={handleConnect} disabled={connecting}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors duration-150 disabled:opacity-50"
           >
-            <Plug className={cn("w-4 h-4", connecting && "animate-pulse")} />
+            <Plug className={cn("w-4 h-4", connecting && "animate-pulse motion-reduce:animate-none")} />
             {connecting ? "Testing connection..." : `Connect ${provider.name}`}
           </button>
         </Card>
@@ -243,7 +243,7 @@ function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
       {status?.connected && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-foreground text-sm">Synced Jobs ({jobs.length})</h3>
+            <h3 className="font-semibold text-foreground text-sm break-words">Synced Jobs ({jobs.length})</h3>
             <button
               onClick={handleSync} disabled={syncing}
               className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 border border-border text-foreground"
@@ -263,7 +263,7 @@ function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
                 <div key={job.id} className="flex items-center justify-between px-4 py-3 bg-muted/40 rounded-xl border border-border">
                   <div>
                     <p className="text-sm font-medium text-foreground">{job.title}</p>
-                    <p className="text-xs text-muted-foreground">{job.location} · ID: {job.external_id ?? "N/A"}</p>
+                    <p className="text-xs text-muted-foreground">{job.location} , ID: {job.external_id ?? "N/A"}</p>
                   </div>
                   {job.source_url && (
                     <a href={job.source_url} target="_blank" rel="noreferrer"
@@ -279,7 +279,7 @@ function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
           {/* Export Logs */}
           {exportLogs.length > 0 && (
             <>
-              <h3 className="font-semibold text-foreground text-sm">Recent Exports</h3>
+              <h3 className="font-semibold text-foreground text-sm break-words">Recent Exports</h3>
               <div className="space-y-2">
                 {exportLogs.map(log => (
                   <div key={log.id} className="flex items-center justify-between px-4 py-3 bg-muted/40 rounded-xl border border-border">
@@ -315,7 +315,7 @@ export default function IntegrationsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-3">
+        <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-3 break-words">
           <Building2 className="w-6 h-6 text-primary" />
           ATS Integrations
         </h1>
@@ -331,7 +331,7 @@ export default function IntegrationsPage() {
             key={p.id}
             onClick={() => setActiveTab(p.id)}
             className={cn(
-              "flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-all",
+              "flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors duration-150",
               activeTab === p.id
                 ? "border-primary text-primary"
                 : "border-transparent text-muted-foreground hover:text-foreground"

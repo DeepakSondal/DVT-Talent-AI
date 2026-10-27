@@ -150,7 +150,7 @@ function AcceptInvitationContent() {
           <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto">
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
-          <h2 className="text-lg font-bold text-foreground">Verifying Team Invitation</h2>
+          <h2 className="text-lg font-bold text-foreground break-words">Verifying Team Invitation</h2>
           <p className="text-xs text-muted-foreground">Checking invitation security credentials and tenant permissions...</p>
         </motion.div>
       </div>
@@ -171,7 +171,7 @@ function AcceptInvitationContent() {
             <AlertTriangle className="w-7 h-7" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-xl font-bold text-foreground">Invitation Unavailable</h1>
+            <h1 className="text-xl font-bold text-foreground break-words">Invitation Unavailable</h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
               {validationError || "This invitation link is invalid or no longer active."}
             </p>
@@ -184,7 +184,7 @@ function AcceptInvitationContent() {
           </div>
           <div className="pt-2">
             <Link href="/auth/login">
-              <Button variant="outline" className="w-full h-11 rounded-xl text-xs font-semibold">
+              <Button variant="outline" className="w-full h-11 rounded-xl text-xs font-semibold whitespace-nowrap">
                 Return to Sign In
               </Button>
             </Link>
@@ -208,7 +208,7 @@ function AcceptInvitationContent() {
             <CheckCircle2 className="w-9 h-9" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-foreground">Welcome to the Team!</h1>
+            <h1 className="text-2xl font-bold text-foreground break-words">Welcome to the Team!</h1>
             <p className="text-sm text-muted-foreground">
               Your account has been created for <strong className="text-foreground">{invitationData.tenant_name}</strong>.
             </p>
@@ -240,10 +240,10 @@ function AcceptInvitationContent() {
             <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto font-bold text-lg">
               D
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Accept Team Invitation</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground break-words">Accept Team Invitation</h1>
             <p className="text-xs text-muted-foreground">
               You have been invited to join <strong className="text-foreground">{invitationData.tenant_name}</strong> as a{" "}
-              <span className="font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+              <span className="font-semibold font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
                 {invitationData.role}
               </span>
             </p>
@@ -331,7 +331,7 @@ function AcceptInvitationContent() {
             <Button
               type="submit"
               disabled={isSubmitting || password.length < 8 || password !== confirmPassword}
-              className="w-full h-11 mt-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-xs transition-all shadow-md shadow-primary/20 disabled:opacity-50"
+              className="w-full h-11 mt-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-xs transition-colors duration-150 shadow-md shadow-primary/20 disabled:opacity-50 whitespace-nowrap"
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">

@@ -133,7 +133,7 @@ function LoginContent() {
                 <Target className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
               )}
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground break-words">
               {portal === "recruiter" ? "Recruiter Workspace" : "Candidate Career-Ops"}
             </h1>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
@@ -183,7 +183,7 @@ function LoginContent() {
                   name="password"
                   type={showPassword ? "text" : "password"}
                   required
-                  placeholder="••••••••"
+                  placeholder=",,,,,,,,"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-10 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"
@@ -204,7 +204,7 @@ function LoginContent() {
               type="submit"
               disabled={isLoading}
               className={cn(
-                "w-full h-11 rounded-xl text-xs font-bold transition-all shadow-md mt-2",
+                "w-full h-11 rounded-xl text-xs font-bold transition-colors duration-150 shadow-md mt-2",
                 portal === "candidate"
                   ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
                   : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20"

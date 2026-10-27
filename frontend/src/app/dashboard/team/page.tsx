@@ -124,7 +124,7 @@ export default function TeamPage() {
               <ShieldAlert className="w-8 h-8 text-red-500" />
            </div>
            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold text-foreground">Access Restricted</h2>
+              <h2 className="text-2xl font-bold text-foreground break-words">Access Restricted</h2>
               <p className="text-sm font-medium text-muted-foreground max-w-sm mx-auto">Admin authorization required to manage team members.</p>
            </div>
            <Button variant="outline" className="mt-4" onClick={() => window.location.href='/dashboard'}>Return to Dashboard</Button>
@@ -142,7 +142,7 @@ export default function TeamPage() {
                  <ShieldCheck className="w-3.5 h-3.5 mr-2 inline" />
                  Workspace Team Management
               </Badge>
-              <h1 className="text-2xl font-bold text-foreground">
+              <h1 className="text-2xl font-bold text-foreground break-words">
                  Team Directory
               </h1>
               <p className="text-muted-foreground text-sm max-w-xl">
@@ -169,33 +169,33 @@ export default function TeamPage() {
                  <Key className="w-5 h-5 text-indigo-600" />
               </div>
               <div>
-                 <h2 className="text-lg font-bold text-foreground">Agency API Vault</h2>
+                 <h2 className="text-lg font-bold text-foreground break-words">Agency API Vault</h2>
                  <p className="text-sm text-muted-foreground">Bring Your Own Key (BYOK) architecture. Paste your billing keys here. Your recruiters will securely inherit them.</p>
               </div>
            </div>
            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                 <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">OpenAI Key (GPT-4)</label>
+                 <label className="text-xs font-bold font-semibold text-muted-foreground">OpenAI Key (GPT-4)</label>
                  <input 
                     type="password"
                     placeholder="sk-proj-..." 
                     value={keys.openai_key}
                     onChange={e => setKeys({...keys, openai_key: e.target.value})}
-                    className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm"
+                    className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors duration-150 shadow-sm"
                  />
               </div>
               <div className="space-y-2">
-                 <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Serper Key (Google Search)</label>
+                 <label className="text-xs font-bold font-semibold text-muted-foreground">Serper Key (Google Search)</label>
                  <input 
                     type="password"
                     placeholder="Required for Candidate Sourcing" 
                     value={keys.serper_key}
                     onChange={e => setKeys({...keys, serper_key: e.target.value})}
-                    className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all shadow-sm"
+                    className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors duration-150 shadow-sm"
                  />
               </div>
               <div className="md:col-span-2 flex justify-end">
-                 <Button variant="primary" onClick={handleSaveKeys} isLoading={isSavingKeys} className="px-6 font-bold tracking-wide">
+                 <Button variant="primary" onClick={handleSaveKeys} isLoading={isSavingKeys} className="px-6 font-bold">
                     Save API Keys to Workspace
                  </Button>
               </div>
@@ -218,8 +218,8 @@ export default function TeamPage() {
                    <div className="text-xs font-bold text-muted-foreground">0{i + 1}</div>
                 </div>
                 <div>
-                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground opacity-80">{stat.label}</p>
-                   <div className="text-2xl font-bold text-foreground mt-1">{stat.value}</div>
+                   <p className="text-xs font-semibold font-semibold text-muted-foreground opacity-80">{stat.label}</p>
+                   <div className="text-2xl font-bold text-foreground mt-1 break-words">{stat.value}</div>
                 </div>
              </Card>
            ))}
@@ -233,11 +233,11 @@ export default function TeamPage() {
                  <input 
                    type="text" 
                    placeholder="Search team members..." 
-                   className="w-full bg-background border border-border focus:ring-2 focus:ring-primary rounded-lg py-2 pl-10 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground transition-all"
+                   className="w-full bg-background border border-border focus:ring-2 focus:ring-primary rounded-lg py-2 pl-10 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground transition-colors duration-150"
                  />
               </div>
               <div className="flex gap-4">
-                 <Button variant="outline" className="gap-2 rounded-lg h-10 px-6 bg-background border-border text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                 <Button variant="outline" className="gap-2 rounded-lg h-10 px-6 bg-background border-border text-xs font-bold font-semibold text-muted-foreground whitespace-nowrap">
                     <Filter className="w-4 h-4" />
                     Filter Roles
                  </Button>
@@ -248,19 +248,19 @@ export default function TeamPage() {
               {isLoading && (
                  <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center z-20 gap-4">
                     <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Syncing Directory...</span>
+                    <span className="text-xs font-bold text-muted-foreground font-semibold">Syncing Directory...</span>
                  </div>
               )}
               
               <table className="w-full text-left">
                  <thead>
                     <tr className="bg-muted/10 border-b border-border">
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Team Member</th>
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Role & Permissions</th>
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Status</th>
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Last Active</th>
-                       <th className="p-6 text-xs font-bold uppercase text-muted-foreground tracking-wider">Joined Date</th>
-                       <th className="p-6 text-right text-xs font-bold uppercase text-muted-foreground tracking-wider">Actions</th>
+                       <th className="p-6 text-xs font-bold text-muted-foreground">Team Member</th>
+                       <th className="p-6 text-xs font-bold text-muted-foreground">Role & Permissions</th>
+                       <th className="p-6 text-xs font-bold text-muted-foreground">Status</th>
+                       <th className="p-6 text-xs font-bold text-muted-foreground">Last Active</th>
+                       <th className="p-6 text-xs font-bold text-muted-foreground">Joined Date</th>
+                       <th className="p-6 text-right text-xs font-bold text-muted-foreground">Actions</th>
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-border">
@@ -271,7 +271,7 @@ export default function TeamPage() {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.05 }}
-                            className="group hover:bg-muted/30 transition-all duration-200"
+                            className="group hover:bg-muted/30 transition-colors duration-150 duration-200"
                           >
                              <td className="p-6">
                                 <div className="flex items-center gap-4">
@@ -297,7 +297,7 @@ export default function TeamPage() {
                              <td className="p-6">
                                 <div className="flex items-center gap-2">
                                    <div className={cn("w-2 h-2 rounded-full", member.is_active ? "bg-emerald-500" : "bg-slate-300")} />
-                                   <span className={cn("text-xs font-bold uppercase tracking-wider", member.is_active ? "text-emerald-600" : "text-slate-500")}>
+                                   <span className={cn("text-xs font-bold font-semibold", member.is_active ? "text-emerald-600" : "text-slate-500")}>
                                       {member.is_active ? "Authorized" : "Suspended"}
                                    </span>
                                 </div>
@@ -313,7 +313,7 @@ export default function TeamPage() {
                                    <Button 
                                       variant="ghost" 
                                       size="icon" 
-                                      className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                      className="w-8 h-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
                                       onClick={() => handleUpdateRole(member.id, member.role === 'admin' ? 'recruiter' : 'admin')}
                                       disabled={member.id === me?.id}
                                    >
@@ -322,13 +322,13 @@ export default function TeamPage() {
                                    <Button 
                                       variant="ghost" 
                                       size="icon" 
-                                      className="w-8 h-8 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                                      className="w-8 h-8 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors whitespace-nowrap"
                                       onClick={() => handleDeactivate(member.id)}
                                       disabled={member.id === me?.id || !member.is_active}
                                    >
                                       <Zap className="w-4 h-4" />
                                    </Button>
-                                   <Button variant="ghost" size="icon" className="w-8 h-8 rounded-lg text-muted-foreground">
+                                   <Button variant="ghost" size="icon" className="w-8 h-8 rounded-lg text-muted-foreground whitespace-nowrap">
                                       <MoreVertical className="w-4 h-4 opacity-50" />
                                    </Button>
                                 </div>
@@ -345,15 +345,15 @@ export default function TeamPage() {
         <div className="flex flex-col md:flex-row items-center gap-8 justify-center pt-12 border-t border-border/20 opacity-40 italic">
            <div className="flex items-center gap-3">
               <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <span className="text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground">SOC2 Protocol: Managed</span>
+              <span className="text-xs font-medium text-muted-foreground">SOC2 Protocol: Managed</span>
            </div>
            <div className="flex items-center gap-3">
               <ShieldCheck className="w-4 h-4 text-primary" />
-              <span className="text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground">Encryption: AES-256 Symmetric</span>
+              <span className="text-xs font-medium text-muted-foreground">Encryption: AES-256 Symmetric</span>
            </div>
            <div className="flex items-center gap-3">
               <Fingerprint className="w-4 h-4 text-primary" />
-              <span className="text-[9px] font-black uppercase tracking-[0.3em] text-muted-foreground">Infrastructure: Audited</span>
+              <span className="text-xs font-medium text-muted-foreground">Infrastructure: Audited</span>
            </div>
         </div>
       </div>
@@ -374,7 +374,7 @@ export default function TeamPage() {
                     <UserPlus className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-foreground">Invite Team Member</h3>
+                    <h3 className="text-lg font-bold text-foreground break-words">Invite Team Member</h3>
                     <p className="text-xs text-muted-foreground">Send an invitation to join your workspace</p>
                   </div>
                 </div>
@@ -407,7 +407,7 @@ export default function TeamPage() {
                     <Button 
                       size="sm" 
                       onClick={handleCopyInviteLink}
-                      className="gap-1.5 h-8 text-xs font-bold rounded-lg shrink-0"
+                      className="gap-1.5 h-8 text-xs font-bold rounded-lg shrink-0 whitespace-nowrap"
                     >
                       {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedLink ? "Copied" : "Copy"}</span>
@@ -431,7 +431,7 @@ export default function TeamPage() {
               ) : (
                 <form onSubmit={handleSendInvite} className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <label className="text-xs font-bold font-semibold text-muted-foreground">
                       Email Address *
                     </label>
                     <input
@@ -445,7 +445,7 @@ export default function TeamPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <label className="text-xs font-bold font-semibold text-muted-foreground">
                       Access Role
                     </label>
                     <select

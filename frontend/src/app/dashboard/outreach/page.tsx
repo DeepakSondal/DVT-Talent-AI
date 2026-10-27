@@ -209,15 +209,15 @@ export default function OutreachLab() {
 
                 <div className="relative z-10 space-y-3 max-w-3xl">
                     <div className="flex items-center gap-3">
-                        <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 uppercase text-[10px] font-black tracking-widest px-3 py-1">
+                        <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] font-black px-3 py-1">
                             Phase 3: Job & Candidate Outreach Hub
                         </Badge>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <span className="text-[10px] font-bold text-slate-400 font-semibold">
                             Pre-Flight Email Deliverability: ACTIVE (0% Bounce Rate)
                         </span>
                     </div>
 
-                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight">
+                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight break-words">
                         Campaign Orchestration & <br />
                         <span className="text-emerald-400 italic">Candidate Engagement Hub.</span>
                     </h1>
@@ -230,13 +230,13 @@ export default function OutreachLab() {
                 <div className="relative z-10 flex flex-col items-start md:items-end gap-3 shrink-0">
                     <div className="flex items-center gap-4 bg-slate-900/80 backdrop-blur-md px-6 py-4 rounded-2xl border border-slate-800">
                         <div className="text-center">
-                            <p className="text-[10px] font-black uppercase text-slate-400">Open Requisitions</p>
-                            <p className="text-2xl font-black text-blue-400">{jobs.length}</p>
+                            <p className="text-[10px] font-black text-slate-400">Open Requisitions</p>
+                            <p className="text-2xl font-black text-blue-400 break-words">{jobs.length}</p>
                         </div>
                         <div className="h-8 w-px bg-slate-800" />
                         <div className="text-center">
-                            <p className="text-[10px] font-black uppercase text-slate-400">Candidates Selected</p>
-                            <p className="text-2xl font-black text-emerald-400">{totalSelectedCount}</p>
+                            <p className="text-[10px] font-black text-slate-400">Candidates Selected</p>
+                            <p className="text-2xl font-black text-emerald-400 break-words">{totalSelectedCount}</p>
                         </div>
                     </div>
                 </div>
@@ -245,11 +245,11 @@ export default function OutreachLab() {
             {/* Combined Jobs & Candidates Section (User Selected Copy) */}
             <div className="space-y-8">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-black uppercase tracking-tight flex items-center gap-3 text-foreground">
+                    <h2 className="text-2xl font-black uppercase tracking-tight flex items-center gap-3 text-foreground break-words">
                         <Send className="w-6 h-6 text-emerald-500" />
                         Combined Requirements & AI-Matched Candidate Profiles ({jobs.length})
                     </h2>
-                    <Badge variant="outline" className="text-[10px] font-bold tracking-widest uppercase bg-muted">
+                    <Badge variant="outline" className="text-[10px] font-bold font-semibold bg-muted">
                         Combined Discovery Requirements + Sourced Candidates
                     </Badge>
                 </div>
@@ -264,18 +264,18 @@ export default function OutreachLab() {
                             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-border">
                                 <div className="space-y-2">
                                     <div className="flex flex-wrap items-center gap-3">
-                                        <h3 className="text-2xl font-black tracking-tight text-foreground">{job.title}</h3>
-                                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-black uppercase tracking-widest px-3 py-1">
+                                        <h3 className="text-2xl font-black tracking-tight text-foreground break-words">{job.title}</h3>
+                                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-black font-semibold px-3 py-1">
                                             Source: {job.portal} Portal
                                         </Badge>
-                                        <Badge variant="outline" className="text-[9px] font-bold uppercase text-blue-600 border-blue-500/30 bg-blue-500/5">
+                                        <Badge variant="outline" className="text-[9px] font-bold text-blue-600 border-blue-500/30 bg-blue-500/5">
                                             {job.candidates.length} Matched Candidate(s)
                                         </Badge>
                                     </div>
 
                                     <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-muted-foreground">
                                         <span className="text-foreground font-bold">{job.company}</span>
-                                        <span>•</span>
+                                        <span>,</span>
                                         <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-blue-500" /> {job.location}</span>
                                     </div>
                                 </div>
@@ -286,7 +286,7 @@ export default function OutreachLab() {
                                         href={job.source_link}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-widest px-4 h-10 rounded-xl shadow-sm transition-all"
+                                        className="inline-flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs font-semibold px-4 h-10 rounded-xl shadow-sm transition-colors duration-150"
                                     >
                                         <Globe className="w-3.5 h-3.5 text-blue-400" />
                                         Job Link <ExternalLink className="w-3 h-3" />
@@ -297,7 +297,7 @@ export default function OutreachLab() {
                             {/* Hiring Manager Card Info */}
                             <div className="p-5 bg-muted/40 dark:bg-slate-900/60 rounded-2xl border border-border flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
                                 <div className="space-y-1">
-                                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 flex items-center gap-1.5">
+                                    <p className="text-[9px] font-black font-semibold text-emerald-500 flex items-center gap-1.5">
                                         <User className="w-3.5 h-3.5" /> Hiring Manager Contact
                                     </p>
                                     <p className="font-black text-foreground text-sm">{job.hiring_manager_name}</p>
@@ -306,7 +306,7 @@ export default function OutreachLab() {
                                     <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
                                         <Mail className="w-3.5 h-3.5" /> {job.hiring_manager_email}
                                     </span>
-                                    <span>•</span>
+                                    <span>,</span>
                                     <span className="flex items-center gap-1.5 text-foreground">
                                         <Phone className="w-3.5 h-3.5 text-emerald-500" /> {job.hiring_manager_phone}
                                     </span>
@@ -316,7 +316,7 @@ export default function OutreachLab() {
                             {/* Matched Candidates Selection List */}
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h4 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-2">
+                                    <h4 className="text-xs font-black font-semibold text-foreground flex items-center gap-2 break-words">
                                         <Zap className="w-4 h-4 text-blue-500" /> Matched Sourced Candidates (Select for Outreach)
                                     </h4>
                                     <Button
@@ -335,7 +335,7 @@ export default function OutreachLab() {
                                             key={cand.id}
                                             onClick={() => toggleCandidateSelection(job.id, cand.id)}
                                             className={cn(
-                                                "p-6 rounded-2xl border transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-6",
+                                                "p-6 rounded-2xl border transition-colors duration-150 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-6",
                                                 cand.selected ? "bg-emerald-500/[0.03] border-emerald-500/40 shadow-md" : "bg-card border-border hover:border-blue-500/30 opacity-75"
                                             )}
                                         >
@@ -353,21 +353,21 @@ export default function OutreachLab() {
                                                 <div className="space-y-1.5">
                                                     <div className="flex flex-wrap items-center gap-3">
                                                         <span className="text-lg font-black text-foreground">{cand.first_name} {cand.last_name}</span>
-                                                        <Badge className="bg-purple-600/10 text-purple-600 dark:text-purple-400 border-purple-500/20 font-black text-[9px] uppercase px-2.5 py-0.5">
+                                                        <Badge className="bg-purple-600/10 text-purple-600 dark:text-purple-400 border-purple-500/20 font-black text-[9px] px-2.5 py-0.5">
                                                             {cand.score}% AI Match Score
                                                         </Badge>
-                                                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-black uppercase px-2.5 py-0.5">
+                                                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-black px-2.5 py-0.5">
                                                             Pre-Flight Deliverable
                                                         </Badge>
                                                     </div>
 
                                                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground font-semibold">
                                                         <span className="text-foreground font-bold">{cand.title}</span>
-                                                        <span>•</span>
+                                                        <span>,</span>
                                                         <span>{cand.company}</span>
-                                                        <span>•</span>
+                                                        <span>,</span>
                                                         <span>{cand.location}</span>
-                                                        <span>•</span>
+                                                        <span>,</span>
                                                         <span>{cand.experience_years} Yrs Exp</span>
                                                     </div>
 
@@ -398,7 +398,7 @@ export default function OutreachLab() {
                             {/* Outreach Campaign Action Controls per Job */}
                             <div className="p-6 bg-slate-950 text-white rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                                 <div className="space-y-2 flex-1">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Outreach Sequence Protocol</label>
+                                    <label className="text-[10px] font-black font-semibold text-slate-400">Outreach Sequence Protocol</label>
                                     <select
                                         value={job.sequence_type}
                                         onChange={(e) => handleSequenceChange(job.id, e.target.value)}
@@ -412,14 +412,14 @@ export default function OutreachLab() {
 
                                 <div className="flex items-center justify-between lg:justify-end gap-4 shrink-0 pt-2 lg:pt-0">
                                     <div className="text-right">
-                                        <p className="text-[9px] font-black uppercase text-slate-400">Candidates Selected</p>
-                                        <p className="text-xl font-black text-emerald-400">{selectedCount} Selected</p>
+                                        <p className="text-[9px] font-black text-slate-400">Candidates Selected</p>
+                                        <p className="text-xl font-black text-emerald-400 break-words">{selectedCount} Selected</p>
                                     </div>
 
                                     <Button
                                         onClick={() => launchCampaignForJob(job)}
                                         disabled={isLaunching || selectedCount === 0}
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs tracking-widest px-8 h-12 rounded-xl shadow-lg shadow-emerald-500/20"
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-8 h-12 rounded-xl shadow-lg shadow-emerald-500/20"
                                     >
                                         {isLaunching ? (
                                             <>

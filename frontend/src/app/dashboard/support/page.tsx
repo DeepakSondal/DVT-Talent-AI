@@ -19,7 +19,7 @@ export default function SupportPage() {
         <Badge variant="outline" className="border-primary/20 text-primary bg-primary/5 text-xs font-semibold px-3 py-1">
           <LifeBuoy className="w-3.5 h-3.5 mr-1.5 inline" /> Platform Assistance &amp; Documentation
         </Badge>
-        <h1 className="text-3xl sm:text-5xl font-extrabold text-foreground tracking-tight">
+        <h1 className="text-3xl sm:text-5xl font-extrabold text-foreground tracking-tight break-words">
           How can we help your team?
         </h1>
         <p className="text-muted-foreground text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
@@ -53,7 +53,7 @@ export default function SupportPage() {
               <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-4">
                 <topic.icon className="w-5 h-5" />
               </div>
-              <h3 className="text-base font-bold text-foreground mb-2">{topic.title}</h3>
+              <h3 className="text-base font-bold text-foreground mb-2 break-words">{topic.title}</h3>
               <p className="text-xs text-muted-foreground leading-relaxed mb-6 flex-1">{topic.desc}</p>
               <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
                 <span>View Documentation</span>
@@ -71,15 +71,15 @@ export default function SupportPage() {
             <MessageSquare className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h4 className="text-lg font-bold text-foreground">Direct Specialist Support</h4>
+            <h4 className="text-lg font-bold text-foreground break-words">Direct Specialist Support</h4>
             <p className="text-xs text-muted-foreground">Our recruitment operations and engineering teams are available Monday through Friday, 9am - 6pm EST.</p>
           </div>
         </div>
         <div className="flex items-center gap-3 w-full lg:w-auto">
-          <Button className="flex-1 lg:flex-none h-10 px-5 bg-primary text-white rounded-lg text-xs font-semibold shadow-sm">
+          <Button className="flex-1 lg:flex-none h-10 px-5 bg-primary text-white rounded-lg text-xs font-semibold shadow-sm whitespace-nowrap">
             <Zap className="w-4 h-4 mr-1.5" /> Connect via Live Bridge
           </Button>
-          <Button variant="outline" className="flex-1 lg:flex-none h-10 px-5 rounded-lg text-xs font-semibold">
+          <Button variant="outline" className="flex-1 lg:flex-none h-10 px-5 rounded-lg text-xs font-semibold whitespace-nowrap">
             <Mail className="w-4 h-4 mr-1.5" /> support@dvt.com
           </Button>
         </div>

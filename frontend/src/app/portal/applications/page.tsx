@@ -40,7 +40,7 @@ export default function CandidateApplicationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+        <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white break-words">
           Application Tracker
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
@@ -51,7 +51,7 @@ export default function CandidateApplicationsPage() {
       {isError ? (
         <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-2xl border border-rose-200 dark:border-rose-900/60 space-y-3">
           <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
-          <h3 className="text-base font-bold text-slate-900 dark:text-white">Failed to load applications</h3>
+          <h3 className="text-base font-bold text-slate-900 dark:text-white break-words">Failed to load applications</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
             Unable to retrieve your application history. Please check your network and try again.
           </p>
@@ -63,13 +63,13 @@ export default function CandidateApplicationsPage() {
       ) : isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-white dark:bg-slate-900 rounded-2xl animate-pulse border border-slate-200 dark:border-slate-800" />
+            <div key={i} className="h-20 bg-white dark:bg-slate-900 rounded-2xl animate-pulse motion-reduce:animate-none border border-slate-200 dark:border-slate-800" />
           ))}
         </div>
       ) : applications.length === 0 ? (
         <div className="p-16 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
           <Briefcase className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto" />
-          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No applications yet</h3>
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 break-words">No applications yet</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
             Browse our verified job matches with 5-dimension scoring and submit 1-click applications.
           </p>
@@ -115,7 +115,7 @@ export default function CandidateApplicationsPage() {
 
                 <div className="flex items-center gap-4 flex-shrink-0">
                   <div className="text-right">
-                    <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold font-semibold">
                       Snapshot Match
                     </div>
                     <div className="text-base font-extrabold text-indigo-600 dark:text-indigo-400">

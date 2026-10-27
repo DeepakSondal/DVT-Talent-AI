@@ -30,7 +30,7 @@ const SignalItem = React.memo(({ s }: SignalItemProps) => (
     <motion.div
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
-        className="flex items-start gap-3 text-xs py-2.5 px-4 font-mono hover:bg-slate-900/60 rounded-xl transition-all border-b border-slate-800/40 last:border-0"
+        className="flex items-start gap-3 text-xs py-2.5 px-4 font-mono hover:bg-slate-900/60 rounded-xl transition-colors duration-150 border-b border-slate-800/40 last:border-0"
     >
         <span className="text-slate-400 font-bold shrink-0">
             [{s.timestamp?.split('T')[1]?.substring(0, 8) || new Date(s.timestamp || Date.now()).toLocaleTimeString()}]
@@ -126,16 +126,16 @@ export default function MonitoringPage() {
 
                 <div className="relative z-10 space-y-3 max-w-3xl">
                     <div className="flex items-center gap-3">
-                        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 uppercase text-[10px] font-black tracking-widest px-3 py-1">
+                        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] font-black px-3 py-1">
                             Live Infrastructure Telemetry
                         </Badge>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[10px] font-bold text-slate-400 font-semibold flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none" />
                             System Health: 100% Operational (12ms Latency)
                         </span>
                     </div>
 
-                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight">
+                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight break-words">
                         Real-Time Pipeline Infrastructure & <br />
                         <span className="text-blue-400 italic">Operational Control.</span>
                     </h1>
@@ -148,13 +148,13 @@ export default function MonitoringPage() {
                 <div className="relative z-10 flex flex-col items-start md:items-end gap-3 shrink-0">
                     <div className="flex items-center gap-6 bg-slate-900/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-slate-800">
                         <div className="text-center">
-                            <p className="text-[9px] font-black uppercase text-slate-400">Active Agents</p>
-                            <p className="text-2xl font-black text-emerald-400">8 Active</p>
+                            <p className="text-[9px] font-black text-slate-400">Active Agents</p>
+                            <p className="text-2xl font-black text-emerald-400 break-words">8 Active</p>
                         </div>
                         <div className="h-8 w-px bg-slate-800" />
                         <div className="text-center">
-                            <p className="text-[9px] font-black uppercase text-slate-400">System Uptime</p>
-                            <p className="text-2xl font-black text-blue-400">99.98%</p>
+                            <p className="text-[9px] font-black text-slate-400">System Uptime</p>
+                            <p className="text-2xl font-black text-blue-400 break-words">99.98%</p>
                         </div>
                     </div>
                 </div>
@@ -163,7 +163,7 @@ export default function MonitoringPage() {
             {/* ROI Analytics Block (User Selected Copy) */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-black uppercase tracking-tight text-foreground flex items-center gap-2">
+                    <h2 className="text-xl font-black uppercase tracking-tight text-foreground flex items-center gap-2 break-words">
                         <DollarSign className="w-5 h-5 text-emerald-500" />
                         Recruiter Time & Cost ROI Calculator
                     </h2>
@@ -186,10 +186,10 @@ export default function MonitoringPage() {
                     <Card className="bg-emerald-600 text-white border-none shadow-xl shadow-emerald-500/20 rounded-[2rem] p-8 space-y-3 relative overflow-hidden">
                         <div className="flex items-center gap-2 opacity-80">
                             <Clock className="w-5 h-5" />
-                            <p className="text-xs font-black uppercase tracking-widest">Recruiting Time Saved</p>
+                            <p className="text-xs font-black font-semibold">Recruiting Time Saved</p>
                         </div>
                         <p className="text-5xl font-black">{hoursSaved} Hours</p>
-                        <p className="text-[10px] font-bold opacity-80 uppercase tracking-wider">
+                        <p className="text-[10px] font-bold opacity-80 font-semibold">
                             Automated Discovery & Sourcing Operations
                         </p>
                     </Card>
@@ -197,10 +197,10 @@ export default function MonitoringPage() {
                     <Card className="bg-indigo-600 text-white border-none shadow-xl shadow-indigo-500/20 rounded-[2rem] p-8 space-y-3 relative overflow-hidden">
                         <div className="flex items-center gap-2 opacity-80">
                             <DollarSign className="w-5 h-5" />
-                            <p className="text-xs font-black uppercase tracking-widest">Estimated Cost Savings</p>
+                            <p className="text-xs font-black font-semibold">Estimated Cost Savings</p>
                         </div>
                         <p className="text-5xl font-black">${totalDollarsSaved.toLocaleString()}</p>
-                        <p className="text-[10px] font-bold opacity-80 uppercase tracking-wider">
+                        <p className="text-[10px] font-bold opacity-80 font-semibold">
                             Calculated @ ${hourlyRate}/hr Recruiter Compensation
                         </p>
                     </Card>
@@ -208,10 +208,10 @@ export default function MonitoringPage() {
                     <Card className="bg-slate-950 text-white border border-slate-800 shadow-xl rounded-[2rem] p-8 space-y-3 relative overflow-hidden">
                         <div className="flex items-center gap-2 opacity-80 text-blue-400">
                             <Zap className="w-5 h-5" />
-                            <p className="text-xs font-black uppercase tracking-widest">Synthesis Velocity</p>
+                            <p className="text-xs font-black font-semibold">Synthesis Velocity</p>
                         </div>
                         <p className="text-5xl font-black text-blue-400">{successRate}%</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        <p className="text-[10px] font-bold text-slate-400 font-semibold">
                             Pipeline Accuracy & Completion Index
                         </p>
                     </Card>
@@ -228,7 +228,7 @@ export default function MonitoringPage() {
                 ].map((item, i) => (
                     <Card key={i} className="bg-card border border-border p-6 rounded-2xl flex items-center justify-between shadow-sm">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{item.label}</p>
+                            <p className="text-[10px] font-black font-semibold text-muted-foreground">{item.label}</p>
                             <p className={cn("text-2xl font-black", item.color)}>{item.val}</p>
                         </div>
                         <div className={cn("p-3 rounded-2xl", item.bg)}>
@@ -246,10 +246,10 @@ export default function MonitoringPage() {
                         <div className="flex items-center gap-3">
                             <Activity className="w-5 h-5 text-emerald-400" />
                             <div>
-                                <CardTitle className="text-xs font-bold uppercase tracking-wider text-white">
+                                <CardTitle className="text-xs font-bold font-semibold text-white">
                                     Real-Time Agent Event Feed
                                 </CardTitle>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                <p className="text-[10px] font-bold text-slate-400 font-semibold">
                                     Live WebSocket Telemetry Buffer
                                 </p>
                             </div>
@@ -259,19 +259,19 @@ export default function MonitoringPage() {
                             <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1 text-[10px] font-bold text-slate-300">
                                 <button 
                                     onClick={() => setFilterCategory("all")}
-                                    className={cn("px-3 py-1 rounded-lg uppercase tracking-wider transition-all", filterCategory === "all" && "bg-emerald-500 text-white font-black")}
+                                    className={cn("px-3 py-1 rounded-lg font-semibold transition-colors duration-150", filterCategory === "all" && "bg-emerald-500 text-white font-black")}
                                 >
                                     All
                                 </button>
                                 <button 
                                     onClick={() => setFilterCategory("errors")}
-                                    className={cn("px-3 py-1 rounded-lg uppercase tracking-wider transition-all", filterCategory === "errors" && "bg-rose-500 text-white font-black")}
+                                    className={cn("px-3 py-1 rounded-lg font-semibold transition-colors duration-150", filterCategory === "errors" && "bg-rose-500 text-white font-black")}
                                 >
                                     Errors
                                 </button>
                                 <button 
                                     onClick={() => setFilterCategory("resolved")}
-                                    className={cn("px-3 py-1 rounded-lg uppercase tracking-wider transition-all", filterCategory === "resolved" && "bg-blue-500 text-white font-black")}
+                                    className={cn("px-3 py-1 rounded-lg font-semibold transition-colors duration-150", filterCategory === "resolved" && "bg-blue-500 text-white font-black")}
                                 >
                                     Resolved
                                 </button>
@@ -281,7 +281,7 @@ export default function MonitoringPage() {
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={() => setIsPaused(!isPaused)}
-                                className="h-8 text-[10px] font-black uppercase tracking-widest text-slate-300 bg-slate-900 border border-slate-800 hover:bg-slate-800"
+                                className="h-8 text-[10px] font-black font-semibold text-slate-300 bg-slate-900 border border-slate-800 hover:bg-slate-800"
                             >
                                 {isPaused ? <Play className="w-3 h-3 mr-1 text-emerald-400" /> : <Pause className="w-3 h-3 mr-1 text-amber-400" />}
                                 {isPaused ? "Resume" : "Pause"}
@@ -291,7 +291,7 @@ export default function MonitoringPage() {
                                 variant="ghost" 
                                 size="sm" 
                                 onClick={clearTelemetryLogs}
-                                className="h-8 text-[10px] font-black uppercase tracking-widest text-rose-400 bg-slate-900 border border-slate-800 hover:bg-rose-500/10"
+                                className="h-8 text-[10px] font-black font-semibold text-rose-400 bg-slate-900 border border-slate-800 hover:bg-rose-500/10 whitespace-nowrap"
                             >
                                 <Trash2 className="w-3 h-3 mr-1" />
                                 Clear
@@ -306,7 +306,7 @@ export default function MonitoringPage() {
                                     <SignalItem key={s.id} s={s} />
                                 ))
                             ) : (
-                                <div className="text-center py-32 text-slate-500 text-xs font-mono uppercase tracking-widest">
+                                <div className="text-center py-32 text-slate-500 text-xs font-mono font-semibold">
                                     [ Awaiting live system signal telemetry stream... ]
                                 </div>
                             )}
@@ -318,10 +318,10 @@ export default function MonitoringPage() {
                 <div className="space-y-6">
                     <Card className="bg-card border border-border shadow-xl rounded-[2.5rem] p-6 space-y-6">
                         <div className="flex items-center justify-between border-b border-border pb-4">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-2">
+                            <h3 className="text-xs font-black font-semibold text-foreground flex items-center gap-2 break-words">
                                 <Cpu className="w-4 h-4 text-emerald-500" /> Recruiting Agent Fleet Status
                             </h3>
-                            <Badge className="bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase">
+                            <Badge className="bg-emerald-500/10 text-emerald-500 text-[9px] font-black">
                                 5 Agents Active
                             </Badge>
                         </div>
@@ -337,9 +337,9 @@ export default function MonitoringPage() {
                                 <div key={i} className="p-3 bg-muted/40 rounded-2xl flex items-center justify-between">
                                     <div className="space-y-1">
                                         <p className="text-foreground font-black">{node.name}</p>
-                                        <p className="text-[10px] text-muted-foreground">Load: {node.load} • Latency: {node.speed}</p>
+                                        <p className="text-[10px] text-muted-foreground">Load: {node.load} , Latency: {node.speed}</p>
                                     </div>
-                                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-black uppercase">
+                                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-black">
                                         {node.status}
                                     </Badge>
                                 </div>
@@ -348,22 +348,22 @@ export default function MonitoringPage() {
                     </Card>
 
                     <Card className="bg-slate-950 text-white border border-slate-800 shadow-xl rounded-[2.5rem] p-6 space-y-4">
-                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-300 flex items-center gap-2">
+                        <h3 className="text-xs font-black font-semibold text-slate-300 flex items-center gap-2 break-words">
                             <Shield className="w-4 h-4 text-blue-400" /> Recent System Audit Tasks
                         </h3>
 
                         <div className="space-y-3">
                             {tasks.slice(0, 4).map((t, i) => (
                                 <div key={i} className="p-3 bg-slate-900 rounded-xl flex items-center justify-between text-xs">
-                                    <span className="font-mono text-slate-300 truncate uppercase">{t.task_type || "Deduplication Check"}</span>
-                                    <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[9px] font-black uppercase">
-                                        VERIFIED
+                                    <span className="font-mono text-slate-300 truncate">{t.task_type || "Deduplication Check"}</span>
+                                    <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] font-semibold">
+                                        Verified
                                     </Badge>
                                 </div>
                             ))}
 
                             {tasks.length === 0 && (
-                                <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest text-center py-4">
+                                <p className="text-[10px] text-slate-500 font-black text-center py-4">
                                     All automated workflows operating normally.
                                 </p>
                             )}

@@ -88,12 +88,12 @@ export default function DashboardHome() {
                 <div>
                     <div className="flex items-center gap-2 mb-1.5">
                         <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 inline-block animate-pulse" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 inline-block animate-pulse motion-reduce:animate-none" />
                             AI Sourcing Engine Active
                         </Badge>
                         <span className="text-xs text-muted-foreground">EEOC &amp; NYC LL144 Compliant</span>
                     </div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground break-words">
                         Recruitment Dashboard
                     </h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
@@ -107,20 +107,20 @@ export default function DashboardHome() {
                         size="icon"
                         onClick={fetchStats}
                         disabled={isRefreshing}
-                        className="h-10 w-10 text-muted-foreground hover:text-foreground"
+                        className="h-10 w-10 text-muted-foreground hover:text-foreground whitespace-nowrap"
                         title="Refresh metrics"
                         aria-label="Refresh metrics"
                     >
                         <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
                     </Button>
                     <Link href="/dashboard/jobs/create" id="dashboard-new-req-btn">
-                        <Button variant="outline" size="sm" className="h-10 text-xs font-semibold gap-1.5 rounded-xl">
+                        <Button variant="outline" size="sm" className="h-10 text-xs font-semibold gap-1.5 rounded-xl whitespace-nowrap">
                             <Plus className="w-4 h-4" />
                             New Requisition
                         </Button>
                     </Link>
                     <Link href="/dashboard/swarm" id="dashboard-launch-swarm-btn">
-                        <Button size="sm" className="h-10 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 rounded-xl shadow-sm">
+                        <Button size="sm" className="h-10 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 rounded-xl shadow-sm whitespace-nowrap">
                             <Rocket className="w-4 h-4" />
                             Launch Sourcing Swarm
                         </Button>
@@ -141,7 +141,7 @@ export default function DashboardHome() {
                             <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
                             <s.icon className={cn("w-4 h-4", s.color)} />
                         </div>
-                        <div className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{s.val}</div>
+                        <div className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight break-words">{s.val}</div>
                         <p className="text-[11px] text-muted-foreground mt-1">{s.note}</p>
                     </Card>
                 ))}
@@ -152,19 +152,19 @@ export default function DashboardHome() {
 
             {/* Quick Navigation Cards */}
             <div className="space-y-4">
-                <h2 className="text-sm font-semibold text-foreground tracking-tight">
+                <h2 className="text-sm font-semibold text-foreground tracking-tight break-words">
                     Quick Navigation
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {navigationCards.map((card, i) => (
                         <Link key={i} href={card.href} className="group block">
-                            <Card className="p-5 h-full bg-card border-border hover:border-primary/50 hover:shadow-md transition-all rounded-2xl flex flex-col justify-between">
+                            <Card className="p-5 h-full bg-card border-border hover:border-primary/50 hover:shadow-md transition-colors duration-150 rounded-2xl flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", card.color)}>
                                         <card.icon className="w-5 h-5" />
                                     </div>
                                     <div>
-                                        <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                                        <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors break-words">
                                             {card.title}
                                         </h3>
                                         <p className="text-xs text-muted-foreground mt-1 leading-relaxed">

@@ -203,16 +203,16 @@ export default function SwarmCommandCenter() {
 
                 <div className="relative z-10 space-y-3 max-w-3xl">
                     <div className="flex items-center gap-3">
-                        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 uppercase text-[10px] font-black tracking-widest px-3 py-1">
+                        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] font-black px-3 py-1">
                             AI Recruitment Automation
                         </Badge>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-[10px] font-bold text-slate-400 font-semibold flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none" />
                             Active Automation Pipeline ({enabledCount}/7 Agents Enabled)
                         </span>
                     </div>
 
-                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight">
+                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight break-words">
                         Autonomous Agent <br />
                         <span className="text-blue-400 italic">Workflow Automation Hub.</span>
                     </h1>
@@ -226,7 +226,7 @@ export default function SwarmCommandCenter() {
                     <Button 
                         onClick={runAutopilot}
                         disabled={status === "running"}
-                        className="h-12 px-8 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black uppercase text-[11px] tracking-widest shadow-xl shadow-blue-500/20 transition-all hover:scale-105"
+                        className="h-12 px-8 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[11px] shadow-xl shadow-blue-500/20 transition-colors duration-150 hover:scale-105 whitespace-nowrap"
                     >
                         {status === "running" ? (
                             <>
@@ -246,7 +246,7 @@ export default function SwarmCommandCenter() {
             {/* Agent Swarm Node Status Fabric with Toggle Controls */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-black uppercase tracking-tight text-foreground flex items-center gap-2">
+                    <h2 className="text-xl font-black uppercase tracking-tight text-foreground flex items-center gap-2 break-words">
                         <Cpu className="w-5 h-5 text-blue-500" /> Active AI Recruiting Agents ({enabledCount}/7 Enabled)
                     </h2>
                     <span className="text-xs font-bold text-muted-foreground">Click agent card to toggle step on / off</span>
@@ -263,7 +263,7 @@ export default function SwarmCommandCenter() {
                             <Card 
                                 onClick={() => toggleAgentEnabled(agent.id)}
                                 className={cn(
-                                    "p-5 relative overflow-hidden transition-all duration-300 border-border rounded-[1.8rem] flex flex-col items-center gap-3 text-center cursor-pointer group select-none",
+                                    "p-5 relative overflow-hidden transition-colors duration-150 duration-300 border-border rounded-[1.8rem] flex flex-col items-center gap-3 text-center cursor-pointer group select-none",
                                     !agent.enabled ? "bg-muted/20 opacity-40 grayscale border-dashed" :
                                     agent.status === "thinking" ? "bg-card shadow-2xl border-blue-500 scale-105" : 
                                     agent.status === "success" ? "bg-emerald-500/10 border-emerald-500/30" :
@@ -275,23 +275,23 @@ export default function SwarmCommandCenter() {
                                 </div>
 
                                 <div className={cn(
-                                    "w-12 h-12 rounded-2xl flex items-center justify-center transition-all mt-1",
+                                    "w-12 h-12 rounded-2xl flex items-center justify-center transition-colors duration-150 mt-1",
                                     !agent.enabled ? "bg-muted text-muted-foreground" :
                                     agent.status === "success" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30" :
-                                    agent.status === "thinking" ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 animate-pulse" : "bg-slate-900 text-slate-300"
+                                    agent.status === "thinking" ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30 animate-pulse motion-reduce:animate-none" : "bg-slate-900 text-slate-300"
                                 )}>
                                     <agent.icon className={cn("w-6 h-6", agent.status === "thinking" && "animate-spin")} />
                                 </div>
 
                                 <div className="space-y-0.5">
-                                    <p className="text-[11px] font-black uppercase tracking-tight text-foreground">{agent.name}</p>
-                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{agent.role}</p>
+                                    <p className="text-[11px] font-black tracking-tight text-foreground">{agent.name}</p>
+                                    <p className="text-[9px] font-bold text-muted-foreground font-semibold">{agent.role}</p>
                                 </div>
 
                                 <div className="flex gap-1.5 pt-1">
                                     {[1, 2, 3].map(dot => (
                                         <div key={dot} className={cn(
-                                            "w-1.5 h-1.5 rounded-full transition-all",
+                                            "w-1.5 h-1.5 rounded-full transition-colors duration-150",
                                             !agent.enabled ? "bg-muted" :
                                             agent.status === "success" ? "bg-emerald-500" :
                                             agent.status === "thinking" ? "bg-blue-500 animate-ping" : "bg-muted-foreground/30"
@@ -310,10 +310,10 @@ export default function SwarmCommandCenter() {
                     {/* Preset Swarm Templates & Pipeline Parameters Card */}
                     <Card className="p-8 rounded-[2.5rem] bg-card border-border shadow-xl space-y-6">
                         <div className="flex items-center justify-between border-b border-border pb-4">
-                            <h3 className="text-sm font-black uppercase tracking-widest text-foreground flex items-center gap-2">
+                            <h3 className="text-sm font-black font-semibold text-foreground flex items-center gap-2 break-words">
                                 <Layers className="w-4 h-4 text-blue-500" /> 1-Click Recruitment Templates
                             </h3>
-                            <Badge className="bg-blue-500/10 text-blue-500 text-[9px] font-black uppercase">
+                            <Badge className="bg-blue-500/10 text-blue-500 text-[9px] font-black">
                                 Pre-Configured Roles
                             </Badge>
                         </div>
@@ -325,7 +325,7 @@ export default function SwarmCommandCenter() {
                                     key={idx}
                                     onClick={() => applyPresetTemplate(preset)}
                                     className={cn(
-                                        "p-4 rounded-2xl border text-left transition-all hover:scale-[1.02] flex items-center justify-between",
+                                        "p-4 rounded-2xl border text-left transition-colors duration-150 hover:scale-[1.02] flex items-center justify-between",
                                         targetRole === preset.role ? "bg-blue-500/10 border-blue-500/40 shadow-sm" : "bg-muted/30 border-border hover:border-blue-500/30"
                                     )}
                                 >
@@ -341,7 +341,7 @@ export default function SwarmCommandCenter() {
                         <div className="pt-4 border-t border-border space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Target Role / Search Term</label>
+                                    <label className="text-[10px] font-black font-semibold text-muted-foreground">Target Role / Search Term</label>
                                     <input
                                         type="text"
                                         value={targetRole}
@@ -351,7 +351,7 @@ export default function SwarmCommandCenter() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Target Location Boundary</label>
+                                    <label className="text-[10px] font-black font-semibold text-muted-foreground">Target Location Boundary</label>
                                     <input
                                         type="text"
                                         value={targetLocation}
@@ -368,7 +368,7 @@ export default function SwarmCommandCenter() {
                                         <ShieldCheck className="w-5 h-5" />
                                     </div>
                                     <div className="space-y-1">
-                                        <h4 className="text-xs font-black text-foreground uppercase">Require Human Sign-Off Before Outreach</h4>
+                                        <h4 className="text-xs font-black text-foreground break-words">Require Human Sign-Off Before Outreach</h4>
                                         <p className="text-[10px] text-muted-foreground font-medium">
                                             Pauses automated pipeline before sending emails to candidates for recruiter approval.
                                         </p>
@@ -398,12 +398,12 @@ export default function SwarmCommandCenter() {
                         
                         <div className="relative z-10 space-y-4">
                             <div className="flex items-center gap-3">
-                                <div className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_12px_rgba(59,130,246,0.6)]" />
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400">Live Pipeline & Execution Activity</span>
+                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" />
+                                <span className="text-xs font-semibold text-emerald-400">Live Pipeline & Execution Activity</span>
                             </div>
                             
                             <div className="space-y-2 max-w-xl">
-                                <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tight leading-tight">
+                                <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight break-words">
                                     Autonomous Sourcing & <br />
                                     <span className="text-blue-400 italic">Screening Execution Fabric.</span>
                                 </h3>
@@ -420,10 +420,10 @@ export default function SwarmCommandCenter() {
                                 { label: "EEOC 4/5ths Ratio", val: "0.89 (PASS)", icon: ShieldCheck },
                             ].map((stat, i) => (
                                 <div key={i} className="space-y-1">
-                                    <p className="text-[9px] font-black text-white/40 uppercase tracking-widest flex items-center gap-1.5">
+                                    <p className="text-[9px] font-black text-white/40 font-semibold flex items-center gap-1.5">
                                         <stat.icon className="w-3.5 h-3.5 text-blue-400" /> {stat.label}
                                     </p>
-                                    <p className="text-lg md:text-xl font-black text-white">{stat.val}</p>
+                                    <p className="text-lg md:text-xl font-black text-white break-words">{stat.val}</p>
                                 </div>
                             ))}
                         </div>
@@ -438,11 +438,11 @@ export default function SwarmCommandCenter() {
                                 <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500">
                                     <Fingerprint className="w-4 h-4" />
                                 </div>
-                                <span className="text-[10px] font-black text-foreground uppercase tracking-widest">
+                                <span className="text-[10px] font-black text-foreground font-semibold">
                                     Live Execution Logs & Pipeline Events
                                 </span>
                             </div>
-                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[8px] font-black uppercase">
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-semibold">
                                 WebSocket Live
                             </Badge>
                         </div>
@@ -471,7 +471,7 @@ export default function SwarmCommandCenter() {
                             {status === "running" && (
                                 <div className="flex items-center gap-2 text-blue-500 pt-2 font-bold">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    <span className="animate-pulse">Ready to run automated recruitment pipeline...</span>
+                                    <span className="animate-pulse motion-reduce:animate-none">Ready to run automated recruitment pipeline...</span>
                                 </div>
                             )}
                         </div>
@@ -480,7 +480,7 @@ export default function SwarmCommandCenter() {
                             <Button 
                                 onClick={exportLogsJSON}
                                 variant="outline" 
-                                className="w-full rounded-xl bg-card border-border text-[10px] font-black uppercase tracking-widest h-11 shadow-sm text-foreground hover:bg-muted"
+                                className="w-full rounded-xl bg-card border-border text-[10px] font-black font-semibold h-11 shadow-sm text-foreground hover:bg-muted whitespace-nowrap"
                             >
                                 <Download className="w-3.5 h-3.5 mr-2 text-blue-500" />
                                 Export Telemetry Logs (JSON)

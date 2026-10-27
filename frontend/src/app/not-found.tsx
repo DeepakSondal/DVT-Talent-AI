@@ -26,10 +26,10 @@ export default function NotFound() {
           </div>
 
           <div className="space-y-2">
-            <span className="text-[11px] font-bold tracking-wider uppercase text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
+            <span className="text-[11px] font-bold font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
               Error 404
             </span>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground pt-1">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground pt-1 break-words">
               Page Not Found
             </h1>
             <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
@@ -40,7 +40,7 @@ export default function NotFound() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-left">
             <Link
               href="/portal"
-              className="p-4 rounded-2xl border border-border bg-muted/30 hover:border-emerald-500/50 hover:bg-emerald-50/20 dark:hover:bg-emerald-950/20 transition-all group"
+              className="p-4 rounded-2xl border border-border bg-muted/30 hover:border-emerald-500/50 hover:bg-emerald-50/20 dark:hover:bg-emerald-950/20 transition-colors duration-150 group"
             >
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold text-sm mb-1">
                 <Compass className="w-4 h-4" />
@@ -53,7 +53,7 @@ export default function NotFound() {
 
             <Link
               href="/dashboard"
-              className="p-4 rounded-2xl border border-border bg-muted/30 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+              className="p-4 rounded-2xl border border-border bg-muted/30 hover:border-primary/50 hover:bg-primary/5 transition-colors duration-150 group"
             >
               <div className="flex items-center gap-2 text-primary font-semibold text-sm mb-1">
                 <Briefcase className="w-4 h-4" />
@@ -69,7 +69,7 @@ export default function NotFound() {
             <Link href="/">
               <Button
                 variant="outline"
-                className="w-full h-11 rounded-xl border-border text-foreground hover:bg-muted flex items-center justify-center gap-2 font-semibold text-xs"
+                className="w-full h-11 rounded-xl border-border text-foreground hover:bg-muted flex items-center justify-center gap-2 font-semibold text-xs whitespace-nowrap"
               >
                 <Home className="w-4 h-4" />
                 Return to Homepage

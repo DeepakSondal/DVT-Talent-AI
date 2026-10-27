@@ -28,9 +28,9 @@ function AuthContent() {
   }, [router, searchParams]);
 
   return (
-    <div className="min-h-screen bg-[#080a0e] flex flex-col items-center justify-center font-['Geist',_sans-serif]">
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center font-sans">
       <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
-      <p className="text-zinc-400 text-sm animate-pulse">Completing authentication...</p>
+      <p className="text-zinc-400 text-sm animate-pulse motion-reduce:animate-none">Completing authentication...</p>
     </div>
   );
 }
@@ -38,7 +38,7 @@ function AuthContent() {
 export default function AuthCallbackPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#080a0e] flex flex-col items-center justify-center font-['Geist',_sans-serif]">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center font-sans">
         <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
       </div>
     }>

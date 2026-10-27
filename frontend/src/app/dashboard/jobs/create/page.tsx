@@ -127,7 +127,7 @@ export default function CreateJobPage() {
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Job Requisitions</span>
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground break-words">
             Create Job Requisition
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
@@ -139,7 +139,7 @@ export default function CreateJobPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Core Role Info */}
         <Card className="p-6 sm:p-8 bg-card border-border rounded-3xl shadow-sm space-y-6">
-          <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+          <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 break-words min-w-0">
             <Briefcase className="w-4 h-4 text-primary" />
             Role Details
           </h2>
@@ -244,7 +244,7 @@ export default function CreateJobPage() {
 
         {/* Compensation & Target Skills */}
         <Card className="p-6 sm:p-8 bg-card border-border rounded-3xl shadow-sm space-y-6">
-          <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+          <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 break-words min-w-0">
             <DollarSign className="w-4 h-4 text-emerald-500" />
             Compensation &amp; Target Competencies
           </h2>
@@ -299,7 +299,7 @@ export default function CreateJobPage() {
                   type="button"
                   variant="outline"
                   onClick={handleAddSkill}
-                  className="h-11 px-4 text-xs font-semibold rounded-xl"
+                  className="h-11 px-4 text-xs font-semibold rounded-xl whitespace-nowrap"
                 >
                   <Plus className="w-4 h-4 mr-1" /> Add Skill
                 </Button>
@@ -330,9 +330,9 @@ export default function CreateJobPage() {
 
         {/* Job Description & Requirements Text */}
         <Card className="p-6 sm:p-8 bg-card border-border rounded-3xl shadow-sm space-y-4">
-          <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2">
+          <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 break-words min-w-0">
             <Building2 className="w-4 h-4 text-primary" />
-            Job Description &amp; Responsibilities
+            Job Description &amp; Core Duties
           </h2>
 
           <div className="space-y-1.5">
@@ -367,7 +367,7 @@ export default function CreateJobPage() {
         {/* Submit Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
           <Link href="/dashboard/jobs">
-            <Button variant="ghost" className="w-full sm:w-auto h-11 px-6 rounded-xl text-xs font-semibold">
+            <Button variant="ghost" className="w-full sm:w-auto h-11 px-6 rounded-xl text-xs font-semibold whitespace-nowrap">
               Cancel
             </Button>
           </Link>
@@ -375,7 +375,7 @@ export default function CreateJobPage() {
             id="publish-requisition-btn"
             type="submit"
             disabled={loading}
-            className="w-full sm:w-auto h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-md shadow-primary/20 gap-2"
+            className="w-full sm:w-auto h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-md shadow-primary/20 gap-2 whitespace-nowrap"
           >
             {loading ? (
               <span className="flex items-center gap-2">

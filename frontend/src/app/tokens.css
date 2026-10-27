@@ -1,0 +1,79 @@
+:root {
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --space-2xl: 64px;
+  --space-3xl: 96px;
+  --space-4xl: 144px;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.44rem;
+  --text-2xl: 1.728rem;
+  --text-3xl: 2.074rem;
+
+  --text-display-s: 1.44rem;
+  --text-display: 1.728rem;
+  --text-section: 1.2rem;
+  --text-title: 1rem;
+  --text-lead: 1rem;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+
+  --color-error: oklch(52% 0.19 27);
+  --color-success: oklch(62% 0.17 160);
+
+  --container: 1440px;
+  --gutter: 48px;
+  --gap-columns: 24px;
+  --section-gap-s: 80px;
+  --section-gap: 120px;
+  --section-gap-l: 144px;
+
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-sticky-nav: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+
+  /* Semantic Theme Tokens */
+  --color-paper: oklch(14% 0.015 250);
+  --color-paper-2: oklch(18% 0.02 250);
+  --color-paper-3: oklch(22% 0.025 250);
+
+  --color-ink: oklch(96% 0.01 250);
+  --color-ink-2: oklch(82% 0.015 250);
+  --color-muted: oklch(62% 0.02 250);
+
+  --color-rule: oklch(25% 0.02 250);
+  --color-line: var(--color-rule);
+
+  --color-accent: oklch(64% 0.17 160);
+  --color-accent-ink: oklch(14% 0.03 160);
+  --color-focus: oklch(64% 0.17 160);
+
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-outlier: var(--font-body);
+
+  --radius-card: 16px;
+  --radius-pill: 9999px;
+  --rule-hair: 1px;
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.35);
+  --tracking-display: -0.02em;
+}

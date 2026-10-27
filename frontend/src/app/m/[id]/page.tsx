@@ -35,7 +35,7 @@ export default function MicrositePage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 selection:bg-blue-500/30">
       {/* Premium Gradient Background */}
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(17,24,39,1)_0%,rgba(0,0,0,1)_100%)]" />
+      <div className="fixed inset-0 bg-slate-950" />
       
       <main className="relative z-10 mx-auto max-w-4xl px-6 py-20">
         <motion.div 
@@ -45,16 +45,16 @@ export default function MicrositePage() {
         >
           {/* Header */}
           <div className="flex items-center gap-4">
-            <div className="h-10 w-10 rounded-full bg-blue-600 blur-sm animate-pulse" />
-            <span className="text-sm font-medium tracking-widest text-blue-400 uppercase">Personalized Opportunity</span>
+            <div className="h-10 w-10 rounded-full bg-blue-600 blur-sm animate-pulse motion-reduce:animate-none" />
+            <span className="text-sm font-medium text-blue-400">Personalized Opportunity</span>
           </div>
 
           {/* Hero Section */}
           <section className="space-y-6">
-            <h1 className="text-5xl font-extrabold leading-tight tracking-tighter md:text-7xl">
+            <h1 className="text-5xl font-extrabold leading-tight tracking-tighter md:text-7xl break-words">
               {data.headline}
             </h1>
-            <p className="max-w-2xl text-xl text-slate-400">
+            <p className="max-w-2xl text-xl text-slate-400 break-words">
               {data.title}
             </p>
           </section>
@@ -63,13 +63,13 @@ export default function MicrositePage() {
           <Card className="border-slate-800 bg-slate-900/50 backdrop-blur-xl">
             <CardContent className="grid gap-12 p-10 md:grid-cols-2">
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-blue-400">The Fit</h3>
+                <h3 className="text-lg font-semibold text-blue-400 break-words">The Fit</h3>
                 <p className="text-slate-300 leading-relaxed">
                   {data.value_proposition}
                 </p>
               </div>
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-emerald-400">The Timing</h3>
+                <h3 className="text-lg font-semibold text-emerald-400 break-words">The Timing</h3>
                 <p className="text-slate-300 leading-relaxed">
                   {data.why_now}
                 </p>
@@ -80,7 +80,7 @@ export default function MicrositePage() {
           {/* CTA Section */}
           <section className="flex flex-col items-center justify-between gap-8 rounded-3xl bg-blue-600 p-12 text-center md:flex-row md:text-left">
             <div className="space-y-2">
-                <h2 className="text-3xl font-bold">Ready to chat?</h2>
+                <h2 className="text-3xl font-bold break-words">Ready to chat?</h2>
                 <p className="text-blue-100 italic">"I'd love to tell you more about the team culture."</p>
             </div>
             <div className="flex gap-4">

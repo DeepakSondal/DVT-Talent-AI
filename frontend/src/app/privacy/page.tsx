@@ -40,17 +40,17 @@ export default function PrivacyPolicyPage() {
           <Badge className="bg-emerald-600 text-white font-semibold text-xs">
             Global Data Protection
           </Badge>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight break-words">
             Privacy Policy &amp; AI Disclosures
           </h1>
           <p className="text-sm text-muted-foreground">
-            Effective Date: January 1, 2026 &bull; NYC LL144 AEDT Compliant &bull; GDPR &amp; CCPA Ready
+            Effective Date: January 1, 2026, NYC LL144 AEDT Compliant, GDPR &amp; CCPA Ready
           </p>
         </div>
 
         <Card className="p-6 sm:p-8 bg-card border-border space-y-8 shadow-sm">
           <section className="space-y-3">
-            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 break-words">
               <Eye className="w-5 h-5 text-emerald-600" />
               1. Information We Collect
             </h2>
@@ -65,7 +65,7 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section className="space-y-3 border-t border-border pt-6">
-            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 break-words">
               <Shield className="w-5 h-5 text-blue-600" />
               2. NYC Local Law 144 &amp; Automated Employment Decision Tools (AEDT)
             </h2>
@@ -75,7 +75,7 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section className="space-y-3 border-t border-border pt-6">
-            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 break-words">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               3. Candidate Rights (GDPR &amp; CCPA/CPRA)
             </h2>
@@ -91,7 +91,7 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section className="space-y-3 border-t border-border pt-6">
-            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 break-words">
               <Lock className="w-5 h-5 text-slate-700 dark:text-slate-300" />
               4. Data Encryption &amp; Security Standards
             </h2>
@@ -101,7 +101,7 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section className="space-y-3 border-t border-border pt-6">
-            <h2 className="text-lg font-bold tracking-tight">
+            <h2 className="text-lg font-bold tracking-tight break-words">
               5. Contact Our Data Protection Officer (DPO)
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">

@@ -84,7 +84,7 @@ export default function CompliancePage() {
             <div className="p-2 rounded-xl bg-primary/10 text-primary">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">AI Compliance & Governance Center</h1>
+            <h1 className="text-2xl font-bold tracking-tight break-words">AI Compliance & Governance Center</h1>
           </div>
           <p className="text-muted-foreground mt-1 text-sm">
             EEOC 4/5ths Adverse Impact Monitoring, Immutable Decision Ledger & NYC LL144 Policy Packs
@@ -105,15 +105,15 @@ export default function CompliancePage() {
       {/* Policy Pack Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {Object.entries(policyPacks).map(([key, pack]) => (
-          <Card key={key} className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm hover:border-primary/40 transition-all">
+          <Card key={key} className="border-border/60 bg-card/50 backdrop-blur-sm shadow-sm hover:border-primary/40 transition-colors duration-150">
             <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Policy Pack</span>
+              <span className="text-xs font-semibold text-muted-foreground font-semibold">Policy Pack</span>
               <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px]">
                 {pack.status}
               </Badge>
             </CardHeader>
             <CardContent className="p-4 pt-1 space-y-2">
-              <h3 className="font-semibold text-base">{pack.name}</h3>
+              <h3 className="font-semibold text-base break-words">{pack.name}</h3>
               <p className="text-xs text-muted-foreground">
                 {key === "nyc_ll144" && "NYC AEDT Annual Bias Audit & 10-day Candidate Notice compliance."}
                 {key === "colorado_sb26" && "Colorado SB26-189 Automated Decision-Making Technology assessment."}
@@ -214,7 +214,7 @@ export default function CompliancePage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-border text-xs text-muted-foreground uppercase">
+                <tr className="border-b border-border text-xs text-muted-foreground">
                   <th className="py-3 px-4">Decision Type</th>
                   <th className="py-3 px-4">Model & Provider</th>
                   <th className="py-3 px-4">Score</th>

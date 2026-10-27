@@ -40,17 +40,17 @@ export default function TermsOfServicePage() {
           <Badge className="bg-blue-600 text-white font-semibold text-xs">
             Master Services Agreement
           </Badge>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight break-words">
             Terms of Service
           </h1>
           <p className="text-sm text-muted-foreground">
-            Effective Date: January 1, 2026 &bull; Last Revised: October 2026 &bull; Version 2.4
+            Effective Date: January 1, 2026, Last Revised: October 2026, Version 2.4
           </p>
         </div>
 
         <Card className="p-6 sm:p-8 bg-card border-border space-y-8 shadow-sm">
           <section className="space-y-3">
-            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 break-words">
               <FileText className="w-5 h-5 text-blue-600" />
               1. Acceptance of Terms &amp; Scope of Service
             </h2>
@@ -60,7 +60,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section className="space-y-3 border-t border-border pt-6">
-            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 break-words">
               <Shield className="w-5 h-5 text-blue-600" />
               2. Multi-Tenant Isolation &amp; Data Ownership
             </h2>
@@ -70,7 +70,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section className="space-y-3 border-t border-border pt-6">
-            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
+            <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 break-words">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               3. Autonomous AI Agent Delegation & Human Oversight
             </h2>
@@ -80,7 +80,7 @@ export default function TermsOfServicePage() {
           </section>
 
           <section className="space-y-3 border-t border-border pt-6">
-            <h2 className="text-lg font-bold tracking-tight">
+            <h2 className="text-lg font-bold tracking-tight break-words">
               4. Recruiting Credits, Token Usage & Subscriptions
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
@@ -89,16 +89,16 @@ export default function TermsOfServicePage() {
           </section>
 
           <section className="space-y-3 border-t border-border pt-6">
-            <h2 className="text-lg font-bold tracking-tight">
+            <h2 className="text-lg font-bold tracking-tight break-words">
               5. Service Level Agreement (SLA) & Platform Availability
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              For Enterprise tier customers, DVT Talent AI commits to 99.9% scheduled platform availability, excluding planned maintenance windows communicated at least 48 hours in advance. In the event of an unscheduled outage exceeding statutory thresholds, eligible accounts qualify for proportional billing service credits as outlined in the Enterprise SLA Addendum.
+              For Enterprise tier customers, DVT Talent AI commits to high-availability scheduled platform availability, excluding planned maintenance windows communicated at least 48 hours in advance. In the event of an unscheduled outage exceeding statutory thresholds, eligible accounts qualify for proportional billing service credits as outlined in the Enterprise SLA Addendum.
             </p>
           </section>
 
           <section className="space-y-3 border-t border-border pt-6">
-            <h2 className="text-lg font-bold tracking-tight">
+            <h2 className="text-lg font-bold tracking-tight break-words">
               6. Governing Law & Dispute Resolution
             </h2>
             <p className="text-sm leading-relaxed text-muted-foreground">

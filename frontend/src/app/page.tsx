@@ -51,10 +51,10 @@ const MOCK_CANDIDATES = [
         id: "alex",
         name: "Alex Chen",
         role: "Staff Distributed Systems Engineer",
-        experience: "10 yrs exp • ex-CloudScale, ex-Fintech",
+        experience: "10 yrs exp , ex-CloudScale, ex-Fintech",
         matchScore: 96,
         sourceType: "ATS Rediscovery (Saved $450 Fee)",
-        reqMatched: "#REQ-402 • Lead Distributed Storage",
+        reqMatched: "#REQ-402 , Lead Distributed Storage",
         skills: ["Raft Consensus", "Go / Golang", "Distributed Storage", "LSM Trees", "gRPC", "High-Throughput Partitioning"],
         radar: { cv: 4.9, role: 4.8, comp: 4.7, culture: 4.6, flags: 0 },
         starStory: {
@@ -71,10 +71,10 @@ const MOCK_CANDIDATES = [
         id: "maya",
         name: "Maya Lin",
         role: "Principal AI Platform Architect",
-        experience: "8 yrs exp • ex-HyperScale AI, Core Contributor",
+        experience: "8 yrs exp , ex-HyperScale AI, Core Contributor",
         matchScore: 94,
         sourceType: "GitHub Open Source Sourced",
-        reqMatched: "#REQ-408 • Principal ML Systems",
+        reqMatched: "#REQ-408 , Principal ML Systems",
         skills: ["vLLM Serving", "CUDA Kernels", "PyTorch", "Kubernetes Operator", "KV-Cache Paging", "TensorRT"],
         radar: { cv: 4.8, role: 4.9, comp: 4.8, culture: 4.5, flags: 0 },
         starStory: {
@@ -91,10 +91,10 @@ const MOCK_CANDIDATES = [
         id: "marcus",
         name: "Marcus Vance",
         role: "Lead Fullstack & Systems Engineer",
-        experience: "9 yrs exp • ex-Enterprise SaaS, Tech Lead",
+        experience: "9 yrs exp , ex-Enterprise SaaS, Tech Lead",
         matchScore: 92,
         sourceType: "Direct Verified Network",
-        reqMatched: "#REQ-395 • Lead Platform Engineer",
+        reqMatched: "#REQ-395 , Lead Platform Engineer",
         skills: ["Next.js App Router", "TypeScript", "PostgreSQL", "Temporal.io", "Kafka", "Row-Level Security"],
         radar: { cv: 4.7, role: 4.7, comp: 4.6, culture: 4.8, flags: 0 },
         starStory: {
@@ -112,16 +112,16 @@ const MOCK_CANDIDATES = [
 // --- Navigation Header ---
 function Navigation() {
     return (
-        <header className="fixed top-0 w-full z-50 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl transition-all">
+        <header className="fixed top-0 w-full z-50 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl transition-colors duration-150">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
                 <Link href="/" id="nav-brand-link" className="flex items-center gap-3 group">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black shadow-lg shadow-blue-600/30 group-hover:scale-105 transition-transform">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black shadow-lg shadow-blue-600/30 group-hover:scale-105 transition-transform">
                         <Bot className="w-6 h-6" />
                     </div>
                     <div className="flex flex-col">
                         <div className="flex items-center gap-2">
                             <span className="font-bold text-lg tracking-tight text-white">
-                                DVT <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Talent AI</span>
+                                DVT <span className="text-emerald-400 text-emerald-400">Talent AI</span>
                             </span>
                             <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-md">
                                 v2.4
@@ -162,7 +162,7 @@ function Navigation() {
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="text-emerald-400 hover:text-emerald-300 text-xs font-semibold border border-emerald-500/30 hover:bg-emerald-500/10 px-3.5 py-2 rounded-xl transition-all"
+                            className="text-emerald-400 hover:text-emerald-300 text-xs font-semibold border border-emerald-500/30 hover:bg-emerald-500/10 px-3.5 py-2 rounded-xl transition-colors duration-150"
                         >
                             Candidate Portal
                         </Button>
@@ -170,7 +170,7 @@ function Navigation() {
                     <Link href="/auth/login?portal=recruiter" id="nav-recruiter-login-btn">
                         <Button
                             size="sm"
-                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold h-10 px-4 rounded-xl shadow-md shadow-blue-600/30 transition-all hover:scale-105"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold h-10 px-4 rounded-xl shadow-md shadow-blue-600/30 transition-colors duration-150 hover:scale-105 whitespace-nowrap"
                         >
                             Recruiter Sign In
                         </Button>
@@ -206,7 +206,7 @@ function LiveInteractiveSimulator({
             {/* Top Lens & Simulator Control Bar */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
                 <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold font-semibold text-slate-400 flex items-center gap-1.5">
                         <Gauge className="w-4 h-4 text-blue-400" />
                         Live Lens:
                     </span>
@@ -223,7 +223,7 @@ function LiveInteractiveSimulator({
                             {persona === "recruiter" && (
                                 <motion.div
                                     layoutId="demo-lens-pill"
-                                    className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-md -z-10"
+                                    className="absolute inset-0 bg-emerald-600 rounded-xl shadow-md -z-10"
                                     transition={springPresets.snappy}
                                 />
                             )}
@@ -242,7 +242,7 @@ function LiveInteractiveSimulator({
                             {persona === "candidate" && (
                                 <motion.div
                                     layoutId="demo-lens-pill"
-                                    className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl shadow-md -z-10"
+                                    className="absolute inset-0 bg-emerald-600 rounded-xl shadow-md -z-10"
                                     transition={springPresets.snappy}
                                 />
                             )}
@@ -267,7 +267,7 @@ function LiveInteractiveSimulator({
                                     setIsApplied(false);
                                 }}
                                 className={cn(
-                                    "px-3 py-1 rounded-lg text-xs font-medium transition-all",
+                                    "px-3 py-1 rounded-lg text-xs font-medium transition-colors duration-150",
                                     selectedCandId === cand.id
                                         ? "bg-slate-800 text-white font-bold border border-slate-700 shadow-sm"
                                         : "text-slate-400 hover:text-slate-200"
@@ -303,7 +303,7 @@ function LiveInteractiveSimulator({
                                         {activeCandidate.sourceType}
                                     </Badge>
                                 </div>
-                                <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                                <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight break-words">
                                     {activeCandidate.name}
                                 </h3>
                                 <p className="text-xs text-slate-400 mt-1">
@@ -312,10 +312,10 @@ function LiveInteractiveSimulator({
                             </div>
 
                             <div className="flex-shrink-0 bg-blue-950/40 border border-blue-800/60 rounded-2xl p-3.5 text-center min-w-[130px] shadow-inner">
-                                <span className="text-[10px] uppercase font-bold text-blue-400 block tracking-wider">
+                                <span className="text-[10px] font-bold text-blue-400 block">
                                     Explainable Match
                                 </span>
-                                <span className="text-3xl font-extrabold text-blue-300">
+                                <span className="text-3xl font-extrabold text-blue-300 break-words">
                                     {activeCandidate.matchScore}%
                                 </span>
                                 <span className="text-[9px] text-blue-400/80 block font-mono">
@@ -394,10 +394,10 @@ function LiveInteractiveSimulator({
                                     type="button"
                                     onClick={() => setIsApproved(!isApproved)}
                                     className={cn(
-                                        "text-xs font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg",
+                                        "text-xs font-bold px-6 py-2.5 rounded-xl transition-colors duration-150 shadow-lg",
                                         isApproved
                                             ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30"
-                                            : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-600/30"
+                                            : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-blue-600/30"
                                     )}
                                 >
                                     {isApproved ? (
@@ -434,8 +434,8 @@ function LiveInteractiveSimulator({
                                         Career-Ops High Alignment
                                     </Badge>
                                 </div>
-                                <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                                    {activeCandidate.reqMatched.split(" • ")[1]}
+                                <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight break-words">
+                                    {activeCandidate.reqMatched.split(" , ")[1]}
                                 </h3>
                                 <p className="text-xs text-slate-400 mt-1">
                                     Target Band: {activeCandidate.salary} &bull; Liveness Confirmed 2h ago
@@ -443,10 +443,10 @@ function LiveInteractiveSimulator({
                             </div>
 
                             <div className="flex-shrink-0 bg-emerald-950/40 border border-emerald-800/60 rounded-2xl p-3.5 text-center min-w-[130px] shadow-inner">
-                                <span className="text-[10px] uppercase font-bold text-emerald-400 block tracking-wider">
+                                <span className="text-[10px] font-bold text-emerald-400 block">
                                     Career-Ops Score
                                 </span>
-                                <span className="text-3xl font-extrabold text-emerald-300">
+                                <span className="text-3xl font-extrabold text-emerald-300 break-words">
                                     4.8 <span className="text-sm font-normal text-emerald-400/70">/ 5.0</span>
                                 </span>
                                 <span className="text-[9px] text-emerald-400/80 block font-mono">
@@ -527,10 +527,10 @@ function LiveInteractiveSimulator({
                                     type="button"
                                     onClick={() => setIsApplied(!isApplied)}
                                     className={cn(
-                                        "text-xs font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg",
+                                        "text-xs font-bold px-6 py-2.5 rounded-xl transition-colors duration-150 shadow-lg",
                                         isApplied
                                             ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30"
-                                            : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30"
+                                            : "bg-emerald-600 hover: hover: text-white shadow-emerald-600/30"
                                     )}
                                 >
                                     {isApplied ? (
@@ -569,7 +569,7 @@ function InteractiveRoiCalculator() {
                     <BarChart3 className="w-3.5 h-3.5 mr-1.5 inline text-indigo-400" />
                     Interactive Value Estimator
                 </Badge>
-                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white break-words">
                     Calculate Your Autonomous Hiring ROI
                 </h2>
                 <p className="text-sm text-slate-400">
@@ -643,37 +643,37 @@ function InteractiveRoiCalculator() {
 
                 {/* Live Calculated Stats Cards */}
                 <div className="lg:col-span-5 grid grid-cols-1 gap-4">
-                    <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-950/40 to-slate-900 border border-blue-800/40 text-left shadow-lg">
+                    <div className="p-5 rounded-2xl bg-emerald-600 border border-blue-800/40 text-left shadow-lg">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs uppercase font-bold text-blue-400 tracking-wider">Time Recovered</span>
+                            <span className="text-xs font-bold text-blue-400">Time Recovered</span>
                             <Clock className="w-4 h-4 text-blue-400" />
                         </div>
                         <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-4xl font-extrabold text-white tracking-tight">{hoursSavedPerMonth}</span>
+                            <span className="text-4xl font-extrabold text-white tracking-tight break-words">{hoursSavedPerMonth}</span>
                             <span className="text-xs text-slate-400 font-medium">Hours / Month</span>
                         </div>
                         <span className="text-[11px] text-blue-300/80 mt-1 block">Equivalent to {Math.round(hoursSavedPerMonth / 160 * 10) / 10} full-time sourcers</span>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/40 to-slate-900 border border-emerald-800/40 text-left shadow-lg">
+                    <div className="p-5 rounded-2xl bg-emerald-600 border border-emerald-800/40 text-left shadow-lg">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs uppercase font-bold text-emerald-400 tracking-wider">Agency Fees Saved</span>
+                            <span className="text-xs font-bold text-emerald-400">Agency Fees Saved</span>
                             <DollarSign className="w-4 h-4 text-emerald-400" />
                         </div>
                         <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-4xl font-extrabold text-white tracking-tight">${rediscoverySavingsDollars.toLocaleString()}</span>
+                            <span className="text-4xl font-extrabold text-white tracking-tight break-words">${rediscoverySavingsDollars.toLocaleString()}</span>
                             <span className="text-xs text-slate-400 font-medium">Per Quarter</span>
                         </div>
                         <span className="text-[11px] text-emerald-300/80 mt-1 block">From internal pipeline revival without agency commission</span>
                     </div>
 
-                    <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-950/40 to-slate-900 border border-purple-800/40 text-left shadow-lg">
+                    <div className="p-5 rounded-2xl bg-emerald-600 border border-purple-800/40 text-left shadow-lg">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs uppercase font-bold text-purple-400 tracking-wider">Average Time-to-Slate</span>
+                            <span className="text-xs font-bold text-purple-400">Average Time-to-Slate</span>
                             <TrendingUp className="w-4 h-4 text-purple-400" />
                         </div>
                         <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-4xl font-extrabold text-white tracking-tight">{placementVelocityWeeks}</span>
+                            <span className="text-4xl font-extrabold text-white tracking-tight break-words">{placementVelocityWeeks}</span>
                             <span className="text-xs text-slate-400 font-medium">Weeks (Down from 6.8w)</span>
                         </div>
                         <span className="text-[11px] text-purple-300/80 mt-1 block">68% acceleration in first qualified candidate introduction</span>
@@ -772,7 +772,7 @@ export default function LandingPage() {
             <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
                 <div
                     className={cn(
-                        "absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full blur-[140px] opacity-25 transition-all duration-700",
+                        "absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full blur-[140px] opacity-25 transition-colors duration-150 duration-700",
                         persona === "recruiter" ? "bg-blue-600/30" : "bg-emerald-600/30"
                     )}
                 />
@@ -802,7 +802,7 @@ export default function LandingPage() {
                             {persona === "recruiter" && (
                                 <motion.div
                                     layoutId="active-landing-pill"
-                                    className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-600/30 -z-10"
+                                    className="absolute inset-0 bg-emerald-600 rounded-xl shadow-lg shadow-blue-600/30 -z-10"
                                     transition={springPresets.snappy}
                                 />
                             )}
@@ -822,7 +822,7 @@ export default function LandingPage() {
                             {persona === "candidate" && (
                                 <motion.div
                                     layoutId="active-landing-pill"
-                                    className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl shadow-lg shadow-emerald-600/30 -z-10"
+                                    className="absolute inset-0 bg-emerald-600 rounded-xl shadow-lg shadow-emerald-600/30 -z-10"
                                     transition={springPresets.snappy}
                                 />
                             )}
@@ -850,15 +850,15 @@ export default function LandingPage() {
                                     Autonomous Sourcing Swarms &bull; NYC LL144 &amp; EEOC 4/5ths Compliant
                                 </Badge>
 
-                                <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.1]">
+                                <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.1] break-words">
                                     Autonomous Talent Sourcing &amp; <br className="hidden sm:inline" />
-                                    <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-blue-500 bg-clip-text text-transparent">
+                                    <span className="bg-emerald-600 text-emerald-400">
                                         Screening Engine
                                     </span>
                                 </h1>
 
                                 <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-                                    Deploy autonomous recruiting agents that discover talent across GitHub, LinkedIn, and your dormant ATS archive—with explainable match scoring and human-in-the-loop outreach approvals.
+                                    Deploy autonomous recruiting agents that discover talent across GitHub, LinkedIn, and your dormant ATS archive, with explainable match scoring and human-in-the-loop outreach approvals.
                                 </p>
 
                                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
@@ -866,7 +866,7 @@ export default function LandingPage() {
                                         <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
                                             <Button
                                                 size="lg"
-                                                className="h-13 px-8 text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl shadow-xl shadow-blue-600/30 transition-all"
+                                                className="h-13 px-8 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-xl shadow-blue-600/30 transition-colors duration-150 whitespace-nowrap"
                                             >
                                                 Start 14-Day Recruiter Trial <ArrowRight className="w-4 h-4 ml-2" />
                                             </Button>
@@ -876,14 +876,14 @@ export default function LandingPage() {
                                         <Button
                                             size="lg"
                                             variant="outline"
-                                            className="h-13 px-6 text-sm font-semibold border-slate-700 text-slate-300 hover:bg-slate-900 rounded-xl"
+                                            className="h-13 px-6 text-sm font-semibold border-slate-700 text-slate-300 hover:bg-slate-900 rounded-xl whitespace-nowrap"
                                         >
                                             Recruiter Sign In
                                         </Button>
                                     </Link>
                                 </div>
                                 <p className="text-xs text-slate-500">
-                                    No credit card required &bull; Unlimited requisitions &bull; Instant sandbox access
+                                    Zero setup friction, Unlimited requisitions, Instant sandbox access
                                 </p>
                             </motion.div>
                         ) : (
@@ -903,9 +903,9 @@ export default function LandingPage() {
                                     100% Free Career-Ops Suite &bull; Anti-Ghost Job Verification
                                 </Badge>
 
-                                <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.1]">
+                                <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.1] break-words">
                                     Stop Applying to Ghost Jobs. <br className="hidden sm:inline" />
-                                    <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-500 bg-clip-text text-transparent">
+                                    <span className="bg-emerald-600 text-emerald-400">
                                         Score Fit with Zero Fabrication.
                                     </span>
                                 </h1>
@@ -919,7 +919,7 @@ export default function LandingPage() {
                                         <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
                                             <Button
                                                 size="lg"
-                                                className="h-13 px-8 text-sm font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl shadow-xl shadow-emerald-600/30 transition-all"
+                                                className="h-13 px-8 text-sm font-bold bg-emerald-600 hover: hover: text-white rounded-xl shadow-xl shadow-emerald-600/30 transition-colors duration-150 whitespace-nowrap"
                                             >
                                                 Join Career-Ops Talent Network <ArrowRight className="w-4 h-4 ml-2" />
                                             </Button>
@@ -929,7 +929,7 @@ export default function LandingPage() {
                                         <Button
                                             size="lg"
                                             variant="outline"
-                                            className="h-13 px-6 text-sm font-semibold border-slate-700 text-slate-300 hover:bg-slate-900 rounded-xl"
+                                            className="h-13 px-6 text-sm font-semibold border-slate-700 text-slate-300 hover:bg-slate-900 rounded-xl whitespace-nowrap"
                                         >
                                             Candidate Sign In
                                         </Button>
@@ -955,38 +955,38 @@ export default function LandingPage() {
                         {persona === "recruiter" ? (
                             <>
                                 <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
-                                    <span className="text-2xl sm:text-3xl font-extrabold text-blue-400">140h+</span>
+                                    <span className="text-2xl sm:text-3xl font-extrabold text-blue-400 break-words">140h+</span>
                                     <span className="text-xs font-semibold text-slate-400 block mt-1">Recruiter Hours Saved / Mo</span>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
-                                    <span className="text-2xl sm:text-3xl font-extrabold text-blue-400">$450</span>
+                                    <span className="text-2xl sm:text-3xl font-extrabold text-blue-400 break-words">$450</span>
                                     <span className="text-xs font-semibold text-slate-400 block mt-1">Saved per ATS Rediscovery</span>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
-                                    <span className="text-2xl sm:text-3xl font-extrabold text-blue-400">100%</span>
+                                    <span className="text-2xl sm:text-3xl font-extrabold text-blue-400 break-words">100%</span>
                                     <span className="text-xs font-semibold text-slate-400 block mt-1">EEOC 4/5ths Rule Checked</span>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
-                                    <span className="text-2xl sm:text-3xl font-extrabold text-blue-400">96%</span>
+                                    <span className="text-2xl sm:text-3xl font-extrabold text-blue-400 break-words">96%</span>
                                     <span className="text-xs font-semibold text-slate-400 block mt-1">Pre-Flight Deliverability</span>
                                 </div>
                             </>
                         ) : (
                             <>
                                 <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
-                                    <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400">5D</span>
+                                    <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 break-words">5D</span>
                                     <span className="text-xs font-semibold text-slate-400 block mt-1">Explainable Fit Scoring</span>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
-                                    <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400">100%</span>
+                                    <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 break-words">100%</span>
                                     <span className="text-xs font-semibold text-slate-400 block mt-1">Verified Active Postings</span>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
-                                    <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400">0.0%</span>
+                                    <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 break-words">0.0%</span>
                                     <span className="text-xs font-semibold text-slate-400 block mt-1">Fabricated Hallucinations</span>
                                 </div>
                                 <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-md">
-                                    <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400">1-Click</span>
+                                    <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 break-words">1-Click</span>
                                     <span className="text-xs font-semibold text-slate-400 block mt-1">Direct Verified Delivery</span>
                                 </div>
                             </>
@@ -1000,7 +1000,7 @@ export default function LandingPage() {
                         <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10 text-xs font-semibold">
                             Recruiter Command Platform
                         </Badge>
-                        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white break-words">
                             Four Pillars of Autonomous Talent Operations
                         </h2>
                         <p className="text-sm text-slate-400">
@@ -1010,12 +1010,12 @@ export default function LandingPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <motion.div whileHover={{ y: -4 }} transition={springPresets.snappy}>
-                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-blue-500/50 rounded-2xl space-y-3.5 transition-all shadow-xl h-full flex flex-col justify-between">
+                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-blue-500/50 rounded-2xl space-y-3.5 transition-colors duration-150 shadow-xl h-full flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
                                         <Briefcase className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-lg font-bold text-white">1. Requisition &amp; JD Optimization</h3>
+                                    <h3 className="text-lg font-bold text-white break-words">1. Requisition &amp; JD Optimization</h3>
                                     <p className="text-xs text-slate-400 leading-relaxed">
                                         Convert raw hiring manager criteria into structured, inclusive job descriptions with automated taxonomy mapping and unconscious bias avoidance.
                                     </p>
@@ -1027,12 +1027,12 @@ export default function LandingPage() {
                         </motion.div>
 
                         <motion.div whileHover={{ y: -4 }} transition={springPresets.snappy}>
-                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-blue-500/50 rounded-2xl space-y-3.5 transition-all shadow-xl h-full flex flex-col justify-between">
+                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-blue-500/50 rounded-2xl space-y-3.5 transition-colors duration-150 shadow-xl h-full flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
                                         <Zap className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-lg font-bold text-white">2. Multi-Channel Sourcing Swarms</h3>
+                                    <h3 className="text-lg font-bold text-white break-words">2. Multi-Channel Sourcing Swarms</h3>
                                     <p className="text-xs text-slate-400 leading-relaxed">
                                         Deploy 5 specialized recruitment agents to discover candidates across GitHub, LinkedIn, and rediscover high-fit candidates dormant in your existing ATS.
                                     </p>
@@ -1044,12 +1044,12 @@ export default function LandingPage() {
                         </motion.div>
 
                         <motion.div whileHover={{ y: -4 }} transition={springPresets.snappy}>
-                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-blue-500/50 rounded-2xl space-y-3.5 transition-all shadow-xl h-full flex flex-col justify-between">
+                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-blue-500/50 rounded-2xl space-y-3.5 transition-colors duration-150 shadow-xl h-full flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
                                         <Mail className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-lg font-bold text-white">3. Approval-Gated Outreach</h3>
+                                    <h3 className="text-lg font-bold text-white break-words">3. Approval-Gated Outreach</h3>
                                     <p className="text-xs text-slate-400 leading-relaxed">
                                         Compose hyper-personalized multi-stage email drafts with mandatory recruiter checkpoints before any candidate message is dispatched.
                                     </p>
@@ -1061,12 +1061,12 @@ export default function LandingPage() {
                         </motion.div>
 
                         <motion.div whileHover={{ y: -4 }} transition={springPresets.snappy}>
-                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-blue-500/50 rounded-2xl space-y-3.5 transition-all shadow-xl h-full flex flex-col justify-between">
+                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-blue-500/50 rounded-2xl space-y-3.5 transition-colors duration-150 shadow-xl h-full flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
                                         <ShieldCheck className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-lg font-bold text-white">4. EEOC &amp; Audit Ledger</h3>
+                                    <h3 className="text-lg font-bold text-white break-words">4. EEOC &amp; Audit Ledger</h3>
                                     <p className="text-xs text-slate-400 leading-relaxed">
                                         Continuous 4/5ths Rule selection ratio monitoring, prompt-injection defense, and cryptographically hashed decision audit logs for full NYC LL144 compliance.
                                     </p>
@@ -1085,7 +1085,7 @@ export default function LandingPage() {
                         <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 bg-emerald-500/10 text-xs font-semibold">
                             Candidate Career-Ops Hub
                         </Badge>
-                        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white break-words">
                             Built for Candidates. Powered by the Career-Ops Engine.
                         </h2>
                         <p className="text-sm text-slate-400">
@@ -1095,14 +1095,14 @@ export default function LandingPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <motion.div whileHover={{ y: -4 }} transition={springPresets.snappy}>
-                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-emerald-500/50 rounded-2xl space-y-3.5 transition-all shadow-xl h-full flex flex-col justify-between">
+                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-emerald-500/50 rounded-2xl space-y-3.5 transition-colors duration-150 shadow-xl h-full flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                                         <Target className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-lg font-bold text-white">1. 5-Dimension Match Scoring</h3>
+                                    <h3 className="text-lg font-bold text-white break-words">1. 5-Dimension Match Scoring</h3>
                                     <p className="text-xs text-slate-400 leading-relaxed">
-                                        Rate any job 1–5 on CV Match, Target Role, Comp Realism, Cultural Signals, and Red Flags with transparent evidence citations.
+                                        Rate any job from 1 to 5 on CV Match, Target Role, Comp Realism, Cultural Signals, and Red Flags with transparent evidence citations.
                                     </p>
                                 </div>
                                 <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
@@ -1112,12 +1112,12 @@ export default function LandingPage() {
                         </motion.div>
 
                         <motion.div whileHover={{ y: -4 }} transition={springPresets.snappy}>
-                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-emerald-500/50 rounded-2xl space-y-3.5 transition-all shadow-xl h-full flex flex-col justify-between">
+                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-emerald-500/50 rounded-2xl space-y-3.5 transition-colors duration-150 shadow-xl h-full flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                                         <Search className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-lg font-bold text-white">2. Ghost-Job Detection</h3>
+                                    <h3 className="text-lg font-bold text-white break-words">2. Ghost-Job Detection</h3>
                                     <p className="text-xs text-slate-400 leading-relaxed">
                                         Liveness verification checks whether hiring managers are active, identifying repost loops and phantom requisitions before you apply.
                                     </p>
@@ -1129,12 +1129,12 @@ export default function LandingPage() {
                         </motion.div>
 
                         <motion.div whileHover={{ y: -4 }} transition={springPresets.snappy}>
-                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-emerald-500/50 rounded-2xl space-y-3.5 transition-all shadow-xl h-full flex flex-col justify-between">
+                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-emerald-500/50 rounded-2xl space-y-3.5 transition-colors duration-150 shadow-xl h-full flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                                         <FileText className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-lg font-bold text-white">3. Zero-Fabrication ATS Audit</h3>
+                                    <h3 className="text-lg font-bold text-white break-words">3. Zero-Fabrication ATS Audit</h3>
                                     <p className="text-xs text-slate-400 leading-relaxed">
                                         Highlight your verified achievements to match target ATS keywords without ever hallucinating fake credentials or skills.
                                     </p>
@@ -1146,12 +1146,12 @@ export default function LandingPage() {
                         </motion.div>
 
                         <motion.div whileHover={{ y: -4 }} transition={springPresets.snappy}>
-                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-emerald-500/50 rounded-2xl space-y-3.5 transition-all shadow-xl h-full flex flex-col justify-between">
+                            <Card className="p-6 bg-slate-900/70 border-slate-800 hover:border-emerald-500/50 rounded-2xl space-y-3.5 transition-colors duration-150 shadow-xl h-full flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
                                         <Sparkles className="w-6 h-6" />
                                     </div>
-                                    <h3 className="text-lg font-bold text-white">4. STAR Behavioral Flashcards</h3>
+                                    <h3 className="text-lg font-bold text-white break-words">4. STAR Behavioral Flashcards</h3>
                                     <p className="text-xs text-slate-400 leading-relaxed">
                                         Rehearse Situation, Task, Action, and Result responses mapped directly from your real project history to behavioral interview questions.
                                     </p>
@@ -1174,7 +1174,7 @@ export default function LandingPage() {
                             <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10 text-xs font-semibold">
                                 Legal &amp; Regulatory Safeguards
                             </Badge>
-                            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white break-words">
                                 Immutable AI Decision Ledger &amp; EEOC Governance
                             </h2>
                             <p className="text-sm text-slate-400 leading-relaxed">
@@ -1209,7 +1209,7 @@ export default function LandingPage() {
                                         <span className="font-bold text-white text-sm">Live Compliance Telemetry</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" />
                                         <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] font-bold">
                                             Status: AUDIT CLEAN
                                         </Badge>
@@ -1248,7 +1248,7 @@ export default function LandingPage() {
                         <Badge variant="outline" className="border-slate-700 text-slate-300 bg-slate-900 text-xs font-semibold">
                             Frequently Asked Questions
                         </Badge>
-                        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                        <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white break-words">
                             Clear Answers for Recruiters and Candidates
                         </h2>
                     </div>
@@ -1271,7 +1271,7 @@ export default function LandingPage() {
                     <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10 text-xs font-semibold">
                         Ready to Transform Hiring?
                     </Badge>
-                    <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-white">
+                    <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-white break-words">
                         Start Modernizing Your Recruitment Pipeline Today
                     </h2>
                     <p className="text-base text-slate-400 max-w-xl mx-auto">
@@ -1282,7 +1282,7 @@ export default function LandingPage() {
                             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
                                 <Button
                                     size="lg"
-                                    className="h-12 px-8 text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl shadow-lg shadow-blue-600/30"
+                                    className="h-12 px-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-blue-600/30 whitespace-nowrap"
                                 >
                                     Start Free Recruiter Trial <ArrowRight className="w-4 h-4 ml-2" />
                                 </Button>
@@ -1293,7 +1293,7 @@ export default function LandingPage() {
                                 <Button
                                     size="lg"
                                     variant="outline"
-                                    className="h-12 px-8 text-xs font-bold border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/40 rounded-xl"
+                                    className="h-12 px-8 text-xs font-bold border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/40 rounded-xl whitespace-nowrap"
                                 >
                                     Join Free Candidate Network
                                 </Button>
@@ -1307,7 +1307,7 @@ export default function LandingPage() {
             <footer className="py-10 border-t border-slate-800 bg-slate-950 text-slate-400 text-xs">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-blue-600/20">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-blue-600/20">
                             D
                         </div>
                         <span className="font-bold text-white">DVT Talent AI</span>

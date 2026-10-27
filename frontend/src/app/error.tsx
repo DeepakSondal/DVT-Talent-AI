@@ -37,7 +37,7 @@ export default function GlobalError({
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground break-words">
               Something went wrong
             </h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
@@ -61,7 +61,7 @@ export default function GlobalError({
             <Link href="/" className="w-full sm:w-auto">
               <Button
                 variant="outline"
-                className="w-full sm:w-auto h-11 px-6 rounded-xl border-border text-foreground hover:bg-muted flex items-center justify-center gap-2 text-xs font-semibold"
+                className="w-full sm:w-auto h-11 px-6 rounded-xl border-border text-foreground hover:bg-muted flex items-center justify-center gap-2 text-xs font-semibold whitespace-nowrap"
               >
                 <Home className="w-4 h-4" />
                 Return Home

@@ -212,15 +212,15 @@ export default function SourcingLab() {
 
                 <div className="relative z-10 space-y-3 max-w-3xl">
                     <div className="flex items-center gap-3">
-                        <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 uppercase text-[10px] font-black tracking-widest px-3 py-1">
+                        <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[10px] font-black px-3 py-1">
                             Phase 2: Automated Sourcing & Pipeline Sync
                         </Badge>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <span className="text-[10px] font-bold text-slate-400 font-semibold">
                             Talent Grid Auto-Sync: ACTIVE
                         </span>
                     </div>
 
-                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight">
+                    <h1 className="text-3xl md:text-5xl font-black tracking-tight uppercase leading-tight break-words">
                         Sourcing Lab: <span className="text-purple-400 italic">Skill & Boolean Discovery.</span>
                     </h1>
 
@@ -232,13 +232,13 @@ export default function SourcingLab() {
                 <div className="relative z-10 flex flex-col items-start md:items-end gap-3 shrink-0">
                     <div className="flex items-center gap-4 bg-slate-900/80 backdrop-blur-md px-6 py-4 rounded-2xl border border-slate-800">
                         <div className="text-center">
-                            <p className="text-[10px] font-black uppercase text-slate-400">Sourced Candidates</p>
-                            <p className="text-2xl font-black text-purple-400">{sourcedCandidates.length}</p>
+                            <p className="text-[10px] font-black text-slate-400">Sourced Candidates</p>
+                            <p className="text-2xl font-black text-purple-400 break-words">{sourcedCandidates.length}</p>
                         </div>
                         <div className="h-8 w-px bg-slate-800" />
                         <div className="text-center">
-                            <p className="text-[10px] font-black uppercase text-slate-400">Grid Synced</p>
-                            <p className="text-2xl font-black text-emerald-400">100%</p>
+                            <p className="text-[10px] font-black text-slate-400">Grid Synced</p>
+                            <p className="text-2xl font-black text-emerald-400 break-words">100%</p>
                         </div>
                     </div>
                 </div>
@@ -248,7 +248,7 @@ export default function SourcingLab() {
             <Card className="p-8 rounded-[2.5rem] bg-card border-border shadow-xl space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
                     <div>
-                        <h2 className="text-lg font-black uppercase tracking-tight text-foreground">
+                        <h2 className="text-lg font-black uppercase tracking-tight text-foreground break-words">
                             Multi-Option Sourcing Search Engine
                         </h2>
                         <p className="text-xs text-muted-foreground font-medium">
@@ -261,7 +261,7 @@ export default function SourcingLab() {
                         <button
                             onClick={() => setSearchMode("skills")}
                             className={cn(
-                                "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                                "px-4 py-2 rounded-xl text-xs font-black font-semibold transition-colors duration-150",
                                 searchMode === "skills" ? "bg-purple-600 text-white shadow-md" : "text-muted-foreground hover:text-foreground"
                             )}
                         >
@@ -270,7 +270,7 @@ export default function SourcingLab() {
                         <button
                             onClick={() => setSearchMode("title")}
                             className={cn(
-                                "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                                "px-4 py-2 rounded-xl text-xs font-black font-semibold transition-colors duration-150",
                                 searchMode === "title" ? "bg-purple-600 text-white shadow-md" : "text-muted-foreground hover:text-foreground"
                             )}
                         >
@@ -279,7 +279,7 @@ export default function SourcingLab() {
                         <button
                             onClick={() => setSearchMode("boolean")}
                             className={cn(
-                                "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                                "px-4 py-2 rounded-xl text-xs font-black font-semibold transition-colors duration-150",
                                 searchMode === "boolean" ? "bg-purple-600 text-white shadow-md" : "text-muted-foreground hover:text-foreground"
                             )}
                         >
@@ -291,7 +291,7 @@ export default function SourcingLab() {
                 {/* Input Fields based on Active Mode */}
                 {searchMode === "skills" && (
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Technical Skill Set (Comma Separated)</label>
+                        <label className="text-[10px] font-black font-semibold text-muted-foreground">Technical Skill Set (Comma Separated)</label>
                         <input
                             type="text"
                             placeholder="e.g. Go, Kubernetes, gRPC, PostgreSQL, eBPF..."
@@ -304,7 +304,7 @@ export default function SourcingLab() {
 
                 {searchMode === "title" && (
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Target Role Title</label>
+                        <label className="text-[10px] font-black font-semibold text-muted-foreground">Target Role Title</label>
                         <input
                             type="text"
                             placeholder="e.g. Staff Backend Distributed Engineer..."
@@ -317,7 +317,7 @@ export default function SourcingLab() {
 
                 {searchMode === "boolean" && (
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Boolean Search String (AND, OR, NOT, Parentheses)</label>
+                        <label className="text-[10px] font-black font-semibold text-muted-foreground">Boolean Search String (AND, OR, NOT, Parentheses)</label>
                         <input
                             type="text"
                             placeholder='e.g. ("Senior Engineer" OR "Lead") AND ("Distributed Systems" OR "Microservices") AND NOT "Junior"'
@@ -331,7 +331,7 @@ export default function SourcingLab() {
                 {/* Secondary Filters */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Experience Range</label>
+                        <label className="text-[10px] font-black font-semibold text-muted-foreground">Experience Range</label>
                         <select
                             value={params.experience_range}
                             onChange={(e) => setParams(prev => ({ ...prev, experience_range: e.target.value }))}
@@ -344,7 +344,7 @@ export default function SourcingLab() {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Location Scope</label>
+                        <label className="text-[10px] font-black font-semibold text-muted-foreground">Location Scope</label>
                         <input
                             type="text"
                             value={params.location}
@@ -354,7 +354,7 @@ export default function SourcingLab() {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Min Match Confidence ({params.min_score}%)</label>
+                        <label className="text-[10px] font-black font-semibold text-muted-foreground">Min Match Confidence ({params.min_score}%)</label>
                         <input
                             type="range"
                             min="60"
@@ -375,7 +375,7 @@ export default function SourcingLab() {
                     <Button
                         onClick={handleSourcing}
                         disabled={loading}
-                        className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white font-black uppercase text-xs tracking-widest h-13 px-8 rounded-xl shadow-lg shadow-purple-500/20"
+                        className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white font-black text-xs h-13 px-8 rounded-xl shadow-lg shadow-purple-500/20 whitespace-nowrap"
                     >
                         {loading ? (
                             <>
@@ -395,11 +395,11 @@ export default function SourcingLab() {
             {/* Sourced Candidate Cards Section (User Selected Copy) */}
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-black uppercase tracking-tight flex items-center gap-3 text-foreground">
+                    <h2 className="text-2xl font-black uppercase tracking-tight flex items-center gap-3 text-foreground break-words">
                         <Users className="w-6 h-6 text-purple-500" />
                         High-Match Sourced Candidates & Contact Cards ({sourcedCandidates.length})
                     </h2>
-                    <Badge variant="outline" className="text-[10px] font-bold tracking-widest uppercase bg-muted">
+                    <Badge variant="outline" className="text-[10px] font-bold font-semibold bg-muted">
                         Auto-Saved to Sourcing Vault & Talent Grid
                     </Badge>
                 </div>
@@ -413,29 +413,29 @@ export default function SourcingLab() {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
                             >
-                                <Card className="p-8 rounded-[2.5rem] bg-card border-border hover:border-purple-500/40 transition-all shadow-xl space-y-6 relative overflow-hidden">
+                                <Card className="p-8 rounded-[2.5rem] bg-card border-border hover:border-purple-500/40 transition-colors duration-150 shadow-xl space-y-6 relative overflow-hidden">
                                     {/* Candidate Header Row */}
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border">
                                         <div className="space-y-2">
                                             <div className="flex flex-wrap items-center gap-3">
-                                                <h3 className="text-2xl font-black tracking-tight text-foreground">
+                                                <h3 className="text-2xl font-black tracking-tight text-foreground break-words">
                                                     {cand.first_name} {cand.last_name}
                                                 </h3>
-                                                <Badge className="bg-purple-600/10 text-purple-600 dark:text-purple-400 border-purple-500/20 font-black text-[10px] uppercase tracking-widest px-3 py-1">
+                                                <Badge className="bg-purple-600/10 text-purple-600 dark:text-purple-400 border-purple-500/20 font-black text-[10px] font-semibold px-3 py-1">
                                                     {cand.score}% Match Confidence
                                                 </Badge>
-                                                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[9px] font-black uppercase tracking-widest px-3 py-1 flex items-center gap-1">
+                                                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[9px] font-black font-semibold px-3 py-1 flex items-center gap-1">
                                                     <CheckCircle2 className="w-3 h-3" /> Auto-Saved to Talent Grid
                                                 </Badge>
                                             </div>
 
                                             <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-muted-foreground">
                                                 <span className="text-foreground font-bold">{cand.title}</span>
-                                                <span>•</span>
+                                                <span>,</span>
                                                 <span>{cand.company}</span>
-                                                <span>•</span>
+                                                <span>,</span>
                                                 <span>{cand.location}</span>
-                                                <span>•</span>
+                                                <span>,</span>
                                                 <span>{cand.experience_years} Years Experience</span>
                                             </div>
                                         </div>
@@ -446,7 +446,7 @@ export default function SourcingLab() {
                                                 href={cand.linkedin_url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="p-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-xl border border-blue-500/20 transition-all"
+                                                className="p-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-xl border border-blue-500/20 transition-colors duration-150"
                                                 title="LinkedIn Profile"
                                             >
                                                 <Linkedin className="w-4 h-4" />
@@ -455,7 +455,7 @@ export default function SourcingLab() {
                                                 href={cand.github_url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="p-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl border border-white/10 transition-all"
+                                                className="p-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl border border-white/10 transition-colors duration-150"
                                                 title="GitHub Repository"
                                             >
                                                 <Github className="w-4 h-4" />
@@ -466,7 +466,7 @@ export default function SourcingLab() {
                                     {/* Contact Info & AI Reasoning Grid */}
                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-muted/40 dark:bg-slate-900/60 p-6 rounded-2xl border border-border">
                                         <div className="lg:col-span-6 space-y-3">
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-purple-500 flex items-center gap-2">
+                                            <p className="text-[10px] font-black font-semibold text-purple-500 flex items-center gap-2">
                                                 <Mail className="w-4 h-4" /> Verified Contact Information
                                             </p>
                                             <div className="space-y-1.5 text-xs font-semibold">
@@ -478,14 +478,14 @@ export default function SourcingLab() {
                                                     <Phone className="w-3.5 h-3.5 text-emerald-500" />
                                                     <span>{cand.phone}</span>
                                                 </div>
-                                                <div className="text-[10px] font-bold text-muted-foreground uppercase pt-1">
+                                                <div className="text-[10px] font-bold text-muted-foreground pt-1">
                                                     Source: {cand.source}
                                                 </div>
                                             </div>
                                         </div>
 
                                         <div className="lg:col-span-6 space-y-3">
-                                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">AI Rationale & Skill Match</p>
+                                            <p className="text-[10px] font-black font-semibold text-muted-foreground">AI Rationale & Skill Match</p>
                                             <p className="text-xs text-muted-foreground font-medium leading-relaxed">
                                                 "{cand.reasoning}"
                                             </p>
@@ -508,12 +508,12 @@ export default function SourcingLab() {
 
                                         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
                                             <Link href="/dashboard/outreach">
-                                                <Button className="bg-purple-600 hover:bg-purple-700 text-white font-black uppercase text-xs tracking-widest px-6 h-11 rounded-xl shadow-lg shadow-purple-500/20">
+                                                <Button className="bg-purple-600 hover:bg-purple-700 text-white font-black text-xs px-6 h-11 rounded-xl shadow-lg shadow-purple-500/20 whitespace-nowrap">
                                                     Launch Outreach <ArrowRight className="w-4 h-4 ml-2" />
                                                 </Button>
                                             </Link>
                                             <Link href="/dashboard/candidates">
-                                                <Button variant="outline" className="border-border font-black uppercase text-xs tracking-widest px-5 h-11 rounded-xl">
+                                                <Button variant="outline" className="border-border font-black text-xs px-5 h-11 rounded-xl whitespace-nowrap">
                                                     View in Talent Grid
                                                 </Button>
                                             </Link>

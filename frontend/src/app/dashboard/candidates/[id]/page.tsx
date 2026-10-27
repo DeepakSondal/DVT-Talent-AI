@@ -325,7 +325,7 @@ export default function CandidateDetailPage() {
 
   if (!candidate) return (
     <div className="text-center p-20 space-y-4">
-      <h1 className="text-2xl font-black text-foreground">Candidate Not Found</h1>
+      <h1 className="text-2xl font-black text-foreground break-words">Candidate Not Found</h1>
       <Link href="/dashboard/candidates">
          <Button variant="secondary" className="rounded-xl font-bold">Return to Pipeline</Button>
       </Link>
@@ -346,7 +346,7 @@ export default function CandidateDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Link 
           href="/dashboard/candidates" 
-          className="group inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+          className="group inline-flex items-center gap-2 text-xs font-black font-semibold text-muted-foreground hover:text-foreground transition-colors"
         >
            <ChevronLeft className="w-4 h-4" />
            <span>Back to Candidate Pipeline</span>
@@ -354,23 +354,23 @@ export default function CandidateDetailPage() {
         <div className="flex flex-wrap items-center gap-3">
            {/* Candidate Status Selector */}
            <div className="flex items-center gap-2 bg-card border border-border px-3 py-1.5 rounded-xl shadow-sm">
-             <span className="text-[11px] font-bold text-muted-foreground uppercase">Status:</span>
+             <span className="text-[11px] font-bold text-muted-foreground">Status:</span>
              <select
                value={candidateStatus}
                onChange={(e) => handleStatusChange(e.target.value)}
                className="bg-transparent text-xs font-bold text-foreground capitalize outline-none cursor-pointer"
              >
-               <option value="sourced" className="bg-card text-foreground">Sourced</option>
-               <option value="shortlisted" className="bg-card text-foreground">Shortlisted</option>
-               <option value="contacted" className="bg-card text-foreground">Contacted</option>
-               <option value="interviewed" className="bg-card text-foreground">Interviewed</option>
-               <option value="hired" className="bg-card text-foreground">Hired</option>
+               <option value="sourced" className="bg-background text-foreground">Sourced</option>
+               <option value="shortlisted" className="bg-background text-foreground">Shortlisted</option>
+               <option value="contacted" className="bg-background text-foreground">Contacted</option>
+               <option value="interviewed" className="bg-background text-foreground">Interviewed</option>
+               <option value="hired" className="bg-background text-foreground">Hired</option>
              </select>
            </div>
 
            <Button 
             variant="outline" 
-            className="h-11 rounded-xl border-border text-foreground hover:bg-muted gap-2 font-bold text-xs"
+            className="h-11 rounded-xl border-border text-foreground hover:bg-muted gap-2 font-bold text-xs whitespace-nowrap"
             onClick={handleReEnrich}
             disabled={busy}
             isLoading={busy}
@@ -383,7 +383,7 @@ export default function CandidateDetailPage() {
              <>
                <Button
                 variant="outline"
-                className="h-11 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 gap-2 font-bold text-xs"
+                className="h-11 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 gap-2 font-bold text-xs whitespace-nowrap"
                 onClick={handleDownloadResume}
                >
                  <Download className="w-4 h-4 text-emerald-500" />
@@ -391,7 +391,7 @@ export default function CandidateDetailPage() {
                </Button>
                <Button
                 variant="outline"
-                className="h-11 rounded-xl border-border text-foreground hover:bg-muted gap-2 font-bold text-xs"
+                className="h-11 rounded-xl border-border text-foreground hover:bg-muted gap-2 font-bold text-xs whitespace-nowrap"
                 onClick={() => setIsViewerOpen(true)}
                >
                  <Eye className="w-4 h-4 text-indigo-500" />
@@ -412,7 +412,7 @@ export default function CandidateDetailPage() {
              <Button
                variant="outline"
                asChild
-               className="h-11 rounded-xl border-border text-foreground hover:bg-muted gap-2 font-bold text-xs cursor-pointer"
+               className="h-11 rounded-xl border-border text-foreground hover:bg-muted gap-2 font-bold text-xs cursor-pointer whitespace-nowrap"
              >
                <span>
                  <Upload className="w-4 h-4 text-primary" />
@@ -423,7 +423,7 @@ export default function CandidateDetailPage() {
 
            <Button 
             variant="primary" 
-            className="h-11 px-8 rounded-xl gap-2 shadow-lg shadow-primary/20 font-bold text-xs"
+            className="h-11 px-8 rounded-xl gap-2 shadow-lg shadow-primary/20 font-bold text-xs whitespace-nowrap"
             onClick={handleEngage}
            >
               <Mail className="w-4 h-4" />
@@ -444,7 +444,7 @@ export default function CandidateDetailPage() {
          <div className="space-y-3 flex-1">
             <div className="space-y-1">
                <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-3xl md:text-5xl font-black tracking-tight text-foreground">
+                  <h1 className="text-3xl md:text-5xl font-black tracking-tight text-foreground break-words">
                     {candidate.first_name} {candidate.last_name}
                   </h1>
                   <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary text-xs font-bold px-3 py-1">
@@ -463,16 +463,16 @@ export default function CandidateDetailPage() {
             </div>
             
             <div className="flex flex-wrap items-center gap-6 pt-1">
-               <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold uppercase tracking-wider">
+               <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold font-semibold">
                   <MapPin className="w-4 h-4 text-primary" />
                   <span>{candidate.location || "San Francisco, CA"}</span>
                </div>
-               <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold uppercase tracking-wider">
+               <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold font-semibold">
                   <Globe className="w-4 h-4 text-emerald-500" />
                   <span>Remote / Distributed</span>
                </div>
                {candidate.phone && (
-                 <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold uppercase tracking-wider">
+                 <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold font-semibold">
                     <Phone className="w-4 h-4 text-indigo-500" />
                     <span>{candidate.phone}</span>
                  </div>
@@ -484,7 +484,7 @@ export default function CandidateDetailPage() {
                       href={candidate.linkedin_url} 
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="p-2 rounded-xl bg-muted border border-border hover:border-primary/40 text-muted-foreground hover:text-primary transition-all"
+                      className="p-2 rounded-xl bg-muted border border-border hover:border-primary/40 text-muted-foreground hover:text-primary transition-colors duration-150"
                       aria-label="LinkedIn Profile"
                     >
                        <Linkedin className="w-4 h-4" />
@@ -495,7 +495,7 @@ export default function CandidateDetailPage() {
                       href={candidate.github_url} 
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="p-2 rounded-xl bg-muted border border-border hover:border-primary/40 text-muted-foreground hover:text-primary transition-all"
+                      className="p-2 rounded-xl bg-muted border border-border hover:border-primary/40 text-muted-foreground hover:text-primary transition-colors duration-150"
                       aria-label="GitHub Profile"
                     >
                        <Github className="w-4 h-4" />
@@ -514,7 +514,7 @@ export default function CandidateDetailPage() {
             <Card className="p-8 bg-card border-border shadow-sm rounded-3xl space-y-6 relative overflow-hidden">
                <div className="flex items-center gap-2.5 pb-2 border-b border-border/60">
                   <Zap className="w-4 h-4 text-primary" />
-                  <h2 className="text-xs font-black uppercase tracking-wider text-foreground">
+                  <h2 className="text-xs font-black font-semibold text-foreground break-words">
                     AI Sourcing & Screening Analysis
                   </h2>
                </div>
@@ -529,7 +529,7 @@ export default function CandidateDetailPage() {
                      { label: 'Stability', value: 'Verified', color: 'text-indigo-600 dark:text-indigo-400' },
                   ].map(stat => (
                      <div key={stat.label} className="space-y-1 p-3 rounded-2xl bg-muted/30 border border-border/60">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+                        <p className="text-[10px] font-bold font-semibold text-muted-foreground">{stat.label}</p>
                         <p className={cn("text-lg font-black", stat.color)}>{stat.value}</p>
                      </div>
                   ))}
@@ -539,7 +539,7 @@ export default function CandidateDetailPage() {
             {/* Experience Section */}
             <div className="space-y-4">
                <div className="flex items-center justify-between px-1">
-                 <h3 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-2">
+                 <h3 className="text-xs font-black font-semibold text-foreground flex items-center gap-2 break-words">
                     <Briefcase className="w-4 h-4 text-primary" />
                     Professional Work Experience
                  </h3>
@@ -553,22 +553,22 @@ export default function CandidateDetailPage() {
                <div className="space-y-4">
                   {parsedExp.length > 0 ? (
                     parsedExp.map((exp: any, i: number) => (
-                      <Card key={i} className="p-6 bg-card border-border shadow-sm rounded-2xl group hover:border-primary/30 transition-all">
+                      <Card key={i} className="p-6 bg-card border-border shadow-sm rounded-2xl group hover:border-primary/30 transition-colors duration-150">
                          <div className="flex justify-between items-start gap-4">
                             <div className="space-y-2 flex-1">
                                <div className="flex items-center gap-2">
-                                 <h4 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">
+                                 <h4 className="text-base font-bold text-foreground group-hover:text-primary transition-colors break-words">
                                     {exp.title || "Software Specialist"}
                                  </h4>
                                </div>
-                               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                  {exp.company || "Enterprise Corp"} {exp.dates ? `• ${exp.dates}` : ""}
+                               <p className="text-xs font-semibold text-muted-foreground font-semibold">
+                                  {exp.company || "Enterprise Corp"} {exp.dates ? `, ${exp.dates}` : ""}
                                </p>
                                {exp.responsibilities && exp.responsibilities.length > 0 ? (
                                  <ul className="space-y-1.5 pt-2">
                                    {exp.responsibilities.map((resp: string, idx: number) => (
                                      <li key={idx} className="text-xs text-foreground/80 leading-relaxed flex items-start gap-2">
-                                       <span className="text-primary mt-1">•</span>
+                                       <span className="text-primary mt-1">,</span>
                                        <span>{resp}</span>
                                      </li>
                                    ))}
@@ -598,14 +598,14 @@ export default function CandidateDetailPage() {
                         desc: "Engineered scalable cloud services, optimized CI/CD automated pipelines, and led team architecture reviews." 
                       },
                     ].map((exp, i) => (
-                      <Card key={i} className="p-6 bg-card border-border shadow-sm rounded-2xl group hover:border-primary/30 transition-all">
+                      <Card key={i} className="p-6 bg-card border-border shadow-sm rounded-2xl group hover:border-primary/30 transition-colors duration-150">
                          <div className="flex justify-between items-start gap-4">
                             <div className="space-y-1.5">
-                               <h4 className="text-base font-bold text-foreground group-hover:text-primary transition-colors">
+                               <h4 className="text-base font-bold text-foreground group-hover:text-primary transition-colors break-words">
                                   {exp.title}
                                </h4>
-                               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                  {exp.company} • {exp.period}
+                               <p className="text-xs font-semibold text-muted-foreground font-semibold">
+                                  {exp.company} , {exp.period}
                                </p>
                                <p className="text-sm text-foreground/75 leading-relaxed pt-1">
                                   {exp.desc}
@@ -624,7 +624,7 @@ export default function CandidateDetailPage() {
             {/* Education Section */}
             {parsedEdu.length > 0 && (
               <div className="space-y-4">
-                 <h3 className="text-xs font-black uppercase tracking-wider text-foreground px-1 flex items-center gap-2">
+                 <h3 className="text-xs font-black font-semibold text-foreground px-1 flex items-center gap-2 break-words">
                     <GraduationCap className="w-4 h-4 text-emerald-500" />
                     Academic Education &amp; Credentials
                  </h3>
@@ -636,7 +636,7 @@ export default function CandidateDetailPage() {
                             <GraduationCap className="w-4 h-4" />
                           </div>
                           <div>
-                            <h4 className="text-sm font-bold text-foreground">{edu.degree || "Degree"}</h4>
+                            <h4 className="text-sm font-bold text-foreground break-words">{edu.degree || "Degree"}</h4>
                             <p className="text-xs font-semibold text-muted-foreground">{edu.institution || "University"}</p>
                           </div>
                         </div>
@@ -651,7 +651,7 @@ export default function CandidateDetailPage() {
 
             {/* Technical Skills */}
             <div className="space-y-4">
-               <h3 className="text-xs font-black uppercase tracking-wider text-foreground px-1 flex items-center gap-2">
+               <h3 className="text-xs font-black font-semibold text-foreground px-1 flex items-center gap-2 break-words">
                   <Star className="w-4 h-4 text-amber-500" />
                   Verified Skills Matrix
                </h3>
@@ -674,7 +674,7 @@ export default function CandidateDetailPage() {
                    <FileText className="w-5 h-5" />
                  </div>
                  <div>
-                   <h3 className="text-sm font-black uppercase text-foreground">Resume Document</h3>
+                   <h3 className="text-sm font-black text-foreground break-words">Resume Document</h3>
                    <p className="text-xs font-bold text-muted-foreground">
                      {hasResume ? "Stored in Vault" : "No Resume Uploaded"}
                    </p>
@@ -692,7 +692,7 @@ export default function CandidateDetailPage() {
                    <div className="flex flex-col gap-2">
                      <Button
                        onClick={handleDownloadResume}
-                       className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl h-10 gap-2 shadow-md shadow-emerald-600/20"
+                       className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl h-10 gap-2 shadow-md shadow-emerald-600/20 whitespace-nowrap"
                      >
                        <Download className="w-4 h-4" />
                        Download Original
@@ -735,13 +735,13 @@ export default function CandidateDetailPage() {
 
             {/* Quick Actions */}
             <Card className="p-6 border-border bg-card shadow-sm rounded-3xl space-y-4">
-               <h3 className="text-xs font-black uppercase tracking-wider text-foreground">
+               <h3 className="text-xs font-black font-semibold text-foreground break-words">
                   Quick Actions
                </h3>
                <div className="grid grid-cols-2 gap-3">
                   <Button 
                     variant="outline" 
-                    className="h-16 rounded-2xl flex-col gap-1 items-start px-4 border-border hover:bg-muted group text-foreground font-bold"
+                    className="h-16 rounded-2xl flex-col gap-1 items-start px-4 border-border hover:bg-muted group text-foreground font-bold whitespace-nowrap"
                     onClick={() => setIsScheduleOpen(true)}
                   >
                      <Calendar className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
@@ -749,7 +749,7 @@ export default function CandidateDetailPage() {
                   </Button>
                   <Button 
                     variant="outline" 
-                    className="h-16 rounded-2xl flex-col gap-1 items-start px-4 border-border hover:bg-muted group text-foreground font-bold"
+                    className="h-16 rounded-2xl flex-col gap-1 items-start px-4 border-border hover:bg-muted group text-foreground font-bold whitespace-nowrap"
                     onClick={handleEngage}
                   >
                      <MessageSquare className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
@@ -776,7 +776,7 @@ export default function CandidateDetailPage() {
                     <Calendar className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-foreground">Schedule Interview</h3>
+                    <h3 className="text-lg font-bold text-foreground break-words">Schedule Interview</h3>
                     <p className="text-xs text-muted-foreground">
                       Interview with {candidate?.first_name} {candidate?.last_name}
                     </p>
@@ -792,7 +792,7 @@ export default function CandidateDetailPage() {
 
               <form onSubmit={handleConfirmSchedule} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  <label className="text-xs font-bold font-semibold text-muted-foreground">
                     Interview Date *
                   </label>
                   <input
@@ -805,7 +805,7 @@ export default function CandidateDetailPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  <label className="text-xs font-bold font-semibold text-muted-foreground">
                     Time (Optional)
                   </label>
                   <input
@@ -817,7 +817,7 @@ export default function CandidateDetailPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  <label className="text-xs font-bold font-semibold text-muted-foreground">
                     Preparation & Agenda Notes
                   </label>
                   <textarea
@@ -868,7 +868,7 @@ export default function CandidateDetailPage() {
                     <FileText className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-black uppercase text-foreground">Extracted Resume Document</h3>
+                    <h3 className="text-xl font-black uppercase text-foreground break-words">Extracted Resume Document</h3>
                     <p className="text-xs font-bold text-muted-foreground">
                       Full multi-format text extracted from {resumeDetails?.file_name || "original document"}
                     </p>
@@ -879,7 +879,7 @@ export default function CandidateDetailPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleCopyText}
-                    className="gap-1.5 font-bold text-xs h-9 rounded-xl border-border"
+                    className="gap-1.5 font-bold text-xs h-9 rounded-xl border-border whitespace-nowrap"
                   >
                     {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                     <span>{copied ? "Copied" : "Copy All"}</span>
@@ -888,7 +888,7 @@ export default function CandidateDetailPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleDownloadResume}
-                    className="gap-1.5 font-bold text-xs h-9 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                    className="gap-1.5 font-bold text-xs h-9 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 whitespace-nowrap"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download Binary</span>

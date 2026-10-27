@@ -60,13 +60,13 @@ export default function LeadDetailPage() {
   if (loading) return (
     <div className="h-[60vh] flex flex-col items-center justify-center space-y-3">
       <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Loading Account Intelligence...</p>
+      <p className="text-xs font-bold text-muted-foreground font-semibold">Loading Account Intelligence...</p>
     </div>
   );
 
   if (!lead) return (
     <div className="text-center p-20 space-y-4">
-      <h1 className="text-2xl font-black text-foreground">Sales Lead Not Found</h1>
+      <h1 className="text-2xl font-black text-foreground break-words">Sales Lead Not Found</h1>
       <Link href="/dashboard/leads">
          <Button variant="secondary" className="rounded-xl font-bold">Return to Pipeline</Button>
       </Link>
@@ -83,7 +83,7 @@ export default function LeadDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Link 
           href="/dashboard/leads" 
-          className="group inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+          className="group inline-flex items-center gap-2 text-xs font-black font-semibold text-muted-foreground hover:text-foreground transition-colors"
         >
            <ChevronLeft className="w-4 h-4" />
            <span>Back to CRM Pipeline</span>
@@ -91,7 +91,7 @@ export default function LeadDetailPage() {
         <div className="flex items-center gap-3">
            <Button 
             variant="outline" 
-            className="h-11 rounded-xl border-border text-foreground hover:bg-muted gap-2 font-bold text-xs"
+            className="h-11 rounded-xl border-border text-foreground hover:bg-muted gap-2 font-bold text-xs whitespace-nowrap"
             onClick={handleAnalyzeSignal}
             disabled={busy}
             isLoading={busy}
@@ -101,7 +101,7 @@ export default function LeadDetailPage() {
            </Button>
            <Button 
             variant="primary" 
-            className="h-11 px-8 rounded-xl gap-2 shadow-lg shadow-primary/20 font-bold text-xs"
+            className="h-11 px-8 rounded-xl gap-2 shadow-lg shadow-primary/20 font-bold text-xs whitespace-nowrap"
             onClick={handleTriggerOutreach}
             disabled={busy}
             isLoading={busy}
@@ -121,14 +121,14 @@ export default function LeadDetailPage() {
          <div className="space-y-3 flex-1">
             <div className="space-y-1">
                <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-3xl md:text-5xl font-black tracking-tight text-foreground">
+                  <h1 className="text-3xl md:text-5xl font-black tracking-tight text-foreground break-words">
                     {lead.company_name}
                   </h1>
                   <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold px-3 py-1">
                      High Intensity Engagement
                   </Badge>
                </div>
-               <div className="flex items-center gap-6 pt-1 text-muted-foreground text-xs font-bold uppercase tracking-wider">
+               <div className="flex items-center gap-6 pt-1 text-muted-foreground text-xs font-bold font-semibold">
                   <div className="flex items-center gap-1.5">
                      <Globe className="w-3.5 h-3.5 text-primary" />
                      <span>{lead.domain || "company.com"}</span>
@@ -150,11 +150,11 @@ export default function LeadDetailPage() {
                <div className="flex items-center justify-between pb-2 border-b border-border/60">
                   <div className="flex items-center gap-2.5">
                      <Bot className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                     <h3 className="text-xs font-black uppercase tracking-wider text-foreground">
+                     <h3 className="text-xs font-black font-semibold text-foreground break-words">
                         Sales Agent Intelligence
                      </h3>
                   </div>
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Last Synced: Today</span>
+                  <span className="text-[10px] font-bold text-muted-foreground">Last Synced: Today</span>
                </div>
                
                <p className="text-base text-foreground/80 font-normal leading-relaxed">
@@ -170,9 +170,9 @@ export default function LeadDetailPage() {
                      <div key={stat.label} className="p-4 rounded-2xl bg-muted/40 border border-border/60 space-y-1">
                         <div className="flex items-center gap-2">
                            <stat.icon className={cn("w-3.5 h-3.5", stat.color)} />
-                           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{stat.label}</span>
+                           <span className="text-[10px] font-bold font-semibold text-muted-foreground">{stat.label}</span>
                         </div>
-                        <p className="text-2xl font-black text-foreground tracking-tight">{stat.value}</p>
+                        <p className="text-2xl font-black text-foreground tracking-tight break-words">{stat.value}</p>
                      </div>
                   ))}
                </div>
@@ -180,7 +180,7 @@ export default function LeadDetailPage() {
 
             {/* Signal Timeline */}
             <div className="space-y-4">
-               <h3 className="text-xs font-black uppercase tracking-wider text-foreground px-1 flex items-center gap-2">
+               <h3 className="text-xs font-black font-semibold text-foreground px-1 flex items-center gap-2 break-words">
                   <Activity className="w-4 h-4 text-primary" />
                   Recent Market Signals
                </h3>
@@ -194,7 +194,7 @@ export default function LeadDetailPage() {
                         <div className="w-2.5 h-2.5 rounded-full bg-primary mt-1.5 shrink-0" />
                         <div className="space-y-1 flex-1">
                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold uppercase tracking-wider text-primary">{signal.type}</span>
+                              <span className="text-xs font-bold font-semibold text-primary">{signal.type}</span>
                               <span className="text-[10px] font-semibold text-muted-foreground">{signal.time}</span>
                            </div>
                            <p className="text-sm font-medium text-foreground/80">
@@ -224,7 +224,7 @@ export default function LeadDetailPage() {
                <div className="space-y-1">
                   <div className="flex items-center gap-2 text-primary">
                      <Send className="w-4 h-4" />
-                     <h3 className="text-xs font-black uppercase tracking-wider text-foreground">AI Outreach Hooks</h3>
+                     <h3 className="text-xs font-black font-semibold text-foreground break-words">AI Outreach Hooks</h3>
                   </div>
                   <p className="text-[11px] font-medium text-muted-foreground">Automated personalized icebreakers</p>
                </div>
@@ -243,7 +243,7 @@ export default function LeadDetailPage() {
                                navigator.clipboard.writeText(hook);
                                toast.success("Hook copied to clipboard!");
                              }}
-                             className="text-[10px] font-bold uppercase text-primary hover:underline"
+                             className="text-[10px] font-bold text-primary hover:underline"
                            >
                               Copy
                            </button>
@@ -258,7 +258,7 @@ export default function LeadDetailPage() {
                <div className="pt-2 border-t border-border">
                   <Button 
                     variant="primary" 
-                    className="w-full h-12 rounded-xl font-bold uppercase text-xs tracking-wider gap-2 shadow-lg shadow-primary/20"
+                    className="w-full h-12 rounded-xl font-bold text-xs gap-2 shadow-lg shadow-primary/20 whitespace-nowrap"
                     onClick={handleTriggerOutreach}
                     disabled={busy}
                     isLoading={busy}
