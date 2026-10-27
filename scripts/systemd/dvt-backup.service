@@ -1,0 +1,12 @@
+[Unit]
+Description=DVT Talent AI Automated Database & Storage Backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/dvt-talent-ai
+ExecStart=/opt/dvt-talent-ai/scripts/backup_db.sh
+StandardOutput=append:/var/log/dvt-backup.log
+StandardError=append:/var/log/dvt-backup.log
+User=root

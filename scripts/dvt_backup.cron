@@ -1,0 +1,11 @@
+# ============================================================
+# DVT Talent AI — Automated Backup Crontab Configuration
+# Target: /etc/cron.d/dvt-backup (or add to `crontab -e`)
+#
+# Schedule: Runs daily at 03:00 UTC (low-traffic maintenance window)
+# Captures: PostgreSQL DB snapshot + /app/storage + /app/uploads
+# ============================================================
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+0 3 * * * root /opt/dvt-talent-ai/scripts/backup_db.sh >> /var/log/dvt-backup.log 2>&1
