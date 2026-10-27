@@ -101,9 +101,10 @@ export default function RecruitingPage() {
                        </div>
                        <div className="h-2 w-full bg-primary/5 rounded-full overflow-hidden p-0.5">
                           <motion.div 
-                             initial={{ width: 0 }}
-                             animate={{ width: "95%" }}
-                             transition={{ duration: 2, ease: "easeOut" }}
+                             initial={{ scaleX: 0 }}
+                             animate={{ scaleX: 0.95 }}
+                             style={{ originX: 0 }}
+                             transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
                              className="h-full bg-primary rounded-full shadow-lg shadow-primary/20" 
                           />
                        </div>

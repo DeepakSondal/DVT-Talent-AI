@@ -552,6 +552,7 @@ export default function CandidatesPage() {
             <AnimatePresence>
                 {selectedIds.length > 0 && (
                     <motion.div
+                        key="bulk-selection-floating-bar"
                         initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 20 }}
@@ -596,8 +597,15 @@ export default function CandidatesPage() {
             {/* Local Resume Upload Modal */}
             <AnimatePresence>
                 {isUploadOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+                    <motion.div
+                        key="upload-resume-modal-backdrop"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+                    >
                         <motion.div
+                            key="upload-resume-modal-content"
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
@@ -665,7 +673,7 @@ export default function CandidatesPage() {
                                 </Button>
                             </div>
                         </motion.div>
-                    </div>
+                    </motion.div>
                 )}
             </AnimatePresence>
 
