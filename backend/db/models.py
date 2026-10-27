@@ -33,25 +33,46 @@ if not settings.database_url:
     )
 db_url = settings.database_url
 
+from sqlalchemy import event
 from sqlalchemy.pool import NullPool
 
 # Use NullPool during test execution so connections are not shared across pytest async event loops
 is_testing = "pytest" in sys.modules or os.environ.get("TESTING") == "true"
+is_sqlite = "sqlite" in db_url
+connect_args = {"timeout": 30} if is_sqlite else {}
+
+# Optimization: Disable verbose engine echo to eliminate console I/O bottleneck under concurrency
+db_echo = os.getenv("DB_ECHO", "false").lower() == "true"
+pool_size = max(settings.db_pool_size, 50)
+max_overflow = max(settings.db_max_overflow, 25)
+
 if is_testing:
     engine = create_async_engine(
         db_url,
-        echo=settings.app_env == "development",
+        echo=db_echo,
         poolclass=NullPool,
+        connect_args=connect_args,
     )
 else:
     engine = create_async_engine(
         db_url,
-        echo=settings.app_env == "development",
-        pool_size=settings.db_pool_size,
-        max_overflow=settings.db_max_overflow,
+        echo=db_echo,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
         pool_timeout=30,
         pool_recycle=1800,
+        connect_args=connect_args,
     )
+
+if is_sqlite:
+    @event.listens_for(engine.sync_engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 AsyncSessionLocal = async_sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
@@ -79,6 +100,15 @@ class UserRole(str, enum.Enum):
     VIEWER = "viewer"
     CANDIDATE = "candidate"
 
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            val_lower = value.lower()
+            for member in cls:
+                if member.value.lower() == val_lower or member.name.lower() == val_lower:
+                    return member
+        return cls.RECRUITER
+
 
 class LeadStatus(str, enum.Enum):
     NEW = "new"
@@ -88,6 +118,15 @@ class LeadStatus(str, enum.Enum):
     NEGOTIATION = "negotiation"
     WON = "won"
     LOST = "lost"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            val_lower = value.lower()
+            for member in cls:
+                if member.value.lower() == val_lower or member.name.lower() == val_lower:
+                    return member
+        return cls.NEW
 
 
 class CandidateStatus(str, enum.Enum):
@@ -100,6 +139,15 @@ class CandidateStatus(str, enum.Enum):
     OFFERED = "offered"
     PLACED = "placed"
     REJECTED = "rejected"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            val_lower = value.lower()
+            for member in cls:
+                if member.value.lower() == val_lower or member.name.lower() == val_lower:
+                    return member
+        return cls.SOURCED
 
 
 class EmailStatus(str, enum.Enum):

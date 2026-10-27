@@ -62,8 +62,9 @@ async def trigger_agent(
     if trigger.agent not in VALID_AGENTS:
         raise HTTPException(status_code=400, detail=f"Unknown agent. Valid: {VALID_AGENTS}")
 
-    from workers.tasks import run_agent_task
-    task = run_agent_task.delay(trigger.agent, trigger.params, tenant_id=str(tenant_uuid))
+    from workers.tasks import run_agent_task, safe_dispatch_task
+    dispatched = safe_dispatch_task(run_agent_task, trigger.agent, trigger.params, tenant_id=str(tenant_uuid))
+    task_id = dispatched.id if dispatched else f"local-{uuid.uuid4().hex[:12]}"
 
     # Log to DB
     agent_task = AgentTask(
@@ -72,7 +73,7 @@ async def trigger_agent(
         task_type="manual_trigger",
         status=AgentTaskStatus.PENDING,
         input_data=trigger.params,
-        celery_task_id=task.id,
+        celery_task_id=task_id,
         user_id=current_user.id,
     )
     db.add(agent_task)
@@ -80,7 +81,7 @@ async def trigger_agent(
 
     return {
         "message": f"Agent '{trigger.agent}' triggered",
-        "celery_task_id": task.id,
+        "celery_task_id": task_id,
         "agent_task_id": str(agent_task.id),
     }
 
@@ -183,7 +184,7 @@ async def list_agent_tasks(
                 "id": str(t.id),
                 "agent_name": t.agent_name,
                 "task_type": t.task_type,
-                "status": t.status.value,
+                "status": getattr(t.status, "value", str(t.status)),
                 "started_at": t.started_at,
                 "completed_at": t.completed_at,
                 "error": t.error_message,
@@ -210,7 +211,7 @@ async def get_task_status(
         "id": str(task.id),
         "agent_name": task.agent_name,
         "task_type": task.task_type,
-        "status": task.status.value,
+        "status": getattr(task.status, "value", str(task.status)),
         "pipeline_mode": task.pipeline_mode,
         "current_checkpoint": task.current_checkpoint,
         "started_at": task.started_at,

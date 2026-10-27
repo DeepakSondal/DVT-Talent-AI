@@ -40,14 +40,20 @@ async def health_db():
 
 @router.get("/health/redis", tags=["Health"], summary="Redis connectivity check")
 async def health_redis():
-    """Pings Redis and measures round-trip latency."""
+    """Pings Redis and measures round-trip latency with circuit-breaker protection."""
+    from services.redis_service import is_redis_available, get_redis_client
+    if not is_redis_available():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "unhealthy", "service": "redis", "error": "Redis broker unreachable"}
+        )
     try:
-        import redis.asyncio as aioredis
-        from config import settings
         t0 = time.monotonic()
-        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        r = get_redis_client()
+        if not r:
+            return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                content={"status": "unhealthy", "service": "redis", "error": "Client unavailable"})
         pong = await r.ping()
-        await r.aclose()
         latency_ms = round((time.monotonic() - t0) * 1000, 2)
         if pong:
             return {"status": "healthy", "service": "redis", "latency_ms": latency_ms}

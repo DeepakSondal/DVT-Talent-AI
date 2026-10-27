@@ -18,6 +18,7 @@ from sqlalchemy import select
 
 from config import settings
 from db.models import User, UserRole, Tenant, Candidate, CandidateStatus, get_db
+from services.redis_service import is_token_revoked, revoke_token
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -111,21 +112,13 @@ async def get_current_user(
     if not token:
         raise credentials_exception
 
-    # Check token revocation blocklist in Redis
-    try:
-        import redis.asyncio as aioredis
-        r = aioredis.from_url(settings.redis_url)
-        is_revoked = await r.get(f"blacklist:{token}")
-        if is_revoked:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token has been revoked",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-    except HTTPException:
-        raise
-    except Exception:
-        pass
+    # Check token revocation blocklist
+    if await is_token_revoked(token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
@@ -319,16 +312,9 @@ async def refresh_token_route(dvt_refresh_token: Optional[str] = Cookie(None), d
     if not dvt_refresh_token:
         raise HTTPException(status_code=401, detail="Refresh token missing")
 
-    # Check refresh token revocation blocklist in Redis
-    try:
-        import redis.asyncio as aioredis
-        r = aioredis.from_url(settings.redis_url)
-        if await r.get(f"blacklist:{dvt_refresh_token}"):
-            raise HTTPException(status_code=401, detail="Refresh token has been revoked")
-    except HTTPException:
-        raise
-    except Exception:
-        pass
+    # Check refresh token revocation blocklist
+    if await is_token_revoked(dvt_refresh_token):
+        raise HTTPException(status_code=401, detail="Refresh token has been revoked")
 
     try:
         payload = jwt.decode(dvt_refresh_token, settings.secret_key, algorithms=[settings.algorithm])
@@ -348,14 +334,12 @@ async def refresh_token_route(dvt_refresh_token: Optional[str] = Cookie(None), d
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or account disabled")
 
-    # Rotate refresh token: blacklist the consumed refresh token if Redis is available
+    # Rotate refresh token: blacklist the consumed refresh token
     try:
         exp = payload.get("exp")
         remaining = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 86400
         if remaining > 0:
-            import redis.asyncio as aioredis
-            r = aioredis.from_url(settings.redis_url)
-            await r.setex(f"blacklist:{dvt_refresh_token}", remaining, "rotated")
+            await revoke_token(dvt_refresh_token, remaining)
     except Exception:
         pass
 
@@ -427,9 +411,7 @@ async def logout(
                 exp = payload.get("exp")
                 remaining = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 3600
                 if remaining > 0:
-                    import redis.asyncio as aioredis
-                    r = aioredis.from_url(settings.redis_url)
-                    await r.setex(f"blacklist:{tok}", remaining, "revoked")
+                    await revoke_token(tok, remaining)
             except Exception:
                 pass
 

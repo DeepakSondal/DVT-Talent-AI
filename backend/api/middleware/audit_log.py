@@ -82,25 +82,35 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                     else:
                         sanitized_params[k] = val
 
-                # 6. Save Audit Log
-                async with AsyncSessionLocal() as session:
-                    audit_entry = AuditLog(
-                        tenant_id=tenant_id,
-                        user_id=user_id,
-                        action=f"{method} {path}",
-                        entity_type=normalized_path.strip("/").split("/")[0] if normalized_path.strip("/") else "root",
-                        severity=severity,
-                        status=status,
-                        ip_address=request.client.host if request.client else "unknown",
-                        user_agent=request.headers.get("user-agent", "unknown"),
-                        meta_data={
-                            "status_code": response.status_code,
-                            "query_params": sanitized_params,
-                            "duration_ms": int((time.time() - start_time) * 1000)
-                        }
-                    )
-                    session.add(audit_entry)
-                    await session.commit()
+                # 6. Save Audit Log asynchronously to eliminate write latency on HTTP response
+                entry_kwargs = {
+                    "tenant_id": tenant_id,
+                    "user_id": user_id,
+                    "action": f"{method} {path}",
+                    "entity_type": normalized_path.strip("/").split("/")[0] if normalized_path.strip("/") else "root",
+                    "severity": severity,
+                    "status": status,
+                    "ip_address": request.client.host if request.client else "unknown",
+                    "user_agent": request.headers.get("user-agent", "unknown"),
+                    "meta_data": {
+                        "status_code": response.status_code,
+                        "query_params": sanitized_params,
+                        "duration_ms": int((time.time() - start_time) * 1000)
+                    }
+                }
+
+                import asyncio
+
+                async def _save_audit_background(kwargs: dict):
+                    try:
+                        async with AsyncSessionLocal() as session:
+                            audit_entry = AuditLog(**kwargs)
+                            session.add(audit_entry)
+                            await session.commit()
+                    except Exception as err:
+                        log.warning("audit_log_background_failed", error=str(err))
+
+                asyncio.create_task(_save_audit_background(entry_kwargs))
             except Exception as e:
                 # Never block the actual request due to audit logging failure
                 log.error("audit_log_failed", error=str(e))

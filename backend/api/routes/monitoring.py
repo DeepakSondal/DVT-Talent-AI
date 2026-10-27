@@ -15,6 +15,8 @@ from db.models import get_db, User, UserRole
 from api.routes.auth import get_current_user, require_admin
 from fastapi import HTTPException
 
+from services.redis_service import get_redis_client, is_redis_available
+
 log = structlog.get_logger(__name__)
 router = APIRouter()
 
@@ -27,10 +29,11 @@ async def get_recent_signals(
     """Fetches the last N signals from the Redis history list, filtered to the caller's tenant."""
     if not current_user.tenant_id or current_user.role == UserRole.CANDIDATE:
         raise HTTPException(status_code=403, detail="Workspace permissions required")
+    r = get_redis_client()
+    if not r:
+        return []
     try:
-        r = aioredis.from_url(settings.redis_url, decode_responses=True)
         signals = await r.lrange("dvt_signals_history", 0, min(max(1, limit), 100) - 1)
-        await r.aclose()
         parsed = [json.loads(s) for s in signals]
         tenant_str = str(current_user.tenant_id)
         return [
@@ -50,9 +53,17 @@ async def get_active_mediations(
     Scans Redis for active distributed locks (lock:*) and score histories.
     Returns REAL data from Redis SCAN — restricted to admins.
     """
+    r = get_redis_client()
+    if not r:
+        return {
+            "active_locks": [],
+            "total_active_locks": 0,
+            "reconciliation_events": [],
+            "total_score_histories": 0,
+            "latest_score_update": None,
+            "connected_to_live_redis": False,
+        }
     try:
-        r = aioredis.from_url(settings.redis_url, decode_responses=True)
-
         # Scan for active locks
         active_locks = []
         cursor = 0

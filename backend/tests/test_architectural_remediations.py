@@ -165,14 +165,9 @@ async def test_auth_logout_and_revocation(db_session):
     mock_request.headers = {"Authorization": f"Bearer {token}"}
     mock_request.cookies = {}
 
-    blacklisted_keys = {}
-    mock_redis = AsyncMock()
-    async def mock_setex(key, ttl, val):
-        blacklisted_keys[key] = val
-    mock_redis.setex.side_effect = mock_setex
+    from services.redis_service import is_token_revoked
 
-    with patch("redis.asyncio.from_url", return_value=mock_redis):
-        response = await logout(request=mock_request, current_user=test_user)
-        assert response.status_code == 200
-        # Verify token was blacklisted
-        assert f"blacklist:{token}" in blacklisted_keys
+    response = await logout(request=mock_request, current_user=test_user)
+    assert response.status_code == 200
+    # Verify token was blacklisted via redis_service
+    assert await is_token_revoked(token) is True
