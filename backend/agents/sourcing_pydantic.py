@@ -51,7 +51,7 @@ sourcing_agent = Agent(
     get_pydantic_model(),
     retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
     deps_type=AgentDeps,
-    result_type=SourcingSynthesis,
+    output_type=SourcingSynthesis,
     system_prompt=(
         "You are an Elite Sourcing & Integrity Agent for DVT Talent AI. "
         "Your mission is to synthesize the best talent nodes for a specific job description. "
