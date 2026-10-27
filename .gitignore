@@ -36,6 +36,7 @@ frontend/.env
 *.swo
 
 # Next.js & Playwright
+dodo-agent-plugin/
 frontend/.next/
 frontend/out/
 frontend/node_modules/
