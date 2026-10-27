@@ -183,7 +183,7 @@ function LoginContent() {
                   name="password"
                   type={showPassword ? "text" : "password"}
                   required
-                  placeholder=",,,,,,,,"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-10 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"

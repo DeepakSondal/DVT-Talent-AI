@@ -395,6 +395,7 @@ export default function CandidatesPage() {
                         <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <input 
                             type="text" 
+                            aria-label="Search candidates by name, job title, email, or technical skills"
                             placeholder="Search candidates by name, job title, email, or technical skills..." 
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -404,6 +405,7 @@ export default function CandidatesPage() {
                     <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
                         <Filter className="w-4 h-4 text-muted-foreground ml-2" />
                         <select
+                            aria-label="Filter candidates by status"
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
                             className="bg-muted/40 border border-border rounded-xl px-4 py-2.5 text-xs font-bold text-foreground outline-none cursor-pointer"

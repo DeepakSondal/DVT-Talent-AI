@@ -348,6 +348,7 @@ export default function ApprovalsPage() {
                                                 <div className="flex gap-3">
                                                     <input
                                                         type="text"
+                                                        aria-label="Agent memory calibration instructions"
                                                         placeholder="e.g., Prioritize candidates with public open-source contributions over company tenure..."
                                                         value={calibrationNote}
                                                         onChange={(e) => setCalibrationNote(e.target.value)}

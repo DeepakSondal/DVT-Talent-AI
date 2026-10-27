@@ -150,8 +150,8 @@ export default function RecruitingPage() {
                        />
                     </div>
                     <div className="flex gap-4">
-                       <Button variant="ghost" size="icon" className="w-12 h-12 rounded-2xl bg-primary/5 hover:bg-primary/10 whitespace-nowrap"><Filter className="w-5 h-5 text-primary" /></Button>
-                       <Button variant="ghost" size="icon" className="w-12 h-12 rounded-2xl bg-primary/5 hover:bg-primary/10 whitespace-nowrap"><Plus className="w-5 h-5 text-primary" /></Button>
+                       <Button variant="ghost" size="icon" aria-label="Filter candidates" className="w-12 h-12 rounded-2xl bg-primary/5 hover:bg-primary/10 whitespace-nowrap"><Filter className="w-5 h-5 text-primary" /></Button>
+                       <Button variant="ghost" size="icon" aria-label="Add new requisition" className="w-12 h-12 rounded-2xl bg-primary/5 hover:bg-primary/10 whitespace-nowrap"><Plus className="w-5 h-5 text-primary" /></Button>
                     </div>
                  </div>
 
