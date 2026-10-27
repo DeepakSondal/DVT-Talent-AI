@@ -70,7 +70,14 @@ export default function AuditPage() {
                         </thead>
                         <tbody className="divide-y divide-naturalist-sage/5">
                             {loading ? (
-                                <tr><td colSpan={4} className="p-20 text-center"><div className="animate-spin w-6 h-6 border-2 border-naturalist-sage border-t-transparent rounded-full mx-auto mb-4" /><span className="font-black font-semibold opacity-40">Decrypting Logs...</span></td></tr>
+                                Array.from({ length: 5 }).map((_, r) => (
+                                    <tr key={r} className="animate-pulse">
+                                        <td className="p-6"><div className="h-4 w-20 bg-naturalist-sage/10 rounded-md" /></td>
+                                        <td className="p-6"><div className="h-5 w-16 bg-naturalist-sage/10 rounded-md" /></td>
+                                        <td className="p-6"><div className="h-4 w-32 bg-naturalist-sage/10 rounded-md" /></td>
+                                        <td className="p-6"><div className="h-4 w-64 bg-naturalist-sage/10 rounded-md" /></td>
+                                    </tr>
+                                ))
                             ) : logs.length === 0 ? (
                                 <tr><td colSpan={4} className="p-20 text-center space-y-4">
                                     <AlertCircle className="w-10 h-10 text-naturalist-sage/20 mx-auto" />

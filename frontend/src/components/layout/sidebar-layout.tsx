@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { CommandPalette } from "@/components/ui/CommandPalette";
 
 import { usersApi, UserOut } from "@/lib/api";
 import { useWebSocket } from "@/providers/websocket-provider";
@@ -26,6 +27,7 @@ const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
   const [user, setUser] = useState<UserOut | null>(null);
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
   const { isConnected } = useWebSocket();
@@ -300,6 +302,19 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 {isConnected ? "Engine Live" : "Disconnected"}
               </span>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setCommandOpen(true)}
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-muted/40 hover:bg-muted text-xs text-muted-foreground transition-colors ml-2"
+              aria-label="Open command palette (Ctrl+K)"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Search or jump to...</span>
+              <kbd className="pointer-events-none inline-flex select-none items-center gap-0.5 rounded border border-border bg-background px-1.5 font-mono text-[10px] font-semibold text-muted-foreground">
+                ⌘K
+              </kbd>
+            </button>
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4">
@@ -323,6 +338,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+
+      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
     </div>
   );
 }

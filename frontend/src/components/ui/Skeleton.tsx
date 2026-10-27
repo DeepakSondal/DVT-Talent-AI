@@ -39,3 +39,30 @@ export function TableRowSkeleton({ columns = 5 }: { columns?: number }) {
     </div>
   );
 }
+
+export function TableSkeleton({
+  rows = 5,
+  columns = 4,
+  className,
+}: {
+  rows?: number;
+  columns?: number;
+  className?: string;
+}) {
+  return (
+    <div
+      role="status"
+      aria-label="Loading table data..."
+      className={cn("w-full divide-y divide-border/40", className)}
+    >
+      {Array.from({ length: rows }).map((_, r) => (
+        <div key={r} className="p-6 flex items-center gap-6 animate-pulse">
+          <Skeleton className="h-4 w-28 shrink-0" />
+          <Skeleton className="h-6 w-20 rounded-lg shrink-0" />
+          <Skeleton className="h-4 w-36 shrink-0 hidden sm:block" />
+          <Skeleton className="h-4 flex-1" />
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { toast } from "sonner";
+import { FormErrorSummary, type FormErrorItem } from "@/components/ui/FormErrorSummary";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
 
@@ -44,6 +45,7 @@ export default function CreateJobPage() {
   });
 
   const [skillInput, setSkillInput] = useState("");
+  const [formErrors, setFormErrors] = useState<FormErrorItem[]>([]);
 
   useEffect(() => {
     async function loadCompanies() {
@@ -85,14 +87,37 @@ export default function CreateJobPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errors: FormErrorItem[] = [];
+
     if (!formData.title?.trim()) {
-      toast.error("Please enter a job title.");
-      return;
+      errors.push({
+        field: "Job Title",
+        message: "Please enter a role title for the requisition.",
+        targetId: "job-title",
+      });
     }
     if (!formData.company_id) {
-      toast.error("Please select a hiring company.");
+      errors.push({
+        field: "Hiring Company",
+        message: "Please select an associated hiring organization.",
+        targetId: "job-company",
+      });
+    }
+    if (formData.salary_min && formData.salary_max && formData.salary_min > formData.salary_max) {
+      errors.push({
+        field: "Compensation",
+        message: "Minimum salary cannot exceed maximum salary.",
+        targetId: "salary-min",
+      });
+    }
+
+    if (errors.length > 0) {
+      setFormErrors(errors);
+      toast.error("Please resolve the form validation errors.");
       return;
     }
+
+    setFormErrors([]);
 
     try {
       setLoading(true);
@@ -137,6 +162,8 @@ export default function CreateJobPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <FormErrorSummary errors={formErrors} onClear={() => setFormErrors([])} />
+
         {/* Core Role Info */}
         <Card className="p-6 sm:p-8 bg-card border-border rounded-3xl shadow-sm space-y-6">
           <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 break-words min-w-0">
