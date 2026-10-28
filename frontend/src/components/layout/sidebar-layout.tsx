@@ -79,7 +79,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         transition={transitionConfig}
         onMouseEnter={() => setCollapsed(false)}
         onMouseLeave={() => setCollapsed(true)}
-        className="hidden md:flex relative z-30 h-full bg-card border-r border-border flex-col transition-all shadow-sm"
+        className="hidden md:flex relative z-30 h-full bg-card border-r border-border flex-col transition-all shadow-sm overflow-hidden"
       >
         {/* Header/Logo */}
         <div className="p-6 flex items-center justify-between">
@@ -105,7 +105,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Navigation Items */}
-        <nav aria-label="Main Navigation" className="flex-1 overflow-y-auto py-4 px-3 space-y-1 scrollbar-none">
+        <nav aria-label="Main Navigation" className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-1 scrollbar-none">
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
             return (
@@ -114,6 +114,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 id={`nav-${item.label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
                 aria-label={item.label}
+                title={collapsed ? item.label : undefined}
               >
                 <div
                   className={cn(
@@ -142,13 +143,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                       </motion.span>
                     )}
                   </AnimatePresence>
-
-                  {/* Tooltip for Collapsed State */}
-                  {collapsed && (
-                    <div className="absolute left-14 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 bg-foreground text-background text-xs font-bold px-2.5 py-1.5 rounded-md whitespace-nowrap shadow-md z-50 pointer-events-none">
-                      {item.label}
-                    </div>
-                  )}
                 </div>
               </Link>
             );
@@ -231,7 +225,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 </Button>
               </div>
 
-              <nav aria-label="Mobile Navigation" className="flex-1 overflow-y-auto py-4 space-y-1">
+              <nav aria-label="Mobile Navigation" className="flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-1 scrollbar-none">
                 {navItems.map((item) => {
                   const isActive = pathname === item.href;
                   return (
