@@ -55,6 +55,9 @@ dvttalent.com {
 
 # Dedicated API subdomain (optional — for direct API access / mobile apps)
 api.dvttalent.com {
+    @metrics path /metrics*
+    respond @metrics 403
+
     reverse_proxy api:8000
 
     header {

@@ -18,13 +18,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
 
 from db.models import get_db, Tenant
 from api.routes.auth import get_current_user, User
+from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
 from services.security_service import encrypt_pii, decrypt_pii
 
 log = structlog.get_logger(__name__)
@@ -134,6 +135,7 @@ async def get_email_sender(
 
 @router.post("", summary="Save SMTP sender credentials")
 async def save_email_sender(
+    request: Request,
     payload: EmailSenderConfig,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
@@ -146,6 +148,15 @@ async def save_email_sender(
     """
     if current_user.role.value != "admin":
         raise HTTPException(403, "Only admins can configure the email sender")
+
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="email_sender_save",
+        identifier=str(current_user.tenant_id or current_user.id),
+        limit=5,
+        window_seconds=600,
+        detail="Too many SMTP configuration attempts (max 5 per 10 minutes).",
+    )
 
     # Live credential validation first — never store bad credentials
     ok, err = _test_smtp(payload.smtp_host, payload.smtp_port, payload.smtp_user, payload.smtp_password)
@@ -189,12 +200,22 @@ async def save_email_sender(
 
 @router.post("/test", summary="Send a test email using saved sender config")
 async def test_email_sender(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Sends a test email to the logged-in admin to confirm the pipeline works end-to-end."""
     if current_user.role.value != "admin":
         raise HTTPException(403, "Only admins can test the sender")
+
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="email_sender_test",
+        identifier=str(current_user.tenant_id or current_user.id),
+        limit=3,
+        window_seconds=600,
+        detail="Test email rate limit exceeded (max 3 per 10 minutes). Please wait before sending another test.",
+    )
 
     tenant = await _get_tenant(current_user.tenant_id, db)
     if not tenant.smtp_user or not tenant.smtp_password_encrypted:
@@ -257,6 +278,7 @@ async def delete_email_sender(
 
 @router.get("/verify", summary="Verify sender email ownership via link")
 async def verify_sender_email(
+    request: Request,
     token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
@@ -264,6 +286,14 @@ async def verify_sender_email(
     Called when the user clicks the verification link in the confirmation email.
     Marks sender_verified = True for the matching tenant.
     """
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="email_sender_verify",
+        identifier=get_real_client_ip(request),
+        limit=10,
+        window_seconds=60,
+        detail="Too many verification attempts. Please wait a minute.",
+    )
     result = await db.execute(
         select(Tenant).where(Tenant.sender_verification_token == token)
     )

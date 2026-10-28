@@ -14,6 +14,7 @@ from sqlalchemy import select
 from config import settings
 from db.models import User, Tenant, get_db
 from api.routes.auth import create_access_token
+from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
 
 router = APIRouter()
 
@@ -53,6 +54,8 @@ def get_saml_settings():
 @router.get("/login")
 async def sso_login(request: Request):
     """ Initiate SAML Login redirect to Identity Provider (Okta/Azure) """
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(request, "sso_login_ip", client_ip, limit=20, window_seconds=60)
     if not SAML_AVAILABLE:
         raise HTTPException(status_code=501, detail="SAML SSO library (python3-saml) is not installed.")
     req = prepare_saml_request(request)
@@ -62,6 +65,8 @@ async def sso_login(request: Request):
 @router.post("/acs")
 async def sso_acs(request: Request, db: AsyncSession = Depends(get_db)):
     """ Assertion Consumer Service — processes the SAML response from IDP """
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(request, "sso_acs_ip", client_ip, limit=15, window_seconds=60)
     if not SAML_AVAILABLE:
         raise HTTPException(status_code=501, detail="SAML SSO library (python3-saml) is not installed.")
     form_data = await request.form()

@@ -19,6 +19,7 @@ from agents.screening_pydantic import screening_agent
 from agents.critic_pydantic import critic_agent
 from agents.market_iq_pydantic import market_iq_agent
 from services.notification_service import notification_service
+from services.llm_guardrail_service import guardrail_service
 
 log = structlog.get_logger(__name__)
 
@@ -121,6 +122,11 @@ class AgentOrchestrator:
     async def _run_agent_with_retry(
         self, agent, prompt: str, deps: Any, model: Any, model_settings: Optional[Dict[str, Any]] = None, max_attempts: int = 3
     ) -> Any:
+        tenant_key = str(self.tenant_id or getattr(deps, "tenant_id", "default") or "default")
+        allowed, rl_reason = await guardrail_service.check_rate_limit(tenant_id=tenant_key, provider="groq")
+        if not allowed:
+            log.warning("llm_guardrail_throttled", tenant_id=tenant_key, reason=rl_reason)
+            await asyncio.sleep(2.0)
         if hasattr(agent, "run_async"):
             return await agent.run_async(prompt, deps=deps, model=model, model_settings=model_settings)
         last_error = None
@@ -134,6 +140,7 @@ class AgentOrchestrator:
                 err_str = str(e).lower()
                 if "429" in err_str or "rate_limit" in err_str or "tpm" in err_str or "too large" in err_str:
                     log.warning("agent_rate_limit_retry", attempt=attempt+1, error=str(e))
+                    await guardrail_service.record_provider_error(provider="groq", error_status=429)
                     await asyncio.sleep(5 * (attempt + 1))
                 else:
                     raise e

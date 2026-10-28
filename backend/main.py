@@ -74,7 +74,8 @@ async def lifespan(app: FastAPI):
 
 
 from api.middleware.audit_log import AuditLogMiddleware
-from api.middleware.rate_limit import RateLimitMiddleware
+from api.middleware.rate_limit import RateLimitMiddleware, enforce_endpoint_rate_limit, get_real_client_ip
+from services.redis_service import record_rate_limit
 
 # ── App ───────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -160,26 +161,32 @@ from fastapi.responses import Response as FastAPIResponse
 import uuid as _uuid
 
 @app.get("/api/v1/track/{tracking_id}/open", include_in_schema=False)
-async def track_email_open(tracking_id: _uuid.UUID, db=Depends(get_db)):
+async def track_email_open(tracking_id: _uuid.UUID, request: Request, db=Depends(get_db)):
     """
     FIX [C-07]: Email open-tracking pixel endpoint.
     Called when recipient opens an email with embedded tracking pixel.
-    Returns a 1x1 transparent GIF.
+    Returns a 1x1 transparent GIF. Debounces DB writes per tracking_id and IP.
     """
     from sqlalchemy import update
     from datetime import datetime as _dt
     from db.models import EmailSent, EmailStatus
 
-    try:
-        await db.execute(
-            update(EmailSent)
-            .where(EmailSent.tracking_id == str(tracking_id))
-            .where(EmailSent.opened_at.is_(None))
-            .values(opened_at=_dt.utcnow(), status=EmailStatus.OPENED)
-        )
-        await db.commit()
-    except Exception:
-        pass  # Never fail on tracking — silent
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(request, "track_open_ip", client_ip, limit=60, window_seconds=60)
+
+    # Debounce DB write per tracking_id (max 2 open writes per minute per tracking_id)
+    write_allowed, _ = await record_rate_limit(f"rl:track_open_id:{tracking_id}", limit=2, window_seconds=60)
+    if write_allowed:
+        try:
+            await db.execute(
+                update(EmailSent)
+                .where(EmailSent.tracking_id == str(tracking_id))
+                .where(EmailSent.opened_at.is_(None))
+                .values(opened_at=_dt.utcnow(), status=EmailStatus.OPENED)
+            )
+            await db.commit()
+        except Exception:
+            pass  # Never fail on tracking — silent
 
     # 1×1 transparent GIF
     gif = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
@@ -192,7 +199,7 @@ app.mount("/metrics", metrics_app)
 
 # ── Health & Safe Click Tracking ──────────────────────────────────────────
 @app.get("/api/v1/track/{tracking_id}/click", include_in_schema=False)
-async def track_link_click(tracking_id: _uuid.UUID, url: str, db=Depends(get_db)):
+async def track_link_click(tracking_id: _uuid.UUID, url: str, request: Request, db=Depends(get_db)):
     """
     Tracks clicks on personalized links (e.g. Microsites).
     Increments click count and redirects ONLY to validated safe origins or the recorded microsite URL.
@@ -201,7 +208,11 @@ async def track_link_click(tracking_id: _uuid.UUID, url: str, db=Depends(get_db)
     from sqlalchemy import update, select
     from db.models import EmailSent
     from fastapi import HTTPException
-    
+
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(request, "track_click_ip", client_ip, limit=30, window_seconds=60)
+    write_allowed, _ = await record_rate_limit(f"rl:track_click_id:{tracking_id}:{client_ip}", limit=3, window_seconds=60)
+
     stored_microsite_url = None
     try:
         res = await db.execute(select(EmailSent).where(EmailSent.tracking_id == str(tracking_id)))
@@ -209,12 +220,13 @@ async def track_link_click(tracking_id: _uuid.UUID, url: str, db=Depends(get_db)
         if email_rec and getattr(email_rec, "microsite_url", None):
             stored_microsite_url = email_rec.microsite_url
 
-        await db.execute(
-            update(EmailSent)
-            .where(EmailSent.tracking_id == str(tracking_id))
-            .values(clicks_count=EmailSent.clicks_count + 1)
-        )
-        await db.commit()
+        if write_allowed:
+            await db.execute(
+                update(EmailSent)
+                .where(EmailSent.tracking_id == str(tracking_id))
+                .values(clicks_count=EmailSent.clicks_count + 1)
+            )
+            await db.commit()
     except Exception as e:
         log.error("click_track_failed", error=str(e))
 

@@ -7,14 +7,33 @@ import json
 import redis.asyncio as redis
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
 from api.routes.auth import get_current_user, User
+from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_bypass_allowed
+from services.llm_guardrail_service import guardrail_service
 
 router = APIRouter()
+
+
+async def _enforce_agent_rate_limit(request: Request, current_user: User) -> uuid.UUID:
+    tenant_uuid = _require_agent_access(current_user)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="agent_trigger_tenant",
+        identifier=str(tenant_uuid),
+        limit=10,
+        window_seconds=60,
+        detail="AI agent execution rate limit exceeded (max 10 runs per minute per workspace).",
+    )
+    if not is_load_test_bypass_allowed(request):
+        allowed, reason = await guardrail_service.check_rate_limit(tenant_id=str(tenant_uuid), provider="groq")
+        if not allowed:
+            raise HTTPException(status_code=429, detail=reason or "LLM provider rate limit exceeded.")
+    return tenant_uuid
 
 
 def _require_agent_access(current_user: User) -> uuid.UUID:
@@ -54,11 +73,12 @@ VALID_AGENTS = [
 @router.post("/trigger")
 async def trigger_agent(
     trigger: AgentTrigger,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Manually trigger an AI agent"""
-    tenant_uuid = _require_agent_access(current_user)
+    tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
     if trigger.agent not in VALID_AGENTS:
         raise HTTPException(status_code=400, detail=f"Unknown agent. Valid: {VALID_AGENTS}")
 
@@ -86,15 +106,17 @@ async def trigger_agent(
     }
 
 
+@router.post("/trigger-dag")
 @router.get("/trigger-dag")
 async def trigger_dag(
+    request: Request,
     industry: str = "AI",
     location: str = "SF",
     background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    tenant_uuid = _require_agent_access(current_user)
+    tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
     from agents.orchestrator import AgentOrchestrator
     orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
     if background_tasks:
@@ -105,11 +127,12 @@ async def trigger_dag(
 @router.post("/swarm/run")
 async def run_swarm_pipeline(
     config: PipelineTrigger,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    tenant_uuid = _require_agent_access(current_user)
+    tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
     print(f"🚀 [SWARM TRACE] Received initiation request for industry: {config.industry}")
     """Trigger the unified swarm pipeline via native background tasks (No Celery required)"""
     from agents.orchestrator import AgentOrchestrator
@@ -134,13 +157,14 @@ async def run_swarm_pipeline(
 @router.post("/swarm/phase")
 async def run_swarm_phase(
     phase: str,
+    request: Request,
     mode: str = "copilot",
     params: Dict[str, Any] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Trigger a specific phase of the swarm (discovery, sourcing, outreach)"""
-    tenant_uuid = _require_agent_access(current_user)
+    tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
     if phase not in ["discovery", "sourcing", "outreach"]:
         raise HTTPException(status_code=400, detail="Invalid phase")
 

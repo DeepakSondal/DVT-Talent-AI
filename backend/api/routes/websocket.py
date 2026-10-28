@@ -1,22 +1,33 @@
 import json
+import time
 import asyncio
 import redis.asyncio as redis
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
 from typing import List, Dict, Set
 from jose import JWTError, jwt
 from config import settings
+from services.redis_service import is_token_revoked
 
 router = APIRouter()
 
+MAX_WS_CONNECTIONS_PER_USER = 5
+MAX_WS_MESSAGES_PER_10S = 20
+
 
 class ConnectionManager:
-    def __init__(self):
+    def __init__(self, max_connections_per_user: int = MAX_WS_CONNECTIONS_PER_USER):
         self.active_connections: Dict[str, Set[WebSocket]] = {}   # user_id → Set[WebSocket]
         self.user_tenants: Dict[str, str] = {}                     # user_id → tenant_id
+        self.max_connections_per_user = max_connections_per_user
         self.redis_client = redis.from_url(settings.redis_url)
         self.pubsub_task = None
 
-    async def connect(self, websocket: WebSocket, user_id: str, tenant_id: str):
+    async def connect(self, websocket: WebSocket, user_id: str, tenant_id: str) -> bool:
+        existing = self.active_connections.get(user_id, set())
+        if len(existing) >= self.max_connections_per_user:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Maximum concurrent WebSocket connections exceeded")
+            return False
+
         await websocket.accept()
         if user_id not in self.active_connections:
             self.active_connections[user_id] = set()
@@ -26,6 +37,7 @@ class ConnectionManager:
         # Start resilient Redis listener if not running
         if self.pubsub_task is None or self.pubsub_task.done():
             self.pubsub_task = asyncio.create_task(self._redis_listener())
+        return True
 
     def disconnect(self, websocket: WebSocket, user_id: str):
         if user_id in self.active_connections:
@@ -98,14 +110,8 @@ async def _verify_ws_token(token: str) -> tuple[str, str] | tuple[None, None]:
     """Validate JWT and return (user_id, tenant_id), or (None, None) if invalid or revoked."""
     if not token:
         return None, None
-    try:
-        r = redis.from_url(settings.redis_url)
-        is_revoked = await r.get(f"blacklist:{token}")
-        await r.aclose()
-        if is_revoked:
-            return None, None
-    except Exception:
-        pass
+    if await is_token_revoked(token):
+        return None, None
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         user_id: str = payload.get("sub")
@@ -131,11 +137,23 @@ async def pipeline_events_endpoint(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await manager.connect(websocket, user_id, tenant_id or "")
+    connected = await manager.connect(websocket, user_id, tenant_id or "")
+    if not connected:
+        return
+
+    frame_timestamps: List[float] = []
     try:
         while True:
-            # Keep connection alive, listen for client pings
+            # Keep connection alive, listen for client pings with frame rate limiting
             data = await websocket.receive_text()
+            now = time.monotonic()
+            frame_timestamps = [ts for ts in frame_timestamps if (now - ts) < 10.0]
+            frame_timestamps.append(now)
+            if len(frame_timestamps) > MAX_WS_MESSAGES_PER_10S:
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Message rate limit exceeded")
+                manager.disconnect(websocket, user_id)
+                return
+
             if data == "ping":
                 await websocket.send_text('{"type":"pong"}')
     except WebSocketDisconnect:

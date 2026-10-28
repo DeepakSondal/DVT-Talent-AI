@@ -4,12 +4,14 @@ DVT Talent AI — Users API  (FIXED [H-01]: was 7-line stub)
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import User, UserRole, get_db
 from api.routes.auth import get_current_user, require_admin, hash_password, verify_password
+from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_bypass_allowed
+from services.redis_service import record_rate_limit, get_rate_limit_count, reset_rate_limit, revoke_token
 
 router = APIRouter()
 
@@ -55,15 +57,55 @@ async def update_my_profile(
 @router.post("/me/change-password")
 async def change_password(
     data: PasswordChange,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    bypass = is_load_test_bypass_allowed(request)
+    fail_key = f"rl:pwd_change_fail:{current_user.id}"
+
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="pwd_change_req",
+        identifier=str(current_user.id),
+        limit=10,
+        window_seconds=900,
+        detail="Too many password change requests. Please wait 15 minutes.",
+    )
+
+    if not bypass:
+        prior_fails = await get_rate_limit_count(fail_key, window_seconds=900)
+        if prior_fails >= 3:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many incorrect password attempts. Please wait 15 minutes.",
+                headers={"Retry-After": "900"},
+            )
+
     if len(data.new_password or "") < 8:
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters long")
     if not await verify_password(data.current_password, current_user.hashed_password):
+        if not bypass:
+            allowed, _ = await record_rate_limit(fail_key, limit=3, window_seconds=900)
+            if not allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many incorrect password attempts. Please wait 15 minutes.",
+                    headers={"Retry-After": "900"},
+                )
         raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    if not bypass:
+        await reset_rate_limit(fail_key, window_seconds=900)
+
     current_user.hashed_password = await hash_password(data.new_password)
     await db.commit()
+
+    # Revoke any active refresh token cookie upon password change
+    refresh_cookie = request.cookies.get("dvt_refresh_token")
+    if refresh_cookie:
+        await revoke_token(refresh_cookie, expire_seconds=30 * 86400)
+
     return {"message": "Password updated successfully"}
 
 # Admin-only endpoints (strictly scoped to caller's tenant)

@@ -5,6 +5,7 @@ zero-latency fallback when Redis is offline, and resilient in-memory fallbacks.
 """
 import time
 import socket
+import asyncio
 import urllib.parse
 from typing import Optional, Dict, Tuple
 import structlog
@@ -22,7 +23,8 @@ _circuit_state = {
 
 _redis_client: Optional[aioredis.Redis] = None
 _in_memory_blacklist: Dict[str, float] = {}  # token -> expires_at
-_in_memory_ratelimit: Dict[str, Tuple[int, int]] = {}  # key -> (minute_bucket, count)
+_in_memory_ratelimit: Dict[str, Tuple[int, int, int]] = {}  # key -> (curr_bucket, curr_count, prev_count)
+_ratelimit_lock = asyncio.Lock()
 
 
 def is_redis_available(timeout: float = 0.05) -> bool:
@@ -127,35 +129,124 @@ async def revoke_token(token: str, expire_seconds: int = 86400) -> None:
             _circuit_state["last_checked"] = now
 
 
-async def record_rate_limit(key: str, limit: int, window_seconds: int = 60) -> Tuple[bool, int]:
+async def record_rate_limit(
+    key: str,
+    limit: int,
+    window_seconds: int = 60,
+    now_override: Optional[float] = None,
+) -> Tuple[bool, int]:
     """
-    Records a rate limit hit. Returns (is_allowed, current_count).
-    Works in Redis or fast in-memory fallback.
+    Records a rate limit hit using a Sliding-Window Counter algorithm
+    (weighted previous window + current window) to prevent boundary bursts.
+    Returns (is_allowed, effective_count).
+    Works in Redis (atomic pipeline) or thread-safe in-memory fallback.
     """
-    now = time.time()
-    minute_bucket = int(now / window_seconds)
+    window_seconds = max(1, int(window_seconds))
+    now = now_override if now_override is not None else time.time()
+    curr_bucket = int(now // window_seconds)
+    prev_bucket = curr_bucket - 1
+    elapsed_ratio = (now % window_seconds) / float(window_seconds)
+    prev_weight = max(0.0, 1.0 - elapsed_ratio)
 
     client = get_redis_client()
     if client:
         try:
-            redis_key = f"{key}:{minute_bucket}"
-            count = await client.incr(redis_key)
-            if count == 1:
-                await client.expire(redis_key, window_seconds)
-            return (count <= limit, count)
+            curr_key = f"{key}:{curr_bucket}"
+            prev_key = f"{key}:{prev_bucket}"
+            pipe = client.pipeline()
+            pipe.get(prev_key)
+            pipe.incr(curr_key)
+            pipe.expire(curr_key, window_seconds * 2)
+            prev_raw, curr_count, _ = await pipe.execute()
+            prev_count = int(prev_raw) if prev_raw else 0
+            effective_count = int(prev_count * prev_weight) + int(curr_count)
+            return (effective_count <= limit, effective_count)
         except Exception:
             _circuit_state["available"] = False
             _circuit_state["last_checked"] = now
 
-    # In-memory fallback
-    if len(_in_memory_ratelimit) > 5000:
-        to_del = [k for k, v in _in_memory_ratelimit.items() if v[0] != minute_bucket]
-        for k in to_del:
-            del _in_memory_ratelimit[k]
+    # Thread-safe in-memory sliding-window fallback
+    async with _ratelimit_lock:
+        if len(_in_memory_ratelimit) > 5000:
+            to_del = [
+                k for k, v in _in_memory_ratelimit.items()
+                if v[0] < prev_bucket
+            ]
+            for k in to_del:
+                del _in_memory_ratelimit[k]
 
-    bucket, count = _in_memory_ratelimit.get(key, (minute_bucket, 0))
-    if bucket != minute_bucket:
-        count = 0
-    count += 1
-    _in_memory_ratelimit[key] = (minute_bucket, count)
-    return (count <= limit, count)
+        stored_bucket, stored_curr, stored_prev = _in_memory_ratelimit.get(key, (curr_bucket, 0, 0))
+        if stored_bucket == curr_bucket:
+            curr_count = stored_curr + 1
+            prev_count = stored_prev
+        elif stored_bucket == prev_bucket:
+            prev_count = stored_curr
+            curr_count = 1
+        else:
+            prev_count = 0
+            curr_count = 1
+
+        _in_memory_ratelimit[key] = (curr_bucket, curr_count, prev_count)
+        effective_count = int(prev_count * prev_weight) + curr_count
+        return (effective_count <= limit, effective_count)
+
+
+async def get_rate_limit_count(
+    key: str,
+    window_seconds: int = 60,
+    now_override: Optional[float] = None,
+) -> int:
+    """
+    Returns current sliding-window count for a key without incrementing it.
+    """
+    window_seconds = max(1, int(window_seconds))
+    now = now_override if now_override is not None else time.time()
+    curr_bucket = int(now // window_seconds)
+    prev_bucket = curr_bucket - 1
+    elapsed_ratio = (now % window_seconds) / float(window_seconds)
+    prev_weight = max(0.0, 1.0 - elapsed_ratio)
+
+    client = get_redis_client()
+    if client:
+        try:
+            curr_key = f"{key}:{curr_bucket}"
+            prev_key = f"{key}:{prev_bucket}"
+            pipe = client.pipeline()
+            pipe.get(prev_key)
+            pipe.get(curr_key)
+            prev_raw, curr_raw = await pipe.execute()
+            prev_count = int(prev_raw) if prev_raw else 0
+            curr_count = int(curr_raw) if curr_raw else 0
+            return int(prev_count * prev_weight) + curr_count
+        except Exception:
+            _circuit_state["available"] = False
+            _circuit_state["last_checked"] = now
+
+    async with _ratelimit_lock:
+        stored_bucket, stored_curr, stored_prev = _in_memory_ratelimit.get(key, (curr_bucket, 0, 0))
+        if stored_bucket == curr_bucket:
+            return int(stored_prev * prev_weight) + stored_curr
+        elif stored_bucket == prev_bucket:
+            return int(stored_curr * prev_weight)
+        return 0
+
+
+async def reset_rate_limit(key: str, window_seconds: int = 60) -> None:
+    """
+    Resets rate-limit counters for a key in both Redis and in-memory store.
+    """
+    window_seconds = max(1, int(window_seconds))
+    now = time.time()
+    curr_bucket = int(now // window_seconds)
+    prev_bucket = curr_bucket - 1
+
+    async with _ratelimit_lock:
+        _in_memory_ratelimit.pop(key, None)
+
+    client = get_redis_client()
+    if client:
+        try:
+            await client.delete(f"{key}:{curr_bucket}", f"{key}:{prev_bucket}")
+        except Exception:
+            _circuit_state["available"] = False
+            _circuit_state["last_checked"] = now

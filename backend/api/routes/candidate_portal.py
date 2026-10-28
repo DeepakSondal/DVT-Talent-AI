@@ -13,7 +13,7 @@ from typing import Optional, List, Dict, Any
 import uuid
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from db.models import (
     Company, Resume, get_db
 )
 from api.routes.auth import get_current_user
+from api.middleware.rate_limit import enforce_endpoint_rate_limit
 from services.privacy_service import is_domain_or_company_blocked
 from services.resume_parser import ResumeParserService
 
@@ -402,6 +403,7 @@ async def update_candidate_profile(
 
 @router.post("/resume")
 async def upload_candidate_resume(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -410,6 +412,14 @@ async def upload_candidate_resume(
     Upload resume, extract 100% full text (PDF/DOCX/TXT), parse structured career history,
     persist file securely, and attach to candidate profile.
     """
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="portal_resume_upload",
+        identifier=str(current_user.id),
+        limit=5,
+        window_seconds=60,
+        detail="Resume upload rate limit exceeded (max 5 per minute).",
+    )
     cand = await get_or_create_candidate_for_user(current_user, db)
 
     # Validate file extension

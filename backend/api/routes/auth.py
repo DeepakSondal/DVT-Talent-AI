@@ -18,7 +18,21 @@ from sqlalchemy import select
 
 from config import settings
 from db.models import User, UserRole, Tenant, Candidate, CandidateStatus, get_db
-from services.redis_service import is_token_revoked, revoke_token
+from services.redis_service import (
+    is_token_revoked,
+    revoke_token,
+    record_rate_limit,
+    get_rate_limit_count,
+    reset_rate_limit,
+)
+from api.middleware.rate_limit import (
+    get_real_client_ip,
+    enforce_endpoint_rate_limit,
+    is_load_test_bypass_allowed,
+)
+
+# Pre-computed dummy bcrypt hash to prevent timing-based user enumeration on login
+_DUMMY_BCRYPT_HASH = bcrypt.hashpw(b"dvt-timing-defense-placeholder", bcrypt.gensalt()).decode("utf-8")
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -148,7 +162,21 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 # ── Routes ────────────────────────────────────────────────────────────────
 @router.post("/register", status_code=201)
-async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(
+    user_data: UserCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="register_ip",
+        identifier=client_ip,
+        limit=10,
+        window_seconds=3600,
+        detail="Too many registration attempts from this IP. Please try again later.",
+    )
+
     # Check if email exists
     result = await db.execute(select(User).where(User.email == user_data.email))
     if result.scalar_one_or_none():
@@ -255,17 +283,68 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    client_ip = get_real_client_ip(request)
+    normalized_email = (form_data.username or "").strip().lower()
+    bypass = is_load_test_bypass_allowed(request)
+
+    # 1. Per-IP login request rate limit (30 req / minute)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="login_req_ip",
+        identifier=client_ip,
+        limit=30,
+        window_seconds=60,
+        detail="Too many login requests. Please try again in a minute.",
+    )
+
+    # 2. Check existing brute-force lockout counters BEFORE expensive bcrypt check
+    ip_fail_key = f"rl:login_fail_ip:{client_ip}"
+    email_fail_key = f"rl:login_fail_email:{normalized_email}"
+    if not bypass:
+        ip_fails = await get_rate_limit_count(ip_fail_key, window_seconds=900)
+        email_fails = await get_rate_limit_count(email_fail_key, window_seconds=900)
+        if ip_fails >= 10 or email_fails >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many failed login attempts. Account is temporarily locked for 15 minutes.",
+                headers={"Retry-After": "900"},
+            )
+
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
 
-    if not user or not await verify_password(form_data.password, user.hashed_password):
+    if not user:
+        # Constant-time dummy bcrypt check to prevent user enumeration via timing
+        await verify_password(form_data.password or "", _DUMMY_BCRYPT_HASH)
+        password_ok = False
+    else:
+        password_ok = await verify_password(form_data.password, user.hashed_password)
+
+    if not user or not password_ok:
+        if not bypass:
+            ip_allowed, _ = await record_rate_limit(ip_fail_key, limit=10, window_seconds=900)
+            email_allowed, _ = await record_rate_limit(email_fail_key, limit=5, window_seconds=900)
+            if not ip_allowed or not email_allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many failed login attempts. Account is temporarily locked for 15 minutes.",
+                    headers={"Retry-After": "900"},
+                )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Account is disabled")
+
+    # Reset failed-attempt counter for this account upon successful authentication
+    if not bypass:
+        await reset_rate_limit(email_fail_key, window_seconds=900)
 
     user.last_login = datetime.now(timezone.utc)
     await db.commit()
@@ -308,7 +387,21 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
 
 
 @router.post("/refresh")
-async def refresh_token_route(dvt_refresh_token: Optional[str] = Cookie(None), db: AsyncSession = Depends(get_db)):
+async def refresh_token_route(
+    request: Request,
+    dvt_refresh_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db),
+):
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="refresh_ip",
+        identifier=client_ip,
+        limit=30,
+        window_seconds=60,
+        detail="Too many token refresh requests. Please wait a minute.",
+    )
+
     if not dvt_refresh_token:
         raise HTTPException(status_code=401, detail="Refresh token missing")
 

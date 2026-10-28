@@ -86,7 +86,7 @@ def generate_stripe_signature(payload: bytes, secret: str) -> str:
 @pytest.mark.asyncio
 async def test_webhook_invalid_signature(monkeypatch):
     """Webhook returns 400 if Stripe signature is invalid."""
-    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_secret")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "mock_stripe_webhook_secret_test")
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_fake")
 
     from main import app
@@ -108,7 +108,7 @@ async def test_webhook_checkout_completed(monkeypatch):
     from main import app
 
     from config import settings
-    secret = "whsec_test_valid_secret"
+    secret = "mock_stripe_webhook_secret_test"
     monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", secret)
     monkeypatch.setattr(settings, "stripe_webhook_secret", secret)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_fake")

@@ -126,9 +126,16 @@ class Settings(BaseSettings):
     ziprecruiter_api_key: str = ""
     dice_api_key: str = ""
 
-    # Rate Limiting
+    # Rate Limiting & Abuse Controls
     api_rate_limit: int = 60
+    rate_limit_per_minute: int = 60
     rate_limit_per_hour: int = 1000
+    load_test_bypass_secret: str = ""
+    trusted_proxy_cidrs: str = "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+    # Inbound Webhook Secrets
+    monster_webhook_secret: str = ""
+    inbound_email_webhook_secret: str = ""
 
     # Stripe Billing
     stripe_secret_key: str = ""

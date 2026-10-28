@@ -16,6 +16,7 @@ from sqlalchemy import select
 from config import settings
 from db.models import get_db, Tenant, SubscriptionPlan, CreditTransaction, CreditTransactionType, User
 from api.routes.auth import get_current_user
+from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -58,10 +59,19 @@ async def list_plans(db: AsyncSession = Depends(get_db)):
 @router.post("/create-checkout", summary="Create a Stripe Checkout session")
 async def create_checkout(
     req: CheckoutRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Creates and returns a Stripe Checkout URL for the given plan."""
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="billing_checkout_user",
+        identifier=str(current_user.id),
+        limit=10,
+        window_seconds=60,
+        detail="Too many checkout session requests. Please wait a minute.",
+    )
     # Get tenant
     tenant: Optional[Tenant] = await db.get(Tenant, current_user.tenant_id)
     if not tenant:
@@ -123,10 +133,19 @@ async def create_checkout(
 @router.post("/portal", summary="Create a Stripe Customer Portal session")
 async def create_portal(
     req: PortalRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Returns a Stripe Customer Portal URL for managing subscriptions."""
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="billing_portal_user",
+        identifier=str(current_user.id),
+        limit=10,
+        window_seconds=60,
+        detail="Too many billing portal requests. Please wait a minute.",
+    )
     tenant: Optional[Tenant] = await db.get(Tenant, current_user.tenant_id)
     if not tenant or not tenant.stripe_customer_id:
         raise HTTPException(status_code=400, detail="No Stripe customer found. Subscribe to a plan first.")
@@ -155,6 +174,14 @@ async def stripe_webhook(
     - invoice.paid → renew credits monthly
     - customer.subscription.deleted → deactivate subscription
     """
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="billing_webhook_ip",
+        identifier=get_real_client_ip(request),
+        limit=60,
+        window_seconds=60,
+        detail="Stripe webhook rate limit exceeded.",
+    )
     payload = await request.body()
 
     if not settings.stripe_webhook_secret:

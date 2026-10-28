@@ -3,14 +3,29 @@ DVT Talent AI — External Webhooks
 Handles inbound data from Monster, LinkedIn, and other job boards.
 """
 import uuid
+import hmac
+import hashlib
 import structlog
 from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from config import settings
 from db.models import Candidate, Job, CandidateStatus, get_db
 from services.email_service import EmailService
+from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
+
+
+def _verify_webhook_hmac(raw_body: bytes, signature_header: str, secret: str) -> bool:
+    if not secret or not signature_header:
+        return False
+    sig = signature_header.strip()
+    if sig.startswith("sha256="):
+        sig = sig.split("=", 1)[1]
+    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig.lower(), expected.lower())
+
 
 @router.post("/monster/applications")
 async def monster_application_webhook(request: Request, db: AsyncSession = Depends(get_db)):
@@ -18,6 +33,23 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
     Accepts Easy Apply applications from Monster.
     Reference: Monster Easy Apply Integration Guide.
     """
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="webhook_monster_ip",
+        identifier=client_ip,
+        limit=30,
+        window_seconds=60,
+        detail="Webhook rate limit exceeded.",
+    )
+
+    raw_body = await request.body()
+    secret = getattr(settings, "monster_webhook_secret", "") or ""
+    sig_header = request.headers.get("X-Monster-Signature") or request.headers.get("X-Webhook-Signature") or ""
+    if secret or settings.is_production:
+        if not _verify_webhook_hmac(raw_body, sig_header, secret):
+            raise HTTPException(status_code=401, detail="Invalid or missing webhook signature")
+
     try:
         payload = await request.json()
     except Exception:
@@ -73,6 +105,23 @@ async def email_inbound_webhook(request: Request):
     Accepts incoming webhooks from Mail Transfer Agents (SendGrid/Mailgun)
     to automatically track candidate replies.
     """
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="webhook_email_ip",
+        identifier=client_ip,
+        limit=30,
+        window_seconds=60,
+        detail="Webhook rate limit exceeded.",
+    )
+
+    raw_body = await request.body()
+    secret = getattr(settings, "inbound_email_webhook_secret", "") or ""
+    sig_header = request.headers.get("X-Inbound-Signature") or request.headers.get("X-Webhook-Signature") or ""
+    if secret or settings.is_production:
+        if not _verify_webhook_hmac(raw_body, sig_header, secret):
+            raise HTTPException(status_code=401, detail="Invalid or missing webhook signature")
+
     try:
         payload = await request.json()
     except Exception:

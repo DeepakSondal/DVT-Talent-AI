@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 import uuid
 import structlog
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, desc
 from pydantic import BaseModel, EmailStr
@@ -23,6 +23,7 @@ from db.models import (
     Tenant,
 )
 from api.routes.auth import get_current_user, hash_password, create_access_token
+from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
 from services.security_service import encrypt_pii, decrypt_pii
 from services.email_service import email_service
 from config import settings
@@ -60,6 +61,7 @@ class AcceptInvitationRequest(BaseModel):
 
 @router.post("/invite")
 async def invite_recruiter(
+    request: Request,
     payload: Optional[InviteRecruiterRequest] = None,
     email: Optional[str] = Query(None),
     team_id: Optional[str] = Query(None),
@@ -74,6 +76,23 @@ async def invite_recruiter(
     """
     raw_email = (payload.email if payload else email) or ""
     clean_email = str(raw_email).strip().lower()
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="invite_tenant",
+        identifier=str(manager.tenant_id or manager.id),
+        limit=10,
+        window_seconds=3600,
+        detail="Team invitation rate limit exceeded (max 10 per hour). Please wait before sending more invites.",
+    )
+    if clean_email and "@" in clean_email:
+        await enforce_endpoint_rate_limit(
+            request,
+            scope="invite_recipient",
+            identifier=clean_email,
+            limit=3,
+            window_seconds=86400,
+            detail="This recipient has already been sent the maximum number of invitations for today.",
+        )
     if not clean_email or "@" not in clean_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -275,6 +294,7 @@ async def revoke_team_invitation(
 @router.get("/invite/validate")
 @router.get("/invitations/validate")
 async def validate_team_invitation(
+    request: Request,
     token: str = Query(..., description="Raw single-use invitation token"),
     db: AsyncSession = Depends(get_db),
 ):
@@ -283,6 +303,14 @@ async def validate_team_invitation(
     Returns invitation metadata (email, role, tenant name, expires_at) if valid and pending.
     Returns 400 or 404 with descriptive details if expired, revoked, already accepted, or invalid.
     """
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="invite_validate_ip",
+        identifier=get_real_client_ip(request),
+        limit=15,
+        window_seconds=60,
+        detail="Too many invitation validation attempts. Please wait a minute.",
+    )
     raw_token = token.strip()
     if not raw_token:
         raise HTTPException(status_code=400, detail="Invitation token is required.")
@@ -341,6 +369,7 @@ async def validate_team_invitation(
 @router.post("/invite/accept")
 @router.post("/invitations/accept")
 async def accept_team_invitation(
+    request: Request,
     payload: AcceptInvitationRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -349,6 +378,14 @@ async def accept_team_invitation(
     Verifies token hash, expiration, and single-use status.
     Creates user account with chosen password, never a placeholder.
     """
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="invite_accept_ip",
+        identifier=get_real_client_ip(request),
+        limit=10,
+        window_seconds=60,
+        detail="Too many invitation acceptance attempts. Please wait a minute.",
+    )
     raw_token = payload.token.strip()
     if not raw_token:
         raise HTTPException(status_code=400, detail="Invitation token is required.")

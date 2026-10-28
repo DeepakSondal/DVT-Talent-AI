@@ -5,6 +5,7 @@ import {
   handleSubscriptionActive,
 } from '../src/services/dodo-webhook-service';
 import { POST } from '../src/app/api/webhook/route';
+import { getDodoWebhookKey } from '../src/lib/dodo-env';
 
 test.describe('Dodo Payments Webhook Event Handlers', () => {
   test('test case 1: processes payment.succeeded event and extracts customer & amount', async () => {
@@ -117,5 +118,58 @@ test.describe('Dodo Payments Webhook Event Handlers', () => {
     const response = await POST(req);
     // Should reject with 401 Unauthorized
     expect(response.status).toBe(401);
+  });
+
+  test('test case 5: getDodoWebhookKey returns configured key from environment variables', async () => {
+    const originalKey = process.env.DODO_PAYMENTS_WEBHOOK_KEY;
+    const originalSecret = process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+    try {
+      delete process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+      process.env.DODO_PAYMENTS_WEBHOOK_KEY = "mock_configured_webhook_key_12345";
+      expect(getDodoWebhookKey()).toBe("mock_configured_webhook_key_12345");
+    } finally {
+      if (originalKey !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_KEY = originalKey;
+      else delete process.env.DODO_PAYMENTS_WEBHOOK_KEY;
+      if (originalSecret !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_SECRET = originalSecret;
+      else delete process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+    }
+  });
+
+  test('test case 6: getDodoWebhookKey throws in production when unconfigured', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalKey = process.env.DODO_PAYMENTS_WEBHOOK_KEY;
+    const originalSecret = process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+    try {
+      delete process.env.DODO_PAYMENTS_WEBHOOK_KEY;
+      delete process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+      process.env.NODE_ENV = "production";
+      expect(() => getDodoWebhookKey()).toThrow(/must be configured in production/);
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalKey !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_KEY = originalKey;
+      if (originalSecret !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_SECRET = originalSecret;
+    }
+  });
+
+  test('test case 7: getDodoWebhookKey returns safe dynamic base64 placeholder in dev/test when unconfigured without secret patterns', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalKey = process.env.DODO_PAYMENTS_WEBHOOK_KEY;
+    const originalSecret = process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+    try {
+      delete process.env.DODO_PAYMENTS_WEBHOOK_KEY;
+      delete process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+      process.env.NODE_ENV = "development";
+      const key = getDodoWebhookKey();
+      expect(typeof key).toBe("string");
+      expect(key.length).toBeGreaterThan(0);
+      expect(key.startsWith("whsec_")).toBe(false);
+      // Verify key is valid base64
+      const decoded = Buffer.from(key, "base64").toString("utf-8");
+      expect(decoded).toBe("dodo_dev_unconfigured_webhook_key");
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalKey !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_KEY = originalKey;
+      if (originalSecret !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_SECRET = originalSecret;
+    }
   });
 });

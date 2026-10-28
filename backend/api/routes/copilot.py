@@ -4,12 +4,14 @@ API Endpoints supporting the Stateful "Human-in-the-Loop" architecture.
 """
 import uuid
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
 from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
 from api.routes.auth import get_current_user, User
+from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_bypass_allowed
+from services.llm_guardrail_service import guardrail_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from agents.orchestrator import AgentOrchestrator
 from workers.tasks import copilot_discovery_task, copilot_sourcing_task, copilot_outreach_task
@@ -102,17 +104,34 @@ async def execute_outreach_bg(task_id: uuid.UUID, req: OutreachRequest, db: Asyn
             task.error_message = str(e)
             await db.commit()
 
+async def _enforce_copilot_rate_limit(request: Request, current_user: User) -> uuid.UUID:
+    tenant_uuid = _require_copilot_access(current_user)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="copilot_tenant",
+        identifier=str(tenant_uuid),
+        limit=10,
+        window_seconds=60,
+        detail="Copilot pipeline rate limit exceeded (max 10 runs per minute per workspace).",
+    )
+    if not is_load_test_bypass_allowed(request):
+        allowed, reason = await guardrail_service.check_rate_limit(tenant_id=str(tenant_uuid), provider="groq")
+        if not allowed:
+            raise HTTPException(status_code=429, detail=reason or "LLM provider rate limit exceeded.")
+    return tenant_uuid
+
 # ── API Routes ───────────────────────────────────────────────────────────────
 
 @router.post("/discovery")
 async def start_copilot_discovery(
     req: DiscoveryRequest,
+    request: Request,
     bg_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Phase 1: Generates Market IQ and draft JD, then PAUSES for human review."""
-    tenant_uuid = _require_copilot_access(current_user)
+    tenant_uuid = await _enforce_copilot_rate_limit(request, current_user)
     if req.tenant_id and str(req.tenant_id) != str(tenant_uuid):
         raise HTTPException(status_code=403, detail="Cross-tenant task execution is forbidden.")
 
@@ -140,12 +159,13 @@ async def start_copilot_discovery(
 @router.post("/sourcing")
 async def start_copilot_sourcing(
     req: SourcingRequest,
+    request: Request,
     bg_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Phase 2: Takes the MANUALLY EDITED Job Description and sources candidates."""
-    tenant_uuid = _require_copilot_access(current_user)
+    tenant_uuid = await _enforce_copilot_rate_limit(request, current_user)
     if req.tenant_id and str(req.tenant_id) != str(tenant_uuid):
         raise HTTPException(status_code=403, detail="Cross-tenant task execution is forbidden.")
 
@@ -172,12 +192,13 @@ async def start_copilot_sourcing(
 @router.post("/outreach")
 async def start_copilot_outreach(
     req: OutreachRequest,
+    request: Request,
     bg_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Phase 3: Takes the MANUALLY CURATED list of candidates and emails them."""
-    tenant_uuid = _require_copilot_access(current_user)
+    tenant_uuid = await _enforce_copilot_rate_limit(request, current_user)
     if req.tenant_id and str(req.tenant_id) != str(tenant_uuid):
         raise HTTPException(status_code=403, detail="Cross-tenant task execution is forbidden.")
 

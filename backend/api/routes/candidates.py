@@ -11,7 +11,7 @@ import base64
 import uuid as _uuid
 import structlog
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 
 from db.models import Candidate, Resume, CandidateStatus, Tenant, UserRole, get_db
 from api.routes.auth import get_current_user, User
+from api.middleware.rate_limit import enforce_endpoint_rate_limit
 from services.security_service import log_audit_event
 from services.privacy_service import is_candidate_visible_to_recruiter, normalize_domain
 from services.resume_parser import ResumeParserService
@@ -88,6 +89,7 @@ async def _resolve_recruiter_tenant_info(db: AsyncSession, current_user: User) -
 
 @router.get("", response_model=CandidateList)
 async def list_candidates(
+    request: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
@@ -113,11 +115,20 @@ async def list_candidates(
     )
 
     if search:
+        await enforce_endpoint_rate_limit(
+            request,
+            scope="candidate_search_user",
+            identifier=str(current_user.id),
+            limit=30,
+            window_seconds=60,
+            detail="Candidate search rate limit exceeded. Please wait a minute.",
+        )
+        safe_search = search.strip()[:100]
         search_filter = (
-            Candidate.first_name.ilike(f"%{search}%") |
-            Candidate.last_name.ilike(f"%{search}%") |
-            Candidate.email.ilike(f"%{search}%") |
-            Candidate.title.ilike(f"%{search}%")
+            Candidate.first_name.ilike(f"%{safe_search}%") |
+            Candidate.last_name.ilike(f"%{safe_search}%") |
+            Candidate.email.ilike(f"%{safe_search}%") |
+            Candidate.title.ilike(f"%{safe_search}%")
         )
         query = query.where(search_filter)
 
@@ -317,6 +328,7 @@ async def update_candidate_status(
 @router.post("/{candidate_id}/resume")
 async def upload_resume(
     candidate_id: UUID,
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
@@ -328,6 +340,14 @@ async def upload_resume(
     and update candidate profile fields.
     """
     _require_recruiter_workspace_access(current_user)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="resume_upload_user",
+        identifier=str(current_user.id),
+        limit=10,
+        window_seconds=60,
+        detail="Resume upload rate limit exceeded (max 10 per minute).",
+    )
 
     filename = (file.filename or "").strip()
     allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".rtf"}
@@ -550,6 +570,7 @@ async def get_candidate_resume_details(
 
 @router.post("/upload")
 async def intake_candidate_resume(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
@@ -561,6 +582,14 @@ async def intake_candidate_resume(
     and returns the fully populated candidate.
     """
     _require_recruiter_workspace_access(current_user)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="resume_upload_user",
+        identifier=str(current_user.id),
+        limit=10,
+        window_seconds=60,
+        detail="Resume upload rate limit exceeded (max 10 per minute).",
+    )
 
     filename = (file.filename or "").strip()
     allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".rtf"}
