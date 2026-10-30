@@ -45,7 +45,7 @@ export const candidatesService = {
       responseType: "blob",
     });
     const blob = new Blob([response.data], {
-      type: response.headers["content-type"] || "application/octet-stream",
+      type: String(response.headers["content-type"] || "application/octet-stream"),
     });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
