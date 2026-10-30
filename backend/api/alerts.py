@@ -11,7 +11,7 @@ import asyncio
 import httpx
 import structlog
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 log = structlog.get_logger(__name__)
 
@@ -40,7 +40,7 @@ async def send_slack_alert(service: str, error: str):
                     {"title": "Service", "value": service.upper(), "short": True},
                     {"title": "Status", "value": "UNHEALTHY", "short": True},
                     {"title": "Error", "value": error, "short": False},
-                    {"title": "Timestamp", "value": datetime.utcnow().isoformat() + "Z", "short": True},
+                    {"title": "Timestamp", "value": datetime.now(timezone.utc).isoformat(), "short": True},
                     {"title": "Environment", "value": os.getenv("APP_ENV", "production"), "short": True},
                 ],
                 "footer": "DVT Talent AI Monitoring",
@@ -70,7 +70,7 @@ async def send_slack_recovery(service: str):
                 "fields": [
                     {"title": "Service", "value": service.upper(), "short": True},
                     {"title": "Status", "value": "HEALTHY", "short": True},
-                    {"title": "Timestamp", "value": datetime.utcnow().isoformat() + "Z", "short": True},
+                    {"title": "Timestamp", "value": datetime.now(timezone.utc).isoformat(), "short": True},
                 ],
                 "footer": "DVT Talent AI Monitoring",
             }

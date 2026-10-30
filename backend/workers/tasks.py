@@ -8,7 +8,7 @@ import uuid
 import structlog
 import asyncio
 from typing import Any, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 import redis
 import socket
@@ -71,7 +71,7 @@ def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: s
         r.publish(channel, json.dumps({
             "type": signal_type,
             "message": message,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "tenant_id": tenant_id,
             "payload": payload
         }))

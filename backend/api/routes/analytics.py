@@ -2,7 +2,7 @@
 DVT Talent AI — Analytics API
 Dashboard KPIs, funnel metrics, campaign performance
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,62 +24,39 @@ async def get_dashboard_kpis(
     current_user: User = Depends(get_current_user),
 ):
     """Main dashboard KPIs"""
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
     tenant_id = current_user.tenant_id
 
-    # Job Requisitions
-    jobs_total = (await db.execute(
-        select(func.count(Job.id)).where(Job.tenant_id == tenant_id)
-    )).scalar() or 0
-    jobs_active = (await db.execute(
-        select(func.count(Job.id)).where(
-            and_(Job.tenant_id == tenant_id, Job.is_active == True)
-        )
-    )).scalar() or 0
+    # Job Requisitions (single aggregate query)
+    jobs_total, jobs_active = (await db.execute(
+        select(
+            func.count(Job.id),
+            func.count(Job.id).filter(Job.is_active == True),
+        ).where(Job.tenant_id == tenant_id)
+    )).one()
 
-    # Candidates
-    candidates_total = (await db.execute(
-        select(func.count(Candidate.id)).where(Candidate.tenant_id == tenant_id)
-    )).scalar() or 0
-    candidates_new = (await db.execute(
-        select(func.count(Candidate.id)).where(
-            and_(Candidate.tenant_id == tenant_id, Candidate.created_at >= since)
-        )
-    )).scalar() or 0
-    candidates_placed = (await db.execute(
-        select(func.count(Candidate.id)).where(
-            and_(Candidate.tenant_id == tenant_id, Candidate.status == CandidateStatus.PLACED)
-        )
-    )).scalar() or 0
+    # Candidates (single aggregate query)
+    candidates_total, candidates_new, candidates_placed = (await db.execute(
+        select(
+            func.count(Candidate.id),
+            func.count(Candidate.id).filter(Candidate.created_at >= since),
+            func.count(Candidate.id).filter(Candidate.status == CandidateStatus.PLACED),
+        ).where(Candidate.tenant_id == tenant_id)
+    )).one()
 
-    # Emails
-    emails_sent = (await db.execute(
-        select(func.count(EmailSent.id)).where(
+    # Emails (single aggregate query)
+    emails_sent, emails_opened, emails_replied = (await db.execute(
+        select(
+            func.count(EmailSent.id).filter(EmailSent.status != EmailStatus.DRAFT),
+            func.count(EmailSent.id).filter(EmailSent.status == EmailStatus.OPENED),
+            func.count(EmailSent.id).filter(EmailSent.status == EmailStatus.REPLIED),
+        ).where(
             and_(
                 EmailSent.tenant_id == tenant_id,
                 EmailSent.created_at >= since,
-                EmailSent.status != EmailStatus.DRAFT
             )
         )
-    )).scalar() or 0
-    emails_opened = (await db.execute(
-        select(func.count(EmailSent.id)).where(
-            and_(
-                EmailSent.tenant_id == tenant_id,
-                EmailSent.created_at >= since,
-                EmailSent.status == EmailStatus.OPENED
-            )
-        )
-    )).scalar() or 0
-    emails_replied = (await db.execute(
-        select(func.count(EmailSent.id)).where(
-            and_(
-                EmailSent.tenant_id == tenant_id,
-                EmailSent.created_at >= since,
-                EmailSent.status == EmailStatus.REPLIED
-            )
-        )
-    )).scalar() or 0
+    )).one()
 
     # Interviews
     interviews_scheduled = (await db.execute(
@@ -125,16 +102,13 @@ async def get_candidate_funnel(
     current_user: User = Depends(get_current_user),
 ):
     """Candidate pipeline funnel breakdown"""
-    stages = [s.value for s in CandidateStatus]
-    funnel = []
-    for stage in stages:
-        count = (await db.execute(
-            select(func.count(Candidate.id)).where(
-                and_(Candidate.tenant_id == current_user.tenant_id, Candidate.status == stage)
-            )
-        )).scalar() or 0
-        funnel.append({"stage": stage, "count": count})
-    return {"funnel": funnel}
+    rows = (await db.execute(
+        select(Candidate.status, func.count(Candidate.id))
+        .where(Candidate.tenant_id == current_user.tenant_id)
+        .group_by(Candidate.status)
+    )).all()
+    counts = {(s.value if hasattr(s, "value") else s): c for s, c in rows}
+    return {"funnel": [{"stage": s.value, "count": counts.get(s.value, 0)} for s in CandidateStatus]}
 
 
 @router.get("/email-performance")
@@ -144,7 +118,7 @@ async def get_email_performance(
     current_user: User = Depends(get_current_user),
 ):
     """Daily email performance over time"""
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
     # Group by day
     result = await db.execute(
         select(

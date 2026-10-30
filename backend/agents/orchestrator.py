@@ -4,7 +4,7 @@ Coordinates the 5 core agents in a streamlined pipeline.
 """
 import asyncio
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import structlog
 import httpx
 
@@ -153,7 +153,7 @@ class AgentOrchestrator:
         enable_microsite: bool = False,
         mock_mode: bool = False
     ) -> Dict[str, Any]:
-        pipeline_start = datetime.utcnow()
+        pipeline_start = datetime.now(timezone.utc)
         log.info("unified_pipeline_started", industry=industry, location=location)
         
         results = {"stages": {}}
@@ -282,7 +282,7 @@ class AgentOrchestrator:
                 log.error("pipeline_failed", error=str(e))
                 results["error"] = str(e)
 
-        results["duration_seconds"] = (datetime.utcnow() - pipeline_start).total_seconds()
+        results["duration_seconds"] = (datetime.now(timezone.utc) - pipeline_start).total_seconds()
         return results
 
 

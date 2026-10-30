@@ -151,6 +151,7 @@ async def test_full_multi_system_resurrection_prevention(db_session):
         redis_live = False
         r = MagicMock()
         _mem_cache = {}
+        r.ping.return_value = True
         r.set.side_effect = lambda k, v: _mem_cache.__setitem__(k, v)
         r.exists.side_effect = lambda k: 1 if k in _mem_cache else 0
         r.delete.side_effect = lambda *ks: [ _mem_cache.pop(k, None) for k in ks ]
@@ -159,58 +160,54 @@ async def test_full_multi_system_resurrection_prevention(db_session):
     r.set(cache_key, "cached_candidate_pii_data")
     assert r.exists(cache_key) == 1
 
-    # 3. Erase candidate
-    if not redis_live:
-        with patch("redis.from_url", return_value=r):
-            res = await erase_candidate_personal_data(
-                candidate_id=candidate_id,
-                db=db_session,
-                requesting_user=admin,
-            )
-    else:
+    from contextlib import nullcontext
+    redis_ctx = nullcontext() if redis_live else patch("redis.from_url", return_value=r)
+
+    with redis_ctx:
+        # 3. Erase candidate
         res = await erase_candidate_personal_data(
             candidate_id=candidate_id,
             db=db_session,
             requesting_user=admin,
         )
-    assert res["status"] == "erased"
-    assert resume_path.exists() is False
-    assert r.exists(cache_key) == 0
+        assert res["status"] == "erased"
+        assert resume_path.exists() is False
+        assert r.exists(cache_key) == 0
 
-    # 4. Simulate complete multi-system restoration of pre-erasure backups:
-    # 4a. Restore DB row
-    c_db = (await db_session.execute(select(Candidate).where(Candidate.id == candidate_id))).scalar_one()
-    c_db.pii_erased = False
-    c_db.first_name = "Resurrected Bob"
-    c_db.email = f"bob.prebackup_{run_id}@test.local"
-    await db_session.commit()
+        # 4. Simulate complete multi-system restoration of pre-erasure backups:
+        # 4a. Restore DB row
+        c_db = (await db_session.execute(select(Candidate).where(Candidate.id == candidate_id))).scalar_one()
+        c_db.pii_erased = False
+        c_db.first_name = "Resurrected Bob"
+        c_db.email = f"bob.prebackup_{run_id}@test.local"
+        await db_session.commit()
 
-    # 4b. Restore physical resume file on disk
-    restored_url = ResumeParserService.save_resume_file(
-        str(candidate_id), str(resume_id), f"test_resume_{run_id}.pdf", b"RESTORED RESUME CONTENT"
-    )
-    restored_path = Path(restored_url)
-    assert restored_path.exists()
+        # 4b. Restore physical resume file on disk
+        restored_url = ResumeParserService.save_resume_file(
+            str(candidate_id), str(resume_id), f"test_resume_{run_id}.pdf", b"RESTORED RESUME CONTENT"
+        )
+        restored_path = Path(restored_url)
+        assert restored_path.exists()
 
-    # 4c. Restore Redis cache
-    r.set(cache_key, "resurrected_cache_data")
-    assert r.exists(cache_key) == 1
+        # 4c. Restore Redis cache
+        r.set(cache_key, "resurrected_cache_data")
+        assert r.exists(cache_key) == 1
 
-    # 5. Run post-restore reconciliation
-    reconcile_res = await reconcile_post_restore_erasures(db_session)
-    assert reconcile_res["resurrected_found"] >= 1
-    assert reconcile_res["files_deleted"] >= 1
-    assert reconcile_res["caches_purged"] >= 1
+        # 5. Run post-restore reconciliation
+        reconcile_res = await reconcile_post_restore_erasures(db_session)
+        assert reconcile_res["resurrected_found"] >= 1
+        assert reconcile_res["files_deleted"] >= 1
+        assert reconcile_res["caches_purged"] >= 1
 
-    # 6. Verify across all systems
-    # DB sanitized
-    c_final = (await db_session.execute(select(Candidate).where(Candidate.id == candidate_id))).scalar_one()
-    assert c_final.pii_erased is True
-    assert c_final.first_name == "Erased"
-    # File removed
-    assert restored_path.exists() is False
-    # Cache purged
-    assert r.exists(cache_key) == 0
+        # 6. Verify across all systems
+        # DB sanitized
+        c_final = (await db_session.execute(select(Candidate).where(Candidate.id == candidate_id))).scalar_one()
+        assert c_final.pii_erased is True
+        assert c_final.first_name == "Erased"
+        # File removed
+        assert restored_path.exists() is False
+        # Cache purged
+        assert r.exists(cache_key) == 0
 
 
 @pytest.mark.asyncio

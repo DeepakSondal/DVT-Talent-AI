@@ -17,12 +17,14 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 @pytest.fixture(autouse=True)
 async def ensure_db_tables():
     from db.models import engine, Base
+    from api.middleware.audit_log import drain_audit_log_tasks
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     except Exception:
         pass
     yield
+    await drain_audit_log_tasks()
 
 
 @pytest.fixture
@@ -34,7 +36,6 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 @pytest.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     from httpx import ASGITransport
-    from api.middleware.audit_log import drain_audit_log_tasks
     async def override_get_db():
         yield db_session
 
@@ -44,7 +45,6 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             yield ac
     finally:
-        await drain_audit_log_tasks()
         app.dependency_overrides.pop(get_db, None)
 
 

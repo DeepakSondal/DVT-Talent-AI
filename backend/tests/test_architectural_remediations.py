@@ -107,7 +107,7 @@ async def test_llm_guardrail_rate_limiting_and_circuit():
     mock_pipeline.expire = MagicMock()
     mock_pipeline.incrby = MagicMock()
     mock_pipeline.execute = AsyncMock(return_value=[1, True, 500, True])
-    mock_redis.pipeline.return_value = mock_pipeline
+    mock_redis.pipeline = MagicMock(return_value=mock_pipeline)
     
     async def mock_get(key):
         return store.get(key)

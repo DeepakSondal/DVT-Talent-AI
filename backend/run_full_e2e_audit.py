@@ -113,52 +113,19 @@ async def run_e2e_audit():
         dash_res = await client.get("/api/v1/analytics/dashboard?days=30", headers=headers)
         if dash_res.status_code == 200:
             d = dash_res.json()
-            record(wf, "Main Dashboard KPIs", "PASSED", "Retrieved scoped KPI summary", f"Companies: {d['companies']['total']}, Candidates: {d['candidates']['total']}")
+            record(wf, "Main Dashboard KPIs", "PASSED", "Retrieved scoped KPI summary", f"Jobs: {d['jobs']['total']}, Candidates: {d['candidates']['total']}")
         else:
             record(wf, "Main Dashboard KPIs", "FAILED", f"Failed with {dash_res.status_code}", dash_res.text)
 
-        lf_res = await client.get("/api/v1/analytics/lead-funnel", headers=headers)
         cf_res = await client.get("/api/v1/analytics/candidate-funnel", headers=headers)
-        if lf_res.status_code == 200 and cf_res.status_code == 200:
-            record(wf, "Pipeline Funnel Breakdown", "PASSED", "Lead and Candidate funnels computed cleanly", f"Lead stages: {len(lf_res.json().get('funnel', []))}")
+        if cf_res.status_code == 200:
+            record(wf, "Pipeline Funnel Breakdown", "PASSED", "Candidate funnel computed cleanly", f"Candidate stages: {len(cf_res.json().get('funnel', []))}")
         else:
-            record(wf, "Pipeline Funnel Breakdown", "FAILED", f"Funnels failed: {lf_res.status_code}, {cf_res.status_code}", lf_res.text)
+            record(wf, "Pipeline Funnel Breakdown", "FAILED", f"Funnel failed: {cf_res.status_code}", cf_res.text)
 
 
-        # ─── WORKFLOW 3: SALES LEAD DISCOVERY & COMPANY RESEARCH ──────────────
-        wf = "3. Sales Lead Discovery"
-        # 3.1 Company Creation
-        comp_payload = {
-            "name": f"Acme AI Technologies {uuid.uuid4().hex[:4]}",
-            "domain": f"acme-{uuid.uuid4().hex[:4]}.io",
-            "industry": "Artificial Intelligence",
-            "size": "50-200",
-            "location": "San Francisco, CA",
-            "description": "Autonomous agents for enterprise recruiting."
-        }
-        comp_res = await client.post("/api/v1/companies", json=comp_payload, headers=headers)
-        comp_id = None
-        if comp_res.status_code == 201:
-            comp_id = comp_res.json().get("id")
-            record(wf, "Company Creation & Tenant Scoping", "PASSED", "Company created and assigned to tenant", f"Company ID: {comp_id}")
-        else:
-            record(wf, "Company Creation & Tenant Scoping", "FAILED", f"Failed: {comp_res.status_code}", comp_res.text)
-
-        # 3.2 Lead Creation
-        if comp_id:
-            lead_payload = {
-                "company_id": comp_id,
-                "status": "new",
-                "notes": "Target account for Q4 outbound campaign.",
-                "value_estimate": 45000.0
-            }
-            lead_res = await client.post("/api/v1/leads", json=lead_payload, headers=headers)
-            if lead_res.status_code == 201:
-                record(wf, "Lead Pipeline Intake", "PASSED", "Lead successfully created in sales pipeline", f"Lead ID: {lead_res.json().get('id')}")
-            else:
-                record(wf, "Lead Pipeline Intake", "FAILED", f"Failed: {lead_res.status_code}", lead_res.text)
-
-        # 3.3 Monitoring Signals Retrieval
+        # ─── WORKFLOW 3: HIRING SIGNAL MONITORING ──────────────────────────────
+        wf = "3. Hiring Signal Monitoring"
         sig_res = await client.get("/api/v1/monitoring/signals/recent?limit=10", headers=headers)
         if sig_res.status_code == 200:
             record(wf, "Hiring Signal Monitoring Intake", "PASSED", "Recent market signals retrieved successfully", f"Retrieved {len(sig_res.json())} signals")
@@ -171,7 +138,6 @@ async def run_e2e_audit():
         # 4.1 Job Creation
         job_payload = {
             "title": "Principal AI Systems Architect",
-            "company_id": comp_id,
             "description": "Design distributed LLM inference systems and agent orchestrators.",
             "skills_required": ["Python", "FastAPI", "PostgreSQL", "PyTorch"],
             "remote": True,

@@ -6,7 +6,7 @@ import pytest
 import uuid
 from httpx import AsyncClient, ASGITransport
 from main import app
-from db.models import Tenant, User, Candidate, Job, UserRole
+from db.models import Tenant, User, Candidate, CandidateStatus, Job, UserRole
 from api.routes.auth import create_access_token
 
 @pytest.mark.asyncio
@@ -66,7 +66,10 @@ async def test_analytics_funnels_and_performance(db_session):
         tenant_id=t.id,
         hashed_password="mock"
     )
-    db_session.add(u)
+    c1 = Candidate(first_name="S1", last_name="Fun", email=f"s1_{uuid.uuid4().hex[:6]}@tfun.com", tenant_id=t.id, status=CandidateStatus.SOURCED)
+    c2 = Candidate(first_name="S2", last_name="Fun", email=f"s2_{uuid.uuid4().hex[:6]}@tfun.com", tenant_id=t.id, status=CandidateStatus.SOURCED)
+    c3 = Candidate(first_name="P1", last_name="Fun", email=f"p1_{uuid.uuid4().hex[:6]}@tfun.com", tenant_id=t.id, status=CandidateStatus.PLACED)
+    db_session.add_all([u, c1, c2, c3])
     await db_session.commit()
 
     token = create_access_token({"sub": str(u.id), "tenant_id": str(t.id)})
@@ -76,8 +79,14 @@ async def test_analytics_funnels_and_performance(db_session):
         # Candidate funnel
         cf = await ac.get("/api/v1/analytics/candidate-funnel", headers=headers)
         assert cf.status_code == 200
-        assert "funnel" in cf.json()
-        assert isinstance(cf.json()["funnel"], list)
+        funnel = cf.json()["funnel"]
+        assert isinstance(funnel, list)
+        stage_map = {item["stage"]: item["count"] for item in funnel}
+        assert stage_map[CandidateStatus.SOURCED.value] == 2
+        assert stage_map[CandidateStatus.PLACED.value] == 1
+        for status in CandidateStatus:
+            if status not in (CandidateStatus.SOURCED, CandidateStatus.PLACED):
+                assert stage_map[status.value] == 0
 
         # Email performance
         ep = await ac.get("/api/v1/analytics/email-performance?days=14", headers=headers)

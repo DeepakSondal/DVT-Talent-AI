@@ -7,7 +7,7 @@ import uuid
 import sys
 import os
 import bcrypt
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add backend root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -83,7 +83,7 @@ async def seed():
                 amount=5000,
                 type=CreditTransactionType.CREDIT,
                 description="Master Seed Credit Refill",
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
             session.add(transaction)
             print("  ✅ 5,000 Credits Verified/Refilled.")
