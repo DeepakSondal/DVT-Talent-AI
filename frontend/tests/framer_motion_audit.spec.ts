@@ -61,13 +61,15 @@ test.describe('Framer Motion Animation & App Router Safety Suite', () => {
     expect(candidatesContent).toContain('key="upload-resume-modal-backdrop"');
   });
 
-  test('test case 3: verifies GPU-accelerated progress bars and spring physics configuration', async () => {
-    const recruitingPath = path.resolve(__dirname, '../src/app/dashboard/recruiting/page.tsx');
-    const recruitingContent = fs.readFileSync(recruitingPath, 'utf8');
+  test('test case 3: verifies GPU-accelerated motion and spring physics configuration', async () => {
+    const screeningPath = path.resolve(__dirname, '../src/app/dashboard/screening/page.tsx');
+    const screeningContent = fs.readFileSync(screeningPath, 'utf8');
 
-    // recruiting progress bar uses scaleX + originX (GPU-accelerated) rather than width
-    expect(recruitingContent).toContain('scaleX');
-    expect(recruitingContent).toContain('originX: 0');
+    // AI screening view uses spring physics and reduced motion checks
+    expect(screeningContent).toContain('useReducedMotion');
+    expect(screeningContent).toContain('springTransition');
+    expect(screeningContent).toContain('stiffness: 400');
+    expect(screeningContent).toContain('damping: 30');
 
     // Portal layout includes useReducedMotion import
     const portalLayoutPath = path.resolve(__dirname, '../src/app/portal/layout.tsx');

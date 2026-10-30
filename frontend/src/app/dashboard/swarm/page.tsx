@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
     Zap, Rocket, Target, Mail, ShieldCheck, 
@@ -58,6 +58,22 @@ export default function SwarmCommandCenter() {
 
     const wsRef = useRef<WebSocket | null>(null);
 
+    const updateAgentStatus = useCallback((id: string, status: AgentStatus) => {
+        setAgents(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    }, []);
+
+    const handleSignal = useCallback((signal: any) => {
+        setLogs(prev => [...prev.slice(-50), `> ${signal.message || JSON.stringify(signal)}`]);
+        
+        if (signal.type === "agent_start") {
+            const agentId = signal.message?.match(/'([^']+)'/)?.[1];
+            if (agentId) updateAgentStatus(agentId, "thinking");
+        } else if (signal.type === "agent_success") {
+            const agentId = signal.message?.match(/'([^']+)'/)?.[1];
+            if (agentId) updateAgentStatus(agentId, "success");
+        }
+    }, [updateAgentStatus]);
+
     useEffect(() => {
         const token = localStorage.getItem("dvt_token");
         if (!token) return;
@@ -83,23 +99,7 @@ export default function SwarmCommandCenter() {
         } catch (err) {
             console.log("WebSocket fallback mode");
         }
-    }, []);
-
-    const handleSignal = (signal: any) => {
-        setLogs(prev => [...prev.slice(-50), `> ${signal.message || JSON.stringify(signal)}`]);
-        
-        if (signal.type === "agent_start") {
-            const agentId = signal.message?.match(/'([^']+)'/)?.[1];
-            if (agentId) updateAgentStatus(agentId, "thinking");
-        } else if (signal.type === "agent_success") {
-            const agentId = signal.message?.match(/'([^']+)'/)?.[1];
-            if (agentId) updateAgentStatus(agentId, "success");
-        }
-    };
-
-    const updateAgentStatus = (id: string, status: AgentStatus) => {
-        setAgents(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-    };
+    }, [handleSignal]);
 
     const toggleAgentEnabled = (id: string) => {
         setAgents(prev => prev.map(a => {

@@ -7,8 +7,9 @@ const Avatar = ({ children, className }: { children: React.ReactNode, className?
   </div>
 )
 
-const AvatarImage = ({ src, className }: { src: string, className?: string }) => (
-  <img src={src} className={cn("aspect-square h-full w-full", className)} />
+const AvatarImage = ({ src, alt = "Avatar", className }: { src: string, alt?: string, className?: string }) => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src={src} alt={alt} className={cn("aspect-square h-full w-full", className)} />
 )
 
 const AvatarFallback = ({ children, className }: { children: React.ReactNode, className?: string }) => (

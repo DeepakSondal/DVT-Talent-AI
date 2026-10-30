@@ -108,11 +108,12 @@ async def list_candidates(
 
     tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
 
-    query = select(Candidate).where(
+    # Base filter conditions
+    base_filters = [
         Candidate.tenant_id == current_user.tenant_id,
         Candidate.is_searchable != False,
         Candidate.pii_erased != True,
-    )
+    ]
 
     if search:
         await enforce_endpoint_rate_limit(
@@ -130,34 +131,51 @@ async def list_candidates(
             Candidate.email.ilike(f"%{safe_search}%") |
             Candidate.title.ilike(f"%{safe_search}%")
         )
-        query = query.where(search_filter)
+        base_filters.append(search_filter)
 
     if status:
-        query = query.where(Candidate.status == status)
+        base_filters.append(Candidate.status == status)
 
     if min_score is not None:
-        query = query.where(Candidate.score >= min_score)
+        base_filters.append(Candidate.score >= min_score)
 
     if source:
-        query = query.where(Candidate.source == source)
+        base_filters.append(Candidate.source == source)
 
-    query = query.order_by(desc(Candidate.score))
-    all_matching = (await db.execute(query)).scalars().all()
+    # Privacy Shield: evaluate employer blacklist only when recruiter has corporate domain or name
+    effective_filters = list(base_filters)
+    if tenant_domain or tenant_name:
+        blacklist_stmt = select(Candidate.id, Candidate.hide_from_companies).where(
+            *base_filters,
+            Candidate.hide_from_companies.isnot(None)
+        ).limit(500)
+        blacklist_rows = (await db.execute(blacklist_stmt)).all()
+        blocked_ids = [
+            row[0] for row in blacklist_rows
+            if not is_candidate_visible_to_recruiter(
+                candidate=type("CandidateStub", (), {"is_searchable": True, "hide_from_companies": row[1]})(),
+                recruiter_tenant_domain=tenant_domain,
+                recruiter_tenant_name=tenant_name,
+                recruiter_email=current_user.email,
+            )
+        ]
+        if blocked_ids:
+            effective_filters.append(Candidate.id.not_in(blocked_ids))
 
-    # Enforce candidate privacy shield: exclude candidates who are in stealth mode or have blacklisted this employer
-    visible_candidates = [
-        c for c in all_matching
-        if is_candidate_visible_to_recruiter(
-            candidate=c,
-            recruiter_tenant_domain=tenant_domain,
-            recruiter_tenant_name=tenant_name,
-            recruiter_email=current_user.email,
-        )
-    ]
+    # Compute total count via database SQL aggregate
+    count_query = select(func.count(Candidate.id)).where(*effective_filters)
+    total = (await db.execute(count_query)).scalar() or 0
 
-    total = len(visible_candidates)
+    # Bounded SQL pagination — fetch only the requested page slice
     start_idx = (page - 1) * page_size
-    paged_items = visible_candidates[start_idx : start_idx + page_size]
+    query = (
+        select(Candidate)
+        .where(*effective_filters)
+        .order_by(desc(Candidate.score))
+        .offset(start_idx)
+        .limit(page_size)
+    )
+    paged_items = (await db.execute(query)).scalars().all()
 
     return CandidateList(items=paged_items, total=total, page=page, page_size=page_size)
 

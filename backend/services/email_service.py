@@ -252,6 +252,34 @@ class EmailService:
             log.error("team_invitation_email_failed", to=to_address, error=str(e))
             return False
 
+    async def send_campaign(self, campaign_id: str) -> Dict[str, int]:
+        """Send all pending draft emails for a given campaign."""
+        from db.models import EmailCampaign
+        cid = uuid.UUID(str(campaign_id))
+        sent, failed = 0, 0
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(
+                select(EmailSent).where(
+                    EmailSent.campaign_id == cid,
+                    EmailSent.status == EmailStatus.DRAFT,
+                )
+            )
+            emails = res.scalars().all()
+            for em in emails:
+                ok = await self.send_email(
+                    str(em.id), em.to_email, em.subject, em.body, tenant_id=em.tenant_id
+                )
+                if ok:
+                    sent += 1
+                else:
+                    failed += 1
+            if sent > 0:
+                camp = await session.get(EmailCampaign, cid)
+                if camp:
+                    camp.total_sent = (camp.total_sent or 0) + sent
+                    await session.commit()
+        return {"sent": sent, "failed": failed}
+
     async def process_incoming_webhook(self, payload: Dict[str, Any]) -> bool:
         """Track email replies via webhook (SendGrid Inbound Parse / Gmail Watcher)."""
         headers = payload.get("Headers", {})

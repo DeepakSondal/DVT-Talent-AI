@@ -6,6 +6,7 @@ import uuid
 import structlog
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, desc
 from pydantic import BaseModel, EmailStr
@@ -524,7 +525,7 @@ async def accept_team_invitation(
     }
     access_token = create_access_token(token_data)
 
-    return {
+    content = {
         "status": "success",
         "message": "Invitation accepted and account created successfully",
         "user": {
@@ -537,6 +538,16 @@ async def accept_team_invitation(
         "access_token": access_token,
         "token_type": "bearer",
     }
+    response = JSONResponse(content=content)
+    response.set_cookie(
+        key="dvt_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        max_age=settings.access_token_expire_minutes * 60,
+        samesite="lax",
+        secure=settings.is_production,
+    )
+    return response
 
 @router.get("/members")
 async def list_team_members(db: AsyncSession = Depends(get_db), manager: User = Depends(require_manager)):

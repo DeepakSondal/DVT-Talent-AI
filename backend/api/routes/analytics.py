@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 
 from db.models import (
-    Company, Lead, Candidate, EmailSent, Interview,
-    LeadStatus, CandidateStatus, EmailStatus, get_db
+    Job, Candidate, EmailSent, Interview,
+    CandidateStatus, EmailStatus, get_db
 )
 from api.routes.auth import get_current_user, User
 
@@ -27,28 +27,13 @@ async def get_dashboard_kpis(
     since = datetime.utcnow() - timedelta(days=days)
     tenant_id = current_user.tenant_id
 
-    # Companies discovered
-    companies_total = (await db.execute(
-        select(func.count(Company.id)).where(Company.tenant_id == tenant_id)
+    # Job Requisitions
+    jobs_total = (await db.execute(
+        select(func.count(Job.id)).where(Job.tenant_id == tenant_id)
     )).scalar() or 0
-    companies_new = (await db.execute(
-        select(func.count(Company.id)).where(
-            and_(Company.tenant_id == tenant_id, Company.created_at >= since)
-        )
-    )).scalar() or 0
-
-    # Leads
-    leads_total = (await db.execute(
-        select(func.count(Lead.id)).where(Lead.tenant_id == tenant_id)
-    )).scalar() or 0
-    leads_new = (await db.execute(
-        select(func.count(Lead.id)).where(
-            and_(Lead.tenant_id == tenant_id, Lead.created_at >= since)
-        )
-    )).scalar() or 0
-    leads_won = (await db.execute(
-        select(func.count(Lead.id)).where(
-            and_(Lead.tenant_id == tenant_id, Lead.status == LeadStatus.WON)
+    jobs_active = (await db.execute(
+        select(func.count(Job.id)).where(
+            and_(Job.tenant_id == tenant_id, Job.is_active == True)
         )
     )).scalar() or 0
 
@@ -107,20 +92,13 @@ async def get_dashboard_kpis(
 
     open_rate = round((emails_opened / emails_sent * 100) if emails_sent > 0 else 0, 1)
     reply_rate = round((emails_replied / emails_sent * 100) if emails_sent > 0 else 0, 1)
-    win_rate = round((leads_won / leads_total * 100) if leads_total > 0 else 0, 1)
     placement_rate = round((candidates_placed / candidates_total * 100) if candidates_total > 0 else 0, 1)
 
     return {
         "period_days": days,
-        "companies": {
-            "total": companies_total,
-            "new_this_period": companies_new,
-        },
-        "leads": {
-            "total": leads_total,
-            "new_this_period": leads_new,
-            "won": leads_won,
-            "win_rate": win_rate,
+        "jobs": {
+            "total": jobs_total,
+            "active": jobs_active,
         },
         "candidates": {
             "total": candidates_total,
@@ -139,24 +117,6 @@ async def get_dashboard_kpis(
             "scheduled": interviews_scheduled,
         },
     }
-
-
-@router.get("/lead-funnel")
-async def get_lead_funnel(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Lead pipeline funnel breakdown"""
-    stages = [s.value for s in LeadStatus]
-    funnel = []
-    for stage in stages:
-        count = (await db.execute(
-            select(func.count(Lead.id)).where(
-                and_(Lead.tenant_id == current_user.tenant_id, Lead.status == stage)
-            )
-        )).scalar() or 0
-        funnel.append({"stage": stage, "count": count})
-    return {"funnel": funnel}
 
 
 @router.get("/candidate-funnel")
@@ -215,26 +175,3 @@ async def get_email_performance(
             for r in rows
         ]
     }
-
-
-@router.get("/top-industries")
-async def get_top_industries(
-    limit: int = Query(10, ge=1, le=50),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Top industries by company count"""
-    result = await db.execute(
-        select(Company.industry, func.count(Company.id).label("count"))
-        .where(
-            and_(
-                Company.tenant_id == current_user.tenant_id,
-                Company.industry.isnot(None)
-            )
-        )
-        .group_by(Company.industry)
-        .order_by(func.count(Company.id).desc())
-        .limit(limit)
-    )
-    rows = result.all()
-    return {"industries": [{"industry": r.industry, "count": r.count} for r in rows]}

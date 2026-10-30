@@ -22,9 +22,8 @@ export interface Job {
   created_at: string;
 }
 
-
 export interface JobCreate {
-  company_id: string;
+  company_id?: string;
   title: string;
   description?: string;
   requirements?: string;

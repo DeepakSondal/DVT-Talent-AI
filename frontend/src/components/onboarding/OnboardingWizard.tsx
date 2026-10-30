@@ -378,6 +378,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                 <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden shrink-0 relative group">
                                                     {tenant.logo_url ? (
                                                         <>
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
                                                             <img 
                                                                 src={tenant.logo_url} 
                                                                 alt="Workspace Logo" 

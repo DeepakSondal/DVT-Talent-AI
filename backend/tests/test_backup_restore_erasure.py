@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 from datetime import datetime, timezone
 from sqlalchemy import select
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from config import settings
 from db.models import Candidate, CandidateStatus, Tenant, User, UserRole, Resume, AgentTask, AgentTaskStatus
@@ -142,18 +142,37 @@ async def test_full_multi_system_resurrection_prevention(db_session):
     db_session.add_all([tenant, admin, candidate, resume])
     await db_session.commit()
 
-    # 2. Populate Redis cache
-    r = redis.from_url(settings.redis_url)
+    # 2. Populate Redis cache (with mock fallback if local Redis is offline)
+    try:
+        r = redis.from_url(settings.redis_url, socket_timeout=0.1)
+        r.ping()
+        redis_live = True
+    except Exception:
+        redis_live = False
+        r = MagicMock()
+        _mem_cache = {}
+        r.set.side_effect = lambda k, v: _mem_cache.__setitem__(k, v)
+        r.exists.side_effect = lambda k: 1 if k in _mem_cache else 0
+        r.delete.side_effect = lambda *ks: [ _mem_cache.pop(k, None) for k in ks ]
+
     cache_key = f"candidate:{candidate_id}"
     r.set(cache_key, "cached_candidate_pii_data")
     assert r.exists(cache_key) == 1
 
     # 3. Erase candidate
-    res = await erase_candidate_personal_data(
-        candidate_id=candidate_id,
-        db=db_session,
-        requesting_user=admin,
-    )
+    if not redis_live:
+        with patch("redis.from_url", return_value=r):
+            res = await erase_candidate_personal_data(
+                candidate_id=candidate_id,
+                db=db_session,
+                requesting_user=admin,
+            )
+    else:
+        res = await erase_candidate_personal_data(
+            candidate_id=candidate_id,
+            db=db_session,
+            requesting_user=admin,
+        )
     assert res["status"] == "erased"
     assert resume_path.exists() is False
     assert r.exists(cache_key) == 0

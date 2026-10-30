@@ -34,14 +34,18 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 @pytest.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     from httpx import ASGITransport
+    from api.middleware.audit_log import drain_audit_log_tasks
     async def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-    app.dependency_overrides.pop(get_db, None)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+    finally:
+        await drain_audit_log_tasks()
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest_asyncio.fixture

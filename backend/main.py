@@ -47,7 +47,7 @@ if _sentry_dsn:
 
 from config import settings
 from db.models import Base, engine, get_db
-from api.routes import auth, auth_social, auth_sso, webhooks, monitoring, users, companies, leads, candidates, jobs, campaigns, analytics, agents, websocket, tenants, copilot, billing, integrations, email_sender, team, plg, compliance, candidate_portal
+from api.routes import auth, auth_social, webhooks, monitoring, users, candidates, jobs, campaigns, analytics, agents, websocket, tenants, copilot, billing, integrations, email_sender, team, compliance, candidate_portal
 from api.routes import health as health_routes
 
 log = structlog.get_logger()
@@ -132,11 +132,8 @@ PREFIX = "/api/v1"
 
 app.include_router(auth.router,       prefix=f"{PREFIX}/auth",       tags=["Authentication"])
 app.include_router(auth_social.router, prefix=f"{PREFIX}/auth",       tags=["Social Authentication"])
-app.include_router(auth_sso.router,    prefix=f"{PREFIX}/auth/sso",   tags=["Enterprise SSO"])
 app.include_router(tenants.router,    prefix=f"{PREFIX}/tenants",    tags=["Tenants"])
 app.include_router(users.router,      prefix=f"{PREFIX}/users",      tags=["Users"])
-app.include_router(companies.router,  prefix=f"{PREFIX}/companies",  tags=["Companies"])
-app.include_router(leads.router,      prefix=f"{PREFIX}/leads",      tags=["Leads"])
 app.include_router(candidates.router, prefix=f"{PREFIX}/candidates", tags=["Candidates"])
 app.include_router(jobs.router,       prefix=f"{PREFIX}/jobs",       tags=["Jobs"])
 app.include_router(campaigns.router,  prefix=f"{PREFIX}/campaigns",  tags=["Campaigns"])
@@ -152,8 +149,6 @@ app.include_router(integrations.router,   prefix=f"{PREFIX}/integrations",   tag
 app.include_router(email_sender.router,    prefix=PREFIX,                     tags=["Email Sender"])
 app.include_router(team.router,              prefix=PREFIX,                     tags=["Team Management"])
 app.include_router(candidate_portal.router, prefix=f"{PREFIX}/candidate-portal", tags=["Candidate Portal"])
-# PLG Trojan Horse deactivated per pivot to Recruiter + Candidate focus
-# app.include_router(plg.router,               prefix=PREFIX,                     tags=["PLG Trojan Horse"])
 app.include_router(health_routes.router, tags=["Health"])
 
 # ── Email Open Tracking (no auth — called by email clients) ──────────────

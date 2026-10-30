@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Briefcase, ArrowLeft, Save, Globe, 
@@ -9,7 +9,7 @@ import {
   AlertCircle, Plus, Target
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
-import { jobsApi, companiesApi, Company, JobCreate } from "@/lib/api";
+import { jobsApi, JobCreate } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -27,12 +27,9 @@ export default function CreateJobPage() {
   const transitionConfig = shouldReduceMotion ? { duration: 0 } : springPreset;
 
   const [loading, setLoading] = useState(false);
-  const [fetchingCompanies, setFetchingCompanies] = useState(true);
-  const [companies, setCompanies] = useState<Company[]>([]);
   
   const [formData, setFormData] = useState<Partial<JobCreate>>({
     title: "",
-    company_id: "",
     location: "Remote (USA)",
     remote: true,
     job_type: "full-time",
@@ -46,23 +43,6 @@ export default function CreateJobPage() {
 
   const [skillInput, setSkillInput] = useState("");
   const [formErrors, setFormErrors] = useState<FormErrorItem[]>([]);
-
-  useEffect(() => {
-    async function loadCompanies() {
-      try {
-        const data = await companiesApi.list();
-        setCompanies(data.items || []);
-        if (data.items && data.items.length > 0) {
-          setFormData(prev => ({ ...prev, company_id: data.items[0].id }));
-        }
-      } catch (err) {
-        toast.error("Could not load companies list.");
-      } finally {
-        setFetchingCompanies(false);
-      }
-    }
-    loadCompanies();
-  }, []);
 
   const handleAddSkill = (e: React.KeyboardEvent | React.MouseEvent) => {
     if (("key" in e && e.key === "Enter") || e.type === "click") {
@@ -94,13 +74,6 @@ export default function CreateJobPage() {
         field: "Job Title",
         message: "Please enter a role title for the requisition.",
         targetId: "job-title",
-      });
-    }
-    if (!formData.company_id) {
-      errors.push({
-        field: "Hiring Company",
-        message: "Please select an associated hiring organization.",
-        targetId: "job-company",
       });
     }
     if (formData.salary_min && formData.salary_max && formData.salary_min > formData.salary_max) {
@@ -149,32 +122,51 @@ export default function CreateJobPage() {
             href="/dashboard/jobs"
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors group text-xs font-semibold mb-2"
           >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Job Requisitions</span>
+            <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+            Back to Requisitions
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground break-words">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+            <Briefcase className="w-6 h-6 text-primary" />
             Create Job Requisition
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Define role requirements, compensation, and target skills for autonomous talent sourcing.
+          <p className="text-xs text-muted-foreground mt-1">
+            Publish an autonomous hiring mandate with hard constraints and automated talent sourcing.
           </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/dashboard/jobs")}
+            className="h-9 px-4 text-xs font-semibold border-border"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="h-9 px-4 text-xs font-semibold bg-primary hover:bg-primary/90 text-white shadow-sm flex items-center gap-2"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Publish Mandate
+          </Button>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <FormErrorSummary errors={formErrors} onClear={() => setFormErrors([])} />
+      <FormErrorSummary errors={formErrors} />
 
-        {/* Core Role Info */}
-        <Card className="p-6 sm:p-8 bg-card border-border rounded-3xl shadow-sm space-y-6">
-          <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 break-words min-w-0">
-            <Briefcase className="w-4 h-4 text-primary" />
-            Role Details
-          </h2>
+      <form onSubmit={handleSubmit} className="space-y-8">
+        {/* Core Attributes Card */}
+        <Card className="p-6 bg-card border-border shadow-sm space-y-6 rounded-2xl">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-sm font-bold text-foreground">Role Specifications</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Define title, location, compensation, and workplace arrangement.</p>
+          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5 sm:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-semibold text-foreground" htmlFor="job-title">
-                Job Title *
+                Role Title *
               </label>
               <input
                 id="job-title"
@@ -185,28 +177,6 @@ export default function CreateJobPage() {
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 className="w-full h-11 px-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground" htmlFor="job-company">
-                Hiring Company *
-              </label>
-              <select
-                id="job-company"
-                value={formData.company_id}
-                onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
-                disabled={fetchingCompanies}
-                className="w-full h-11 px-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
-              >
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-                {companies.length === 0 && (
-                  <option value="">No companies available</option>
-                )}
-              </select>
             </div>
 
             <div className="space-y-1.5">
@@ -228,193 +198,190 @@ export default function CreateJobPage() {
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground" htmlFor="job-location">
-                Primary Location
+                Target Location / Territory
               </label>
-              <input
-                id="job-location"
-                type="text"
-                placeholder="e.g. San Francisco, CA or Remote"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                className="w-full h-11 px-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground" htmlFor="job-experience">
-                Minimum Experience (Years)
-              </label>
-              <input
-                id="job-experience"
-                type="number"
-                min="0"
-                max="25"
-                value={formData.experience_years}
-                onChange={(e) => setFormData({ ...formData, experience_years: Number(e.target.value) })}
-                className="w-full h-11 px-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
-              />
-            </div>
-
-            <div className="sm:col-span-2 pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-foreground select-none">
+              <div className="relative">
+                <MapPin className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input
-                  type="checkbox"
-                  checked={formData.remote}
-                  onChange={(e) => setFormData({ ...formData, remote: e.target.checked })}
-                  className="rounded border-border w-4 h-4 text-primary focus:ring-primary"
+                  id="job-location"
+                  type="text"
+                  placeholder="e.g. San Francisco, CA or Remote (US)"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  className="w-full h-11 pl-10 pr-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
                 />
-                <span>Remote position eligible (Open to candidates working from anywhere)</span>
-              </label>
+              </div>
             </div>
-          </div>
-        </Card>
 
-        {/* Compensation & Target Skills */}
-        <Card className="p-6 sm:p-8 bg-card border-border rounded-3xl shadow-sm space-y-6">
-          <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 break-words min-w-0">
-            <DollarSign className="w-4 h-4 text-emerald-500" />
-            Compensation &amp; Target Competencies
-          </h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground" htmlFor="salary-min">
-                Minimum Base Salary ($ USD)
+                Salary Floor (USD / yr)
               </label>
-              <input
-                id="salary-min"
-                type="number"
-                step="5000"
-                placeholder="120000"
-                value={formData.salary_min || ""}
-                onChange={(e) => setFormData({ ...formData, salary_min: Number(e.target.value) || undefined })}
-                className="w-full h-11 px-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
-              />
+              <div className="relative">
+                <DollarSign className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  id="salary-min"
+                  type="number"
+                  step="5000"
+                  value={formData.salary_min}
+                  onChange={(e) => setFormData({ ...formData, salary_min: parseInt(e.target.value) || 0 })}
+                  className="w-full h-11 pl-10 pr-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
+                />
+              </div>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground" htmlFor="salary-max">
-                Maximum Base Salary ($ USD)
+                Salary Ceiling (USD / yr)
+              </label>
+              <div className="relative">
+                <DollarSign className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  id="salary-max"
+                  type="number"
+                  step="5000"
+                  value={formData.salary_max}
+                  onChange={(e) => setFormData({ ...formData, salary_max: parseInt(e.target.value) || 0 })}
+                  className="w-full h-11 pl-10 pr-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground" htmlFor="experience-years">
+                Minimum Experience (Years)
               </label>
               <input
-                id="salary-max"
+                id="experience-years"
                 type="number"
-                step="5000"
-                placeholder="180000"
-                value={formData.salary_max || ""}
-                onChange={(e) => setFormData({ ...formData, salary_max: Number(e.target.value) || undefined })}
+                min="0"
+                max="30"
+                value={formData.experience_years}
+                onChange={(e) => setFormData({ ...formData, experience_years: parseInt(e.target.value) || 0 })}
                 className="w-full h-11 px-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
               />
             </div>
 
-            {/* Target Skills Tag Input */}
-            <div className="space-y-2 sm:col-span-2 pt-2">
-              <label className="text-xs font-semibold text-foreground" htmlFor="skill-input">
-                Required Technical Competencies (Press Enter or click Add)
-              </label>
-              <div className="flex gap-2">
+            <div className="flex items-center gap-3 pt-6">
+              <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
                 <input
-                  id="skill-input"
-                  type="text"
-                  placeholder="e.g. Go, Kubernetes, Kafka, gRPC"
-                  value={skillInput}
-                  onChange={(e) => setSkillInput(e.target.value)}
-                  onKeyDown={handleAddSkill}
-                  className="flex-1 h-11 px-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
+                  type="checkbox"
+                  checked={formData.remote}
+                  onChange={(e) => setFormData({ ...formData, remote: e.target.checked })}
+                  className="w-4 h-4 rounded text-primary border-border focus:ring-primary"
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleAddSkill}
-                  className="h-11 px-4 text-xs font-semibold rounded-xl whitespace-nowrap"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> Add Skill
-                </Button>
-              </div>
-
-              {/* Tag Cloud */}
-              <div className="flex flex-wrap gap-2 pt-1">
-                {formData.skills_required?.map((skill) => (
-                  <span
-                    key={skill}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 text-xs font-medium"
-                  >
-                    <span>{skill}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeSkill(skill)}
-                      className="hover:text-destructive"
-                      aria-label={`Remove ${skill}`}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
+                100% Remote Eligible Role
+              </label>
             </div>
           </div>
         </Card>
 
-        {/* Job Description & Requirements Text */}
-        <Card className="p-6 sm:p-8 bg-card border-border rounded-3xl shadow-sm space-y-4">
-          <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center gap-2 break-words min-w-0">
-            <Building2 className="w-4 h-4 text-primary" />
-            Job Description &amp; Core Duties
-          </h2>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground" htmlFor="job-description">
-              Role Summary &amp; Overview
-            </label>
-            <textarea
-              id="job-description"
-              rows={4}
-              placeholder="Describe the team mission, core architecture, and day-to-day impact..."
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full p-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors resize-y leading-relaxed"
-            />
+        {/* Required Skills Matrix */}
+        <Card className="p-6 bg-card border-border shadow-sm space-y-4 rounded-2xl">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-sm font-bold text-foreground">Target Skills &amp; Competencies</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Used by the autonomous discovery &amp; sourcing agents to match talent.</p>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground" htmlFor="job-requirements">
-              Key Requirements &amp; Qualifications
-            </label>
-            <textarea
-              id="job-requirements"
-              rows={4}
-              placeholder="List specific technical qualifications, system scale achievements, and background requirements..."
-              value={formData.requirements}
-              onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
-              className="w-full p-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors resize-y leading-relaxed"
-            />
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Add skill (e.g. Distributed Systems, Kubernetes, Go) and press Enter"
+                value={skillInput}
+                onChange={(e) => setSkillInput(e.target.value)}
+                onKeyDown={handleAddSkill}
+                className="flex-1 h-11 px-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddSkill}
+                className="h-11 px-4 text-xs font-semibold rounded-xl border-border"
+              >
+                <Plus className="w-4 h-4 mr-1" /> Add
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-2">
+              {formData.skills_required?.map((skill) => (
+                <Badge
+                  key={skill}
+                  variant="secondary"
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 bg-muted border border-border"
+                >
+                  {skill}
+                  <button
+                    type="button"
+                    onClick={() => removeSkill(skill)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </Badge>
+              ))}
+              {(!formData.skills_required || formData.skills_required.length === 0) && (
+                <span className="text-xs text-muted-foreground italic">No skills added yet. Add at least 1-2 skills for sourcing precision.</span>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        {/* Job Description & Requirements */}
+        <Card className="p-6 bg-card border-border shadow-sm space-y-6 rounded-2xl">
+          <div className="border-b border-border pb-4">
+            <h2 className="text-sm font-bold text-foreground">Role Context &amp; Description</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Provide detailed responsibilities and qualifications for candidate briefing.</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground" htmlFor="job-description">
+                Overview &amp; Mission
+              </label>
+              <textarea
+                id="job-description"
+                rows={5}
+                placeholder="Describe the company mission, team context, and core responsibilities for this opening..."
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full p-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors leading-relaxed"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground" htmlFor="job-requirements">
+                Mandatory Requirements &amp; Qualifications
+              </label>
+              <textarea
+                id="job-requirements"
+                rows={4}
+                placeholder="List educational background, certifications, technical stack depth, or required years of experience..."
+                value={formData.requirements}
+                onChange={(e) => setFormData({ ...formData, requirements: e.target.value })}
+                className="w-full p-3.5 rounded-xl border border-border bg-muted/40 text-sm text-foreground focus:border-primary focus:bg-background transition-colors leading-relaxed"
+              />
+            </div>
           </div>
         </Card>
 
         {/* Submit Actions */}
-        <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
-          <Link href="/dashboard/jobs">
-            <Button variant="ghost" className="w-full sm:w-auto h-11 px-6 rounded-xl text-xs font-semibold whitespace-nowrap">
-              Cancel
-            </Button>
-          </Link>
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
           <Button
-            id="publish-requisition-btn"
+            type="button"
+            variant="outline"
+            onClick={() => router.push("/dashboard/jobs")}
+            className="h-10 px-5 text-xs font-semibold border-border"
+          >
+            Cancel
+          </Button>
+          <Button
             type="submit"
             disabled={loading}
-            className="w-full sm:w-auto h-11 px-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-md shadow-primary/20 gap-2 whitespace-nowrap"
+            className="h-10 px-6 text-xs font-semibold bg-primary hover:bg-primary/90 text-white shadow-sm flex items-center gap-2"
           >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Publishing Requisition...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <Target className="w-4 h-4" />
-                Publish &amp; Activate Sourcing Swarm
-              </span>
-            )}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Publish Job Requisition
           </Button>
         </div>
       </form>

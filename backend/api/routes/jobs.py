@@ -21,7 +21,7 @@ def _require_jobs_access(current_user: User, write: bool = False) -> None:
         raise HTTPException(status_code=403, detail="Recruiter, manager, or admin permissions required to modify jobs.")
 
 class JobCreate(BaseModel):
-    company_id: UUID
+    company_id: Optional[UUID] = None
     title: str
     description: Optional[str] = None
     requirements: Optional[str] = None

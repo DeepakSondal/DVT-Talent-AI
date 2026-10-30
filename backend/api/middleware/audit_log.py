@@ -1,12 +1,25 @@
 import time
 import json
 import uuid
+import asyncio
+from typing import Set
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from db.models import AsyncSessionLocal, AuditLog
 import structlog
 
 log = structlog.get_logger(__name__)
+
+# Active background audit tasks registry for lifecycle management & clean test teardown
+_active_audit_tasks: Set[asyncio.Task] = set()
+
+async def drain_audit_log_tasks(timeout: float = 3.0) -> None:
+    """Drain in-flight audit log tasks before shutting down or ending an async test."""
+    if not _active_audit_tasks:
+        return
+    pending = [t for t in list(_active_audit_tasks) if not t.done()]
+    if pending:
+        await asyncio.wait(pending, timeout=timeout)
 
 # List of sensitive root paths to log specifically (read or write)
 SENSITIVE_PATHS = [
@@ -99,18 +112,25 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                     }
                 }
 
-                import asyncio
-
                 async def _save_audit_background(kwargs: dict):
                     try:
                         async with AsyncSessionLocal() as session:
                             audit_entry = AuditLog(**kwargs)
                             session.add(audit_entry)
                             await session.commit()
+                    except (asyncio.CancelledError, GeneratorExit):
+                        pass
                     except Exception as err:
                         log.warning("audit_log_background_failed", error=str(err))
 
-                asyncio.create_task(_save_audit_background(entry_kwargs))
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_running() and not loop.is_closed():
+                        task = loop.create_task(_save_audit_background(entry_kwargs))
+                        _active_audit_tasks.add(task)
+                        task.add_done_callback(_active_audit_tasks.discard)
+                except RuntimeError:
+                    pass
             except Exception as e:
                 # Never block the actual request due to audit logging failure
                 log.error("audit_log_failed", error=str(e))

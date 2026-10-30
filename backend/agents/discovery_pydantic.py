@@ -92,15 +92,6 @@ async def search_market_signals(ctx: RunContext[AgentDeps], query: str) -> str:
         return f"Market signal search temporary error ({str(e)}). Synthesize requirements using provided Market IQ data."
 
 @discovery_agent.tool
-async def research_company_deep_dive(ctx: RunContext[AgentDeps], research_goal: str) -> str:
-    """
-    Launches an autonomous browser to find 'hidden' info about a company's hiring status.
-    Goal Example: 'Find the current engineering headcount and open roles at TechCorp'
-    """
-    from agents.tools.browser_tools import browser_tool
-    return await browser_tool.execute_goal(research_goal)
-
-@discovery_agent.tool
 async def analyze_talent_hotspots(ctx: RunContext[AgentDeps], job_title: str) -> Dict[str, Any]:
     """
     Estimates salary bands and talent density for a specific role based on market averages.

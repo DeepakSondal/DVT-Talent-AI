@@ -142,10 +142,10 @@ test.describe('Dodo Payments Webhook Event Handlers', () => {
     try {
       delete process.env.DODO_PAYMENTS_WEBHOOK_KEY;
       delete process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
-      process.env.NODE_ENV = "production";
+      (process.env as any).NODE_ENV = "production";
       expect(() => getDodoWebhookKey()).toThrow(/must be configured in production/);
     } finally {
-      process.env.NODE_ENV = originalNodeEnv;
+      (process.env as any).NODE_ENV = originalNodeEnv;
       if (originalKey !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_KEY = originalKey;
       if (originalSecret !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_SECRET = originalSecret;
     }
@@ -158,7 +158,7 @@ test.describe('Dodo Payments Webhook Event Handlers', () => {
     try {
       delete process.env.DODO_PAYMENTS_WEBHOOK_KEY;
       delete process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
-      process.env.NODE_ENV = "development";
+      (process.env as any).NODE_ENV = "development";
       const key = getDodoWebhookKey();
       expect(typeof key).toBe("string");
       expect(key.length).toBeGreaterThan(0);
@@ -167,7 +167,7 @@ test.describe('Dodo Payments Webhook Event Handlers', () => {
       const decoded = Buffer.from(key, "base64").toString("utf-8");
       expect(decoded).toBe("dodo_dev_unconfigured_webhook_key");
     } finally {
-      process.env.NODE_ENV = originalNodeEnv;
+      (process.env as any).NODE_ENV = originalNodeEnv;
       if (originalKey !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_KEY = originalKey;
       if (originalSecret !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_SECRET = originalSecret;
     }

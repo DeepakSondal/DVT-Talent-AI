@@ -33,18 +33,12 @@ async def run_pydantic_pulse_test():
             self.data = data
 
     # Define some dummy data that matches our Pydantic models
-    with patch("agents.market_iq_pydantic.market_iq_agent.run", new_callable=AsyncMock) as mock_iq, \
-         patch("agents.discovery_pydantic.discovery_agent.run", new_callable=AsyncMock) as mock_disc, \
+    with patch("agents.discovery_pydantic.discovery_agent.run", new_callable=AsyncMock) as mock_disc, \
          patch("agents.sourcing_pydantic.sourcing_agent.run", new_callable=AsyncMock) as mock_sour, \
          patch("agents.critic_pydantic.critic_agent.run", new_callable=AsyncMock) as mock_crit, \
          patch("agents.outreach_pydantic.outreach_agent.run", new_callable=AsyncMock) as mock_out, \
          patch("agents.analytics_pydantic.analytics_agent.run", new_callable=AsyncMock) as mock_anal:
 
-        # Mock Market IQ
-        mock_iq.return_value = MockResult(data=AsyncMock(
-            model_dump=lambda: {"industry": "AI", "trends": []}
-        ))
-        
         # Mock Discovery
         mock_disc.return_value = MockResult(data=AsyncMock(
             model_dump=lambda: {"job_description": "Senior AI Engineer"},
@@ -92,10 +86,6 @@ async def run_pydantic_pulse_test():
         else:
             print(f"✅ Pipeline Completed in {results.get('duration_seconds', 0):.2f}s")
             print(f"🔹 Stages Executed: {list(results['stages'].keys())}")
-            
-            # Verify structured data preservation
-            iq_data = results["stages"]["market_iq"]
-            print(f"🔹 Market IQ Verified: {iq_data.get('industry')}")
             
             sourcing_data = results["stages"]["sourcing"]
             print(f"🔹 Sourcing Verified: Found {len(sourcing_data.get('candidates', []))} candidates")

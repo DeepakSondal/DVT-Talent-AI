@@ -40,8 +40,9 @@ async def deduct_credits(
         import uuid
 
         async with AsyncSessionLocal() as session:
+            t_uuid = uuid.UUID(str(tenant_id))
             result = await session.execute(
-                select(Tenant).where(Tenant.id == uuid.UUID(tenant_id))
+                select(Tenant).where(Tenant.id == t_uuid).with_for_update()
             )
             tenant: Optional[Tenant] = result.scalar_one_or_none()
 

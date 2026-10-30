@@ -36,11 +36,15 @@ test.describe('UI/UX Pro Max Remediation & Component Integrity Suite', () => {
     expect(content).toContain('aria-label="Loading table data..."');
     expect(content).toContain('animate-pulse');
 
-    // Audit page verification using structured skeletons instead of bare spinner
-    const auditPath = path.resolve(__dirname, '../src/app/dashboard/audit/page.tsx');
-    const auditContent = fs.readFileSync(auditPath, 'utf8');
-    expect(auditContent).not.toContain('animate-spin w-6 h-6 border-2');
-    expect(auditContent).toContain('animate-pulse');
+    // CardSkeleton and Skeleton components for layout-shift prevention
+    expect(content).toContain('export function CardSkeleton');
+    expect(content).toContain('export function Skeleton');
+
+    // Dashboard verification using accessible pulse indicators with motion-reduce safety
+    const dashboardPath = path.resolve(__dirname, '../src/app/dashboard/page.tsx');
+    const dashboardContent = fs.readFileSync(dashboardPath, 'utf8');
+    expect(dashboardContent).toContain('animate-pulse');
+    expect(dashboardContent).toContain('motion-reduce:animate-none');
   });
 
   test('test case 3: verifies CommandPalette global navigation shortcuts and route registry', async () => {

@@ -239,7 +239,8 @@ async def run_reconciliation(
     # 5c. Redis cache check
     try:
         import redis
-        r = redis.from_url(settings.redis_url)
+        r = redis.from_url(settings.redis_url, socket_timeout=0.5, socket_connect_timeout=0.5)
+        r.ping()
         for cid_str in tombstoned_ids:
             keys_to_check = [
                 f"candidate:{cid_str}",

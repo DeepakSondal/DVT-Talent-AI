@@ -4,15 +4,15 @@ Tests the Pydantic AI agent swarm architecture and orchestrator.
 """
 import pytest
 from unittest.mock import AsyncMock, patch
-from agents.market_iq_pydantic import market_iq_agent
+from agents.screening_pydantic import screening_agent
 from agents.sourcing_pydantic import sourcing_agent
 from agents.discovery_pydantic import discovery_agent
 
 @pytest.mark.asyncio
-async def test_market_intelligence_parallel_logic():
-    """ Verify Pydantic AI market_iq_agent execution structure """
-    assert market_iq_agent is not None
-    assert market_iq_agent.name is not None or hasattr(market_iq_agent, "run")
+async def test_screening_agent_parallel_logic():
+    """ Verify Pydantic AI screening_agent execution structure """
+    assert screening_agent is not None
+    assert screening_agent.name is not None or hasattr(screening_agent, "run")
 
 @pytest.mark.asyncio
 async def test_lead_discovery_reaction():

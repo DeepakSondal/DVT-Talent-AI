@@ -47,16 +47,11 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://redis:6379/1"
     celery_result_backend: str = "redis://redis:6379/2"
 
-    # ChromaDB
-    chroma_host: str = "localhost"
-    chroma_port: int = 8001
-    chroma_collection_resumes: str = "dvt_resumes"
-    chroma_collection_jobs: str = "dvt_jobs"
-    chroma_collection_companies: str = "dvt_companies"
-
-    # Pinecone Vector Database
-    pinecone_api_key: str = ""
-    pinecone_host: str = ""
+    # Dodo Payments & Billing
+    dodo_payments_api_key: str = ""
+    dodo_payments_webhook_key: str = ""
+    dodo_payments_environment: str = "test"
+    internal_service_secret: str = ""
 
     # AI — Anthropic (High Intelligence)
     anthropic_api_key: str = ""
@@ -114,14 +109,6 @@ class Settings(BaseSettings):
     app_base_url: str = "http://127.0.0.1:8000"
     frontend_url: str = "http://127.0.0.1:3000"
 
-    # Voice (ElevenLabs)
-    elevenlabs_api_key: str = ""
-
-    # SAML SSO (Enterprise)
-    saml_idp_entity_id: str = ""
-    saml_idp_sso_url: str = ""
-    saml_idp_cert: str = ""
-
     # Hub Integrations
     ziprecruiter_api_key: str = ""
     dice_api_key: str = ""
@@ -137,10 +124,6 @@ class Settings(BaseSettings):
     monster_webhook_secret: str = ""
     inbound_email_webhook_secret: str = ""
 
-    # Stripe Billing
-    stripe_secret_key: str = ""
-    stripe_publishable_key: str = ""
-    stripe_webhook_secret: str = ""
 
     # ATS Integrations
     greenhouse_api_key: str = ""

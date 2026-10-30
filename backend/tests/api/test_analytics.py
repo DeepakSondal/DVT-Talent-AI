@@ -1,8 +1,12 @@
+"""
+DVT Talent AI — Analytics API Unit Tests
+Tests dashboard KPIs, candidate funnel metrics, and email performance telemetry.
+"""
 import pytest
 import uuid
 from httpx import AsyncClient, ASGITransport
 from main import app
-from db.models import Tenant, User, Candidate, Company, UserRole
+from db.models import Tenant, User, Candidate, Job, UserRole
 from api.routes.auth import create_access_token
 
 @pytest.mark.asyncio
@@ -22,14 +26,16 @@ async def test_analytics_dashboard_tenant_isolation(db_session):
     )
     db_session.add(u1)
 
-    # Add 2 candidates for Tenant 1 and 5 candidates for Tenant 2
+    # Add 2 jobs and 2 candidates for Tenant 1, and 5 candidates for Tenant 2
+    j1 = Job(title="Backend Engineer", tenant_id=t1.id, is_active=True)
+    j2 = Job(title="Frontend Engineer", tenant_id=t1.id, is_active=False)
     c1 = Candidate(first_name="C1", last_name="T1", email=f"c1_{uuid.uuid4().hex[:6]}@t1.com", tenant_id=t1.id)
     c2 = Candidate(first_name="C2", last_name="T1", email=f"c2_{uuid.uuid4().hex[:6]}@t1.com", tenant_id=t1.id)
     for i in range(5):
         c_other = Candidate(first_name=f"COther{i}", last_name="T2", email=f"c2_{i}_{uuid.uuid4().hex[:6]}@t2.com", tenant_id=t2.id)
         db_session.add(c_other)
 
-    db_session.add_all([c1, c2])
+    db_session.add_all([j1, j2, c1, c2])
     await db_session.commit()
 
     token = create_access_token({"sub": str(u1.id), "tenant_id": str(t1.id)})
@@ -39,14 +45,16 @@ async def test_analytics_dashboard_tenant_isolation(db_session):
         res = await ac.get("/api/v1/analytics/dashboard", headers=headers)
         assert res.status_code == 200
         data = res.json()
+        assert "jobs" in data
         assert "candidates" in data
-        assert "companies" in data
-        assert "leads" in data
         assert "outreach" in data
+        assert "interviews" in data
+        assert data["jobs"]["total"] == 2
+        assert data["jobs"]["active"] == 1
         assert data["candidates"]["total"] == 2  # Only Tenant 1's candidates!
 
 @pytest.mark.asyncio
-async def test_analytics_funnels(db_session):
+async def test_analytics_funnels_and_performance(db_session):
     t = Tenant(name="Tenant Funnels", domain=f"tfun-{uuid.uuid4().hex[:6]}.com")
     db_session.add(t)
     await db_session.flush()
@@ -65,18 +73,20 @@ async def test_analytics_funnels(db_session):
     headers = {"Authorization": f"Bearer {token}"}
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        lf = await ac.get("/api/v1/analytics/lead-funnel", headers=headers)
-        assert lf.status_code == 200
-        assert "funnel" in lf.json()
-
+        # Candidate funnel
         cf = await ac.get("/api/v1/analytics/candidate-funnel", headers=headers)
         assert cf.status_code == 200
         assert "funnel" in cf.json()
+        assert isinstance(cf.json()["funnel"], list)
 
-        ep = await ac.get("/api/v1/analytics/email-performance", headers=headers)
+        # Email performance
+        ep = await ac.get("/api/v1/analytics/email-performance?days=14", headers=headers)
         assert ep.status_code == 200
         assert "data" in ep.json()
+        assert isinstance(ep.json()["data"], list)
 
-        ti = await ac.get("/api/v1/analytics/top-industries", headers=headers)
-        assert ti.status_code == 200
-        assert "industries" in ti.json()
+@pytest.mark.asyncio
+async def test_analytics_unauthenticated_rejected():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        res = await ac.get("/api/v1/analytics/dashboard")
+        assert res.status_code == 401

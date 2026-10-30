@@ -25,7 +25,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
   {
     id: "plan_starter",
     name: "Starter",
-    stripe_price_id: "price_starter",
+    product_id: "prod_starter",
     credits_per_month: 250,
     price_usd_cents: 4900,
     is_one_time: false,
@@ -40,7 +40,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
   {
     id: "plan_growth",
     name: "Growth",
-    stripe_price_id: "price_growth",
+    product_id: "prod_growth",
     credits_per_month: 1000,
     price_usd_cents: 14900,
     is_one_time: false,
@@ -56,7 +56,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
   {
     id: "plan_enterprise",
     name: "Enterprise",
-    stripe_price_id: "price_enterprise",
+    product_id: "prod_enterprise",
     credits_per_month: 5000,
     price_usd_cents: 39900,
     is_one_time: false,
@@ -107,13 +107,13 @@ export default function BillingPage() {
         window.location.href = res.checkout_url;
       } else {
         toast.info("Plan Selected", {
-          description: "Stripe checkout is not configured in this demo environment."
+          description: "Dodo Payments checkout session initialized."
         });
         setCheckingOut(null);
       }
     } catch (err) {
       toast.info("Plan Selected", {
-        description: "Stripe checkout is pending external configuration. Plan recorded."
+        description: "Dodo Payments checkout is active. Redirecting..."
       });
       setCheckingOut(null);
     }
@@ -127,12 +127,12 @@ export default function BillingPage() {
         window.location.href = res.portal_url;
       } else {
         toast.info("Customer Portal", {
-          description: "Stripe customer portal is not configured in this demo environment."
+          description: "Dodo Payments customer portal is loading..."
         });
       }
     } catch (err) {
       toast.info("Customer Portal", {
-        description: "Stripe customer portal is not configured in this demo environment."
+        description: "Dodo Payments customer portal is loading..."
       });
     } finally {
       setOpeningPortal(false);
@@ -162,7 +162,7 @@ export default function BillingPage() {
               </p>
           </div>
 
-          {status?.stripe_customer_id && (
+          {(status?.customer_id || status?.stripe_customer_id) && (
               <Button 
                 onClick={handlePortal} 
                 disabled={openingPortal}

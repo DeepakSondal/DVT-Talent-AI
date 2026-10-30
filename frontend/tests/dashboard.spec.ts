@@ -19,7 +19,7 @@ test.describe('Dashboard Performance & Components', () => {
         await expect(page.locator('nav >> text=Dashboard')).toBeVisible();
         await expect(page.locator('nav >> text=Job Requisitions')).toBeVisible();
         await expect(page.locator('nav >> text=Candidates')).toBeVisible();
-        await expect(page.locator('nav >> text=Companies')).toBeVisible();
+        await expect(page.locator('nav >> text=AI Screening')).toBeVisible();
 
         // Check for Quick Actions
         await expect(page.locator('#dashboard-new-req-btn')).toBeVisible();

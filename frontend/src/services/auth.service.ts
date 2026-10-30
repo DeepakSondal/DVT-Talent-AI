@@ -14,7 +14,8 @@ export const authService = {
     });
     if (typeof window !== "undefined") {
       localStorage.setItem("dvt_token", res.data.access_token);
-      document.cookie = `dvt_token=${res.data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+      const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `dvt_token=${res.data.access_token}; path=/; max-age=86400; SameSite=Strict${isSecure}`;
     }
     return res.data;
   },
@@ -23,7 +24,8 @@ export const authService = {
     const res = await http.post<AuthResponse>("/auth/register", data);
     if (typeof window !== "undefined") {
       localStorage.setItem("dvt_token", res.data.access_token);
-      document.cookie = `dvt_token=${res.data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+      const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `dvt_token=${res.data.access_token}; path=/; max-age=86400; SameSite=Strict${isSecure}`;
     }
     return res.data;
   },
@@ -33,7 +35,7 @@ export const authService = {
   logout: (): void => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("dvt_token");
-      document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Lax";
+      document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Strict";
     }
   },
 };

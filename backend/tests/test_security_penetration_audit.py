@@ -539,32 +539,27 @@ class TestAdversarialSecurityPenetrationSuite:
             )
             assert prep_unpub.status_code == 404
 
-            # 3. Non-admin recruiter cannot overwrite tenant SAML SSO IdP certificate/URL
-            sso_attack = await client.post(
-                "/api/v1/auth/sso/config",
-                headers=recruiter_headers,
-                json={
-                    "idp_entity_id": "https://evil-idp.attacker.com",
-                    "idp_sso_url": "https://evil-idp.attacker.com/sso",
-                    "idp_cert": "FAKE_CERT",
-                    "is_enabled": True,
-                },
-            )
-            assert sso_attack.status_code == 403
-
-            # 4. Viewer cannot create/modify/delete companies, jobs, or candidates
-            viewer_comp = await client.post(
-                "/api/v1/companies",
+            # 3. Viewer cannot create jobs or deactivate jobs
+            viewer_job = await client.post(
+                "/api/v1/jobs",
                 headers=viewer_headers,
-                json={"name": "Unauthorized Co"},
+                json={"title": "Unauthorized Job"},
             )
-            assert viewer_comp.status_code == 403
+            assert viewer_job.status_code == 403
 
-            viewer_del = await client.delete(
-                f"/api/v1/companies/{env['company_a'].id}",
+            viewer_deact = await client.patch(
+                f"/api/v1/jobs/{env['job_a_unpublished'].id}/deactivate",
                 headers=viewer_headers,
             )
-            assert viewer_del.status_code == 403
+            assert viewer_deact.status_code == 403
+
+            # 4. Viewer cannot create candidates
+            viewer_cand = await client.post(
+                "/api/v1/candidates",
+                headers=viewer_headers,
+                json={"first_name": "Unauthorized", "last_name": "Candidate", "email": "unauth@candidate.com"},
+            )
+            assert viewer_cand.status_code == 403
 
     # ── 6. Open Redirect, SSRF, File Upload & AI Sanitization Defenses ──────
     async def test_open_redirect_ssrf_and_ai_file_boundaries(self):

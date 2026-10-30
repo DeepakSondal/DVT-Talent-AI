@@ -139,7 +139,10 @@ test.describe('Team Invitation Acceptance Flow', () => {
       acceptRequestPayload = JSON.parse(route.request().postData() || '{}');
       await route.fulfill({
         status: 200,
-        contentType: 'application/json',
+        headers: {
+          'Set-Cookie': 'dvt_token=mock_jwt_token_alice_session_xyz789; Path=/; SameSite=Lax; HttpOnly',
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           status: 'success',
           message: 'Account created and invitation accepted successfully.',

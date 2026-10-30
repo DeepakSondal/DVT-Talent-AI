@@ -244,3 +244,34 @@ async def get_task_status(
         "output_data": task.output_data,
         "created_at": task.created_at,
     }
+
+
+class ScreeningGenerateRequest(BaseModel):
+    job_description: str
+    role_title: Optional[str] = None
+    job_id: Optional[str] = None
+
+@router.post("/screening/generate", summary="Generate structured interview screening guide with answers from a JD")
+async def generate_screening_questions(
+    req: ScreeningGenerateRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
+    if not req.job_description or not req.job_description.strip():
+        raise HTTPException(status_code=400, detail="Job description cannot be empty.")
+    
+    from agents.screening_pydantic import generate_screening_guide
+    import httpx
+    from agents.pydantic_config import AgentDeps
+    
+    async with httpx.AsyncClient() as client:
+        deps = AgentDeps(http_client=client, tenant_id=str(tenant_uuid))
+        plan = await generate_screening_guide(
+            job_description=req.job_description,
+            role_title=req.role_title,
+            tenant_id=str(tenant_uuid),
+            deps=deps,
+        )
+        return plan.model_dump()

@@ -64,7 +64,7 @@ export async function handlePaymentSucceeded(payload: {
   // 3. Dispatch internal backend synchronization
   const backendApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
   try {
-    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.NEXTAUTH_SECRET || "internal_secret";
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.NEXTAUTH_SECRET || "";
     await fetch(`${backendApiUrl}/billing/webhook-sync`, {
       method: "POST",
       headers: {
@@ -119,7 +119,7 @@ export async function handleSubscriptionActive(payload: {
   // 3. Dispatch internal backend synchronization
   const backendApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
   try {
-    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.NEXTAUTH_SECRET || "internal_secret";
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.NEXTAUTH_SECRET || "";
     await fetch(`${backendApiUrl}/billing/webhook-sync`, {
       method: "POST",
       headers: {

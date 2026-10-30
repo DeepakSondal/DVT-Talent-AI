@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PROTECTED_PREFIXES = ["/dashboard", "/candidates", "/companies", "/campaigns", "/analytics", "/settings"];
+const PROTECTED_PREFIXES = ["/dashboard", "/candidates", "/campaigns", "/analytics", "/settings"];
 const PUBLIC_PATHS = ["/auth/login", "/auth/register", "/api"];
 
 export function middleware(request: NextRequest) {

@@ -45,65 +45,6 @@ def _require_copilot_access(current_user: User) -> uuid.UUID:
         raise HTTPException(status_code=403, detail="Workspace recruiter or administrative permissions required.")
     return current_user.tenant_id
 
-# ── Background Task Wrappers ─────────────────────────────────────────────────
-async def execute_discovery_bg(task_id: uuid.UUID, req: DiscoveryRequest, db: AsyncSession):
-    orchestrator = AgentOrchestrator()
-    try:
-        results = await orchestrator.run_discovery_phase(req.industry, req.location)
-        
-        # Update Task State to AWAITING_INPUT
-        task = await db.get(AgentTask, task_id)
-        if task:
-            task.output_data = results
-            task.status = AgentTaskStatus.AWAITING_INPUT
-            task.current_checkpoint = "discovery_complete"
-            await db.commit()
-            log.info("copilot_discovery_complete", task_id=str(task_id))
-    except Exception as e:
-        task = await db.get(AgentTask, task_id)
-        if task:
-            task.status = AgentTaskStatus.FAILED
-            task.error_message = str(e)
-            await db.commit()
-
-async def execute_sourcing_bg(task_id: uuid.UUID, req: SourcingRequest, db: AsyncSession):
-    orchestrator = AgentOrchestrator()
-    try:
-        results = await orchestrator.run_sourcing_phase(req.approved_jd, req.location)
-        
-        task = await db.get(AgentTask, task_id)
-        if task:
-            task.output_data = results
-            task.status = AgentTaskStatus.AWAITING_INPUT
-            task.current_checkpoint = "sourcing_complete"
-            await db.commit()
-            log.info("copilot_sourcing_complete", task_id=str(task_id))
-    except Exception as e:
-        task = await db.get(AgentTask, task_id)
-        if task:
-            task.status = AgentTaskStatus.FAILED
-            task.error_message = str(e)
-            await db.commit()
-
-async def execute_outreach_bg(task_id: uuid.UUID, req: OutreachRequest, db: AsyncSession):
-    orchestrator = AgentOrchestrator()
-    try:
-        results = await orchestrator.run_outreach_phase(req.approved_candidates, req.job_context)
-        
-        task = await db.get(AgentTask, task_id)
-        if task:
-            task.output_data = {"outreach_results": results}
-            task.status = AgentTaskStatus.COMPLETED
-            task.current_checkpoint = "pipeline_complete"
-            await db.commit()
-            log.info("copilot_outreach_complete", task_id=str(task_id))
-    except Exception as e:
-        task = await db.get(AgentTask, task_id)
-        if task:
-            task.status = AgentTaskStatus.FAILED
-            task.error_message = str(e)
-            await db.commit()
-
 async def _enforce_copilot_rate_limit(request: Request, current_user: User) -> uuid.UUID:
     tenant_uuid = _require_copilot_access(current_user)
     await enforce_endpoint_rate_limit(

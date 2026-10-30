@@ -43,21 +43,20 @@ export function CopilotActionModal({ task: initialTask, onClose, onComplete }: C
     .includes(task?.status || task?.current_checkpoint);
   const checkpoint = task?.current_checkpoint || "";
   const outputData = task?.output_data || {};
+  const discoveryJd = outputData?.discovery?.job_description || outputData?.discovery?.job_requirements;
+  const sourcingCandidates = outputData?.sourcing?.candidates;
 
   // Initialise editable fields from task data
   useEffect(() => {
     if (checkpoint === "discovery_complete") {
-      const jd = outputData?.discovery?.job_description
-        || outputData?.discovery?.job_requirements
-        || outputData?.market_iq?.draft_jd
-        || "Edit the AI-generated Job Description here…";
+      const jd = discoveryJd || "Edit the AI-generated Job Description here…";
       setEditedJd(jd);
     }
     if (checkpoint === "sourcing_complete") {
-      const all = outputData?.sourcing?.candidates || [];
+      const all = sourcingCandidates || [];
       setApprovedCandidates(all); // Start with ALL selected
     }
-  }, [checkpoint]);
+  }, [checkpoint, discoveryJd, sourcingCandidates]);
 
   // Poll for task updates while running
   const startPolling = useCallback(() => {

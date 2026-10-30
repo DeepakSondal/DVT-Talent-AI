@@ -5,7 +5,8 @@
 export interface SubscriptionPlan {
   id: string;
   name: string;
-  stripe_price_id: string;
+  product_id: string;
+  stripe_price_id?: string;
   credits_per_month: number;
   features: string[];
   price_usd_cents: number;
@@ -25,7 +26,8 @@ export interface CreditStatus {
   credits_balance: number;
   credits_last_reset_at: string | null;
   plan: string;
-  stripe_customer_id: string | null;
+  customer_id?: string | null;
+  stripe_customer_id?: string | null;
   transactions: CreditTransaction[];
 }
 

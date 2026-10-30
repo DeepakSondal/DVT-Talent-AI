@@ -14,7 +14,6 @@ import {
 import { toast } from "sonner";
 import { EmailSenderSettings } from "@/components/settings/EmailSenderTab";
 import { ApiKeysSettings } from "@/components/settings/TeamKeysTab";
-import { SSOSettingsTab } from "@/components/settings/SSOSettingsTab";
 
 export default function SettingsPage() {
   const [tenant, setTenant] = useState<any>({ name: "", logo_url: "" });
@@ -110,12 +109,6 @@ export default function SettingsPage() {
           >
             <Users className="w-4 h-4 mr-2" /> Team
           </TabsTrigger>
-          <TabsTrigger
-            value="sso"
-            className="data-[state=active]:bg-card data-[state=active]:shadow-sm font-semibold text-sm py-2 px-5 rounded-md"
-          >
-            <ShieldCheck className="w-4 h-4 mr-2" /> Enterprise SSO
-          </TabsTrigger>
         </TabsList>
 
         {/* ── Identity Tab ── */}
@@ -170,11 +163,6 @@ export default function SettingsPage() {
         {/* ── AI & Search Keys Tab ── */}
         <TabsContent value="keys" className="space-y-6">
           <ApiKeysSettings />
-        </TabsContent>
-
-        {/* ── Enterprise SSO Tab ── */}
-        <TabsContent value="sso" className="space-y-6">
-          <SSOSettingsTab />
         </TabsContent>
 
         {/* ── Team Tab ── */}

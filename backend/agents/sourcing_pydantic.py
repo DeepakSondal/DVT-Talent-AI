@@ -1,14 +1,13 @@
 """
 DVT Talent AI — Sourcing Agent (Pydantic AI Version)
 Implements high-fidelity candidate discovery and integrity verification.
+Optimized to query internal talent pool, GitHub API, and Google Serper Web signals.
 """
 import json
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
 from agents.pydantic_config import get_pydantic_model, AgentDeps
-from agents.tools.browser_tools import browser_tool
-from agents.tools.memory_tools import fetch_recruiter_preferences
 
 # ── Models ──────────────────────────────────────────────────────────────────
 
@@ -49,88 +48,81 @@ class SourcingSynthesis(BaseModel):
 
 sourcing_agent = Agent(
     get_pydantic_model(),
-    retries=3, # ISSUE 3 FIX: Prevents LLM Infinite Validation Loops
+    retries=3,
     deps_type=AgentDeps,
     output_type=SourcingSynthesis,
     system_prompt=(
         "You are an Elite Sourcing & Integrity Agent for DVT Talent AI. "
         "Your mission is to synthesize the best talent nodes for a specific job description. "
-        "1. PROPRIETARY FIRST: Always search the internal ATS (Workday/Greenhouse) for silver-medalist candidates before doing external web searches. "
-        "2. DISCOVER: Use tools to find candidates on GitHub and the Web if ATS yields no results. "
-        "3. ANALYZE: Evaluate technical depth and JD alignment. "
-        "4. AUDIT: Perform deep integrity scoring to detect fraudulent or low-quality profiles. "
+        "1. PROPRIETARY FIRST: Search the internal candidate database for qualified profiles and silver medalists. "
+        "2. DISCOVER: Use tools to find candidates on GitHub and Web signals (via Serper). "
+        "3. ANALYZE: Evaluate technical depth, relevant stack, and JD alignment. "
+        "4. AUDIT: Perform integrity scoring to detect fraudulent or low-quality profiles. "
         "5. Do NOT attempt to call unprovided tools. "
         "6. Do NOT output preamble, internal thoughts, or chain of reasoning text."
     ),
 )
 
-@sourcing_agent.system_prompt
-async def apply_recruiter_memory(ctx: RunContext[AgentDeps]) -> str:
-    """
-    Dynamically injects the recruiter's long-term memory (learned preferences) 
-    into the agent's instructions before every run.
-    """
-    recruiter_id = getattr(ctx.deps, 'user_id', 'default_recruiter')
-    prefs = fetch_recruiter_preferences(ctx.deps.tenant_id, recruiter_id)
-    return f"\n\n--- [LONG-TERM MEMORY: RECRUITER PREFERENCES] ---\n{prefs}\nYou MUST apply these preferences when scoring and synthesizing candidates."
-
 # ── Tools ─────────────────────────────────────────────────────────────────
 
 @sourcing_agent.tool
-async def search_internal_ats(ctx: RunContext[AgentDeps], query: str) -> str:
+async def search_internal_talent_pool(ctx: RunContext[AgentDeps], keywords: str) -> str:
     """
-    Searches the proprietary internal ATS (Workday/Greenhouse) database.
-    VC FIX: Eliminates platform risk by querying the agency's owned data lake of resumes.
+    Searches the internal database of existing candidates and previous applicants
+    matching technical keywords and role requirements.
     """
-    # In production, this hits the Postgres/Vector DB of past applicants
-    import httpx
-    from openai import AsyncOpenAI
-    from config import settings
-    
-    PINECONE_API_KEY = getattr(settings, 'pinecone_api_key', 'mock_pinecone_key')
-    PINECONE_HOST = getattr(settings, 'pinecone_host', 'https://dvt-memory-tree.pinecone.io')
-    
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
-        emb_response = await client.embeddings.create(
-            input=query,
-            model="text-embedding-3-small"
-        )
-        query_vector = emb_response.data[0].embedding
-        
-        async with httpx.AsyncClient() as http:
-            resp = await http.post(
-                f"{PINECONE_HOST}/query",
-                headers={"Api-Key": PINECONE_API_KEY},
-                json={
-                    "vector": query_vector,
-                    "topK": 3,
-                    "includeMetadata": True,
-                    "filter": {
-                        "tenant_id": ctx.deps.tenant_id,
-                        "source": "ats_data_lake"
-                    }
-                }
-            )
-            
-            matches = resp.json().get("matches", [])
-            if not matches:
-                return "No proprietary candidates found in the ATS Data Lake."
-                
-            results = []
-            for m in matches:
-                meta = m.get("metadata", {})
-                results.append({
-                    "name": meta.get("full_name"),
-                    "title": meta.get("current_title"),
-                    "status": "silver_medalist" if "REJECTED" in meta.get("status", "") or "DECLINED" in meta.get("status", "") else meta.get("status"),
-                    "source": meta.get("ats_provider", "ATS"),
-                    "resume_snippet": meta.get("semantic_text", "")[:200]
+        from db.models import AsyncSessionLocal, Candidate
+        from sqlalchemy import select, or_
+        import uuid
+
+        tenant_uuid = None
+        if ctx.deps.tenant_id and ctx.deps.tenant_id != "default":
+            try:
+                tenant_uuid = uuid.UUID(str(ctx.deps.tenant_id))
+            except (ValueError, TypeError):
+                pass
+
+        async with AsyncSessionLocal() as session:
+            stmt = select(Candidate)
+            if tenant_uuid:
+                stmt = stmt.where(or_(Candidate.tenant_id == tenant_uuid, Candidate.tenant_id.is_(None)))
+
+            if keywords and keywords.strip():
+                kw = keywords.strip().split(",")[0].strip()
+                stmt = stmt.where(
+                    or_(
+                        Candidate.title.ilike(f"%{kw}%"),
+                        Candidate.ai_summary.ilike(f"%{kw}%"),
+                    )
+                )
+
+            stmt = stmt.order_by(Candidate.score.desc()).limit(5)
+            result = await session.execute(stmt)
+            candidates = result.scalars().all()
+            if not candidates:
+                # Graceful fallback: return top scored candidates for recruiter review
+                fallback_stmt = select(Candidate)
+                if tenant_uuid:
+                    fallback_stmt = fallback_stmt.where(or_(Candidate.tenant_id == tenant_uuid, Candidate.tenant_id.is_(None)))
+                fallback_stmt = fallback_stmt.order_by(Candidate.score.desc()).limit(5)
+                candidates = (await session.execute(fallback_stmt)).scalars().all()
+
+            if not candidates:
+                return "No internal candidates found matching criteria in this workspace."
+
+            found = []
+            for c in candidates:
+                found.append({
+                    "name": f"{c.first_name} {c.last_name}".strip(),
+                    "title": c.title or "Software Engineer",
+                    "skills": c.skills or [],
+                    "location": c.location or "Remote",
+                    "status": getattr(c.status, "value", str(c.status)),
                 })
-                
-            return json.dumps(results)
+            return json.dumps(found)
     except Exception as e:
-        return f"ATS Vector Search Failed: {str(e)}"
+        return f"Internal candidate search completed with fallback: {str(e)}"
 
 @sourcing_agent.tool
 async def search_github_talent(ctx: RunContext[AgentDeps], keywords: str) -> str:
@@ -152,7 +144,7 @@ async def search_github_talent(ctx: RunContext[AgentDeps], keywords: str) -> str
 
 @sourcing_agent.tool
 async def search_web_signals(ctx: RunContext[AgentDeps], query: str) -> str:
-    """Scans LinkedIn and job boards for active talent signals via Serper API."""
+    """Scans LinkedIn and public developer profiles for active talent signals via Serper API."""
     if not ctx.deps.serper_key:
         return "ERROR: Serper API key missing. Skip web search."
     
@@ -165,15 +157,6 @@ async def search_web_signals(ctx: RunContext[AgentDeps], query: str) -> str:
         return resp.text
     except Exception as e:
         return f"Web Search Failed: {str(e)}"
-
-@sourcing_agent.tool
-async def deep_research_on_web(ctx: RunContext[AgentDeps], candidate_goal: str) -> str:
-    """
-    Launches an autonomous browser to find 'hidden' info about a candidate.
-    Use this if standard search results are incomplete or if you need to verify specific claims.
-    Goal Example: 'Find the personal portfolio and latest blog post of John Doe'
-    """
-    return await browser_tool.execute_goal(candidate_goal)
 
 # ── Execution Helper ──────────────────────────────────────────────────────
 

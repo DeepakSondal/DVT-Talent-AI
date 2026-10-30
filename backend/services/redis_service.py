@@ -29,8 +29,8 @@ _ratelimit_lock = asyncio.Lock()
 
 def is_redis_available(timeout: float = 0.05) -> bool:
     """
-    Fast, non-blocking socket check with circuit breaker caching.
-    Returns False in 0.001ms if Redis is currently offline.
+    Fast check with circuit breaker caching.
+    Returns immediately if Redis client is already active or recently tested.
     """
     now = time.time()
     if (
@@ -39,14 +39,21 @@ def is_redis_available(timeout: float = 0.05) -> bool:
     ):
         return _circuit_state["available"]
 
+    if _redis_client is not None and _circuit_state["available"] is True:
+        _circuit_state["last_checked"] = now
+        return True
+
     try:
         parsed = urllib.parse.urlparse(settings.redis_url)
         host = parsed.hostname or "127.0.0.1"
         port = parsed.port or 6379
-        with socket.create_connection((host, port), timeout=timeout):
-            _circuit_state["available"] = True
-            _circuit_state["last_checked"] = now
-            return True
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((host, port))
+        s.close()
+        _circuit_state["available"] = True
+        _circuit_state["last_checked"] = now
+        return True
     except Exception:
         _circuit_state["available"] = False
         _circuit_state["last_checked"] = now

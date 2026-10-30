@@ -696,6 +696,14 @@ async def reconcile_post_restore_erasures(db: AsyncSession) -> Dict[str, Any]:
     files_deleted = 0
     caches_purged = 0
     now = datetime.now(timezone.utc)
+    redis_client = None
+    try:
+        import redis
+        redis_client = redis.from_url(settings.redis_url, socket_timeout=0.2, socket_connect_timeout=0.2)
+        redis_client.ping()
+    except Exception:
+        redis_client = None
+
     for raw_id in erased_ids:
         try:
             cand_uuid = uuid.UUID(raw_id)
@@ -765,19 +773,18 @@ async def reconcile_post_restore_erasures(db: AsyncSession) -> Dict[str, Any]:
             log.warning("restore_reconcile_file_delete_failed", error=str(fe), candidate_id=str(cand_uuid))
 
         # Invalidate Redis caches for tombstoned candidate
-        try:
-            import redis
-            r = redis.from_url(settings.redis_url)
-            cache_keys = [
-                f"candidate:{cand_uuid}",
-                f"candidate_profile:{cand_uuid}",
-            ]
-            if candidate and candidate.tenant_id:
-                cache_keys.append(f"tenant:{candidate.tenant_id}:candidate:{cand_uuid}")
-            r.delete(*cache_keys)
-            caches_purged += len(cache_keys)
-        except Exception as re:
-            log.warning("restore_reconcile_redis_cache_failed", error=str(re), candidate_id=str(cand_uuid))
+        if redis_client:
+            try:
+                cache_keys = [
+                    f"candidate:{cand_uuid}",
+                    f"candidate_profile:{cand_uuid}",
+                ]
+                if candidate and candidate.tenant_id:
+                    cache_keys.append(f"tenant:{candidate.tenant_id}:candidate:{cand_uuid}")
+                redis_client.delete(*cache_keys)
+                caches_purged += len(cache_keys)
+            except Exception as re:
+                log.warning("restore_reconcile_redis_cache_failed", error=str(re), candidate_id=str(cand_uuid))
 
     await db.commit()
     return {

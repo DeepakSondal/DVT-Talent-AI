@@ -7,9 +7,7 @@
 import http from "./http";
 import { authService } from "@/services/auth.service";
 import { analyticsService } from "@/services/analytics.service";
-import { companiesService } from "@/services/companies.service";
 import { candidatesService } from "@/services/candidates.service";
-import { leadsService } from "@/services/leads.service";
 import { campaignsService } from "@/services/campaigns.service";
 import { jobsService } from "@/services/jobs.service";
 import { copilotService } from "@/services/copilot.service";
@@ -22,7 +20,6 @@ import { integrationsService } from "@/services/integrations.service";
 import { emailSenderService } from "@/services/email-sender.service";
 import { teamService } from "@/services/team.service";
 import { complianceService } from "@/services/compliance.service";
-import { ssoService } from "@/services/sso.service";
 
 // Re-export all centralized types and contracts
 export * from "@/types";
@@ -34,9 +31,7 @@ export const api = http;
 // Domain Service Aliases (Preserves 100% backward compatibility)
 export const authApi = authService;
 export const analyticsApi = analyticsService;
-export const companiesApi = companiesService;
 export const candidatesApi = candidatesService;
-export const leadsApi = leadsService;
 export const campaignsApi = campaignsService;
 export const jobsApi = jobsService;
 export const copilotApi = copilotService;
@@ -49,6 +44,5 @@ export const integrationsApi = integrationsService;
 export const emailSenderApi = emailSenderService;
 export const teamApi = teamService;
 export const complianceApi = complianceService;
-export const ssoApi = ssoService;
 
 export default http;

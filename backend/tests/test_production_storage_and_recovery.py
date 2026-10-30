@@ -84,7 +84,7 @@ def test_docker_compose_prod_volume_configuration():
     top_vols = compose.get("volumes", {})
     assert "dvt_storage" in top_vols
     assert "dvt_uploads" in top_vols
-    assert "postgres_data" in top_vols
+    assert "postgres_prod_data" in top_vols or "postgres_data" in top_vols
 
 
 @pytest.mark.asyncio

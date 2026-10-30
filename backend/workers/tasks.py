@@ -24,7 +24,6 @@ from agents.sourcing_pydantic import sourcing_agent
 from agents.outreach_pydantic import outreach_agent
 from agents.analytics_pydantic import analytics_agent
 from agents.screening_pydantic import screening_agent
-from agents.market_iq_pydantic import market_iq_agent
 from services.resume_parser import ResumeParserService
 
 log = structlog.get_logger(__name__)
@@ -94,7 +93,6 @@ def run_agent_task(self, agent_name: str, params: Dict[str, Any] = None, tenant_
             "outreach": outreach_agent,
             "analytics": analytics_agent,
             "screening": screening_agent,
-            "market_iq": market_iq_agent
         }
         
         if agent_name not in agents_map:
@@ -267,39 +265,6 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
         log.error("ats_sync_failed", error=str(exc))
         raise self.retry(exc=exc, countdown=300)
 
-@celery_app.task(bind=True, name="workers.tasks.run_company_research", max_retries=3)
-def run_company_research(self, company_id: str, tenant_id: str = "default") -> Dict[str, Any]:
-    """Research and enrich company profile using DiscoveryAgent"""
-    log.info("celery_task_started", task="run_company_research", company_id=company_id, tenant_id=tenant_id)
-    try:
-        engine = create_engine(settings.database_sync_url)
-        with engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT name, domain, industry, tenant_id FROM companies WHERE id = :cid LIMIT 1"),
-                {"cid": company_id}
-            ).fetchone()
-            if not row:
-                return {"company_id": company_id, "status": "not_found"}
-            comp_name, comp_domain, comp_industry, comp_tenant = row[0], row[1], row[2], row[3]
-
-        async def _run():
-            import httpx
-            async with httpx.AsyncClient() as client:
-                deps = AgentDeps(http_client=client, tenant_id=comp_tenant or tenant_id)
-                prompt = f"Research and enrich this company: Name: {comp_name}, Domain: {comp_domain}, Industry: {comp_industry}."
-                res = await discovery_agent.run(prompt, deps=deps)
-                return res.output.model_dump()
-
-        result = asyncio.run(_run())
-        _update_company_in_db(company_id, result)
-        return {"company_id": company_id, "status": "enriched", "data": result}
-    except Exception as exc:
-        log.error("company_research_failed", error=str(exc))
-        try:
-            raise self.retry(exc=exc, countdown=60)
-        except Exception:
-            return {"company_id": company_id, "status": "failed", "error": str(exc)}
-
 @celery_app.task(bind=True, name="workers.tasks.source_candidates_for_job", max_retries=3)
 def source_candidates_for_job(self, job_id: str, skills: list, location: Optional[str] = None, tenant_id: str = "default") -> Dict[str, Any]:
     """Automated candidate sourcing for a newly requisitioned job"""
@@ -349,9 +314,10 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
     async def _run():
         orchestrator = AgentOrchestrator(tenant_id=tenant_id)
         try:
-            results = await orchestrator.run_discovery_phase(industry, location)
+            results = await orchestrator.run_swarm_phase("discovery", mode="copilot", industry=industry, location=location)
+            task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
-                task = await db.get(AgentTask, task_id)
+                task = await db.get(AgentTask, task_uuid)
                 if task:
                     task.output_data = results
                     task.status = AgentTaskStatus.AWAITING_INPUT
@@ -359,8 +325,9 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
                     await db.commit()
             broadcast_signal("Discovery phase completed.", "agent_success", tenant_id)
         except Exception as e:
+            task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
-                task = await db.get(AgentTask, task_id)
+                task = await db.get(AgentTask, task_uuid)
                 if task:
                     task.status = AgentTaskStatus.FAILED
                     task.error_message = str(e)
@@ -378,9 +345,10 @@ def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, t
     async def _run():
         orchestrator = AgentOrchestrator(tenant_id=tenant_id)
         try:
-            results = await orchestrator.run_sourcing_phase(approved_jd, location)
+            results = await orchestrator.run_swarm_phase("sourcing", mode="copilot", job_description=approved_jd, location=location)
+            task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
-                task = await db.get(AgentTask, task_id)
+                task = await db.get(AgentTask, task_uuid)
                 if task:
                     task.output_data = results
                     task.status = AgentTaskStatus.AWAITING_INPUT
@@ -388,8 +356,9 @@ def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, t
                     await db.commit()
             broadcast_signal("Sourcing phase completed.", "agent_success", tenant_id)
         except Exception as e:
+            task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
-                task = await db.get(AgentTask, task_id)
+                task = await db.get(AgentTask, task_uuid)
                 if task:
                     task.status = AgentTaskStatus.FAILED
                     task.error_message = str(e)
@@ -406,9 +375,10 @@ def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_con
     async def _run():
         orchestrator = AgentOrchestrator(tenant_id=tenant_id)
         try:
-            results = await orchestrator.run_outreach_phase(approved_candidates, job_context, enable_screening=enable_screening)
+            results = await orchestrator.run_swarm_phase("outreach", mode="copilot", approved_candidates=approved_candidates, job=job_context, enable_screening=enable_screening)
+            task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
-                task = await db.get(AgentTask, task_id)
+                task = await db.get(AgentTask, task_uuid)
                 if task:
                     task.output_data = {"outreach_results": results}
                     task.status = AgentTaskStatus.COMPLETED
@@ -416,8 +386,9 @@ def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_con
                     await db.commit()
             broadcast_signal("Outreach pipeline completed.", "agent_success", tenant_id)
         except Exception as e:
+            task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
-                task = await db.get(AgentTask, task_id)
+                task = await db.get(AgentTask, task_uuid)
                 if task:
                     task.status = AgentTaskStatus.FAILED
                     task.error_message = str(e)
@@ -492,30 +463,3 @@ def _update_resume_in_db(resume_id: str, analysis: dict, raw_text: str = ""):
     except Exception as e:
         log.error("db_update_failed", table="resumes", error=str(e))
 
-def _update_company_in_db(company_id: str, research: dict):
-    try:
-        engine = create_engine(settings.database_sync_url)
-        with engine.connect() as conn:
-            conn.execute(
-                text("""
-                    UPDATE companies
-                    SET tech_stack = :tech_stack,
-                        score = :score,
-                        open_roles_count = :open_roles,
-                        last_enriched = NOW(),
-                        description = :desc,
-                        metadata = :metadata
-                    WHERE id = :company_id
-                """),
-                {
-                    "company_id": company_id,
-                    "tech_stack": research.get("tech_stack", []),
-                    "score": research.get("score", 0),
-                    "open_roles": research.get("open_roles", 0),
-                    "desc": research.get("description", ""),
-                    "metadata": json.dumps(research.get("metadata", {})),
-                }
-            )
-            conn.commit()
-    except Exception as e:
-        log.error("db_update_failed", table="companies", error=str(e))

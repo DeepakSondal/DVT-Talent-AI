@@ -22,7 +22,7 @@ export const billingService = {
   },
 
   /**
-   * Create Stripe Checkout session for upgrading or buying credits
+   * Create Dodo Payments Checkout session for upgrading or buying credits
    */
   createCheckout: async (planId: string, successUrl?: string, cancelUrl?: string): Promise<CheckoutResponse> => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -35,7 +35,7 @@ export const billingService = {
   },
 
   /**
-   * Open Stripe Customer Billing Portal session for managing payment methods & invoices
+   * Open Dodo Payments Customer Billing Portal session for managing payment methods & invoices
    */
   openPortal: async (returnUrl?: string): Promise<PortalResponse> => {
     const origin = typeof window !== "undefined" ? window.location.origin : "";

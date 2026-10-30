@@ -113,7 +113,8 @@ function AcceptInvitationContent() {
       // Securely store authentication session (standard JWT auth)
       if (typeof window !== "undefined") {
         localStorage.setItem("dvt_token", res.access_token);
-        document.cookie = `dvt_token=${res.access_token}; path=/; max-age=86400; SameSite=Lax`;
+        const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
+        document.cookie = `dvt_token=${res.access_token}; path=/; max-age=86400; SameSite=Strict${isSecure}`;
       }
 
       setIsSuccess(true);

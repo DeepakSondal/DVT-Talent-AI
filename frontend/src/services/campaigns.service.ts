@@ -1,37 +1,18 @@
-/**
- * DVT Talent AI — Campaigns Service
- */
 import http from "@/lib/http";
-import type { EmailCampaign, EmailSent, PaginatedResponse } from "@/types";
+import { EmailCampaign, EmailSent } from "@/types/campaigns";
+import { PaginatedResponse } from "@/types/common";
 
 export interface CampaignListParams {
   page?: number;
-  page_size?: number;
+  per_page?: number;
+  status?: string;
+  lead_id?: string;
 }
 
 export interface EmailListParams {
   page?: number;
+  per_page?: number;
   status?: string;
-}
-
-export interface MicrositeData {
-  id: string;
-  candidate_name: string;
-  headline: string;
-  title: string;
-  value_proposition: string;
-  why_now: string;
-  company_name: string;
-  recruiter_name: string;
-  recruiter_email?: string;
-  job_id?: string;
-  status: string;
-}
-
-export interface ScheduleCallRequest {
-  preferred_time?: string;
-  notes?: string;
-  candidate_email?: string;
 }
 
 export const campaignsService = {
@@ -52,15 +33,6 @@ export const campaignsService = {
 
   listEmails: (id: string, params?: EmailListParams): Promise<PaginatedResponse<EmailSent>> =>
     http.get(`/campaigns/${id}/emails`, { params }).then((r) => r.data),
-
-  getMicrosite: (trackingId: string): Promise<MicrositeData> =>
-    http.get(`/campaigns/microsite/${trackingId}`).then((r) => r.data),
-
-  scheduleCall: (
-    trackingId: string,
-    data?: ScheduleCallRequest
-  ): Promise<{ success: boolean; message: string }> =>
-    http.post(`/campaigns/microsite/${trackingId}/schedule`, data).then((r) => r.data),
 };
 
 export default campaignsService;
