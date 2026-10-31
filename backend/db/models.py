@@ -88,6 +88,34 @@ async def get_db():
 
 
 # ── Base ─────────────────────────────────────────────────────────────────────
+from sqlalchemy.types import TypeDecorator
+try:
+    from pgvector.sqlalchemy import Vector as PgVector
+    PGVECTOR_AVAILABLE = True
+except ImportError:
+    PGVECTOR_AVAILABLE = False
+    PgVector = None
+
+
+class VectorColumn(TypeDecorator):
+    """
+    Portable 384-dimensional vector column:
+    Uses native pgvector.sqlalchemy.Vector(dim) on PostgreSQL,
+    and JSON array on SQLite / fallback dialects for test isolation.
+    """
+    impl = JSON
+    cache_ok = True
+
+    def __init__(self, dim=384, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dim = dim
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql" and PGVECTOR_AVAILABLE and PgVector is not None:
+            return dialect.type_descriptor(PgVector(self.dim))
+        return dialect.type_descriptor(JSON())
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -400,7 +428,7 @@ class Job(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
     is_published = Column(Boolean, default=True, nullable=False)  # Visible to candidate portal
     posted_at = Column(DateTime(timezone=True))
-    embedding_id = Column(String(255))  # ChromaDB reference
+    embedding_id = Column(String(255))
 
     company = relationship("Company", back_populates="jobs")
     candidates = relationship("JobCandidate", back_populates="job")
@@ -433,7 +461,7 @@ class Candidate(Base, TimestampMixin):
     status = Column(Enum(CandidateStatus), default=CandidateStatus.SOURCED, index=True)
     source = Column(String(100))
     score = Column(Float, default=0.0)
-    embedding_id = Column(String(255))  # ChromaDB reference
+    embedding_id = Column(String(255))
     ai_summary = Column(Text)
     do_not_contact = Column(Boolean, default=False)
     meta_data = Column("metadata", JSON, default=dict)
@@ -471,6 +499,7 @@ class Resume(Base, TimestampMixin):
     parsed_data = Column(JSON, default=dict)
     score = Column(Float, default=0.0)
     embedding_id = Column(String(255))
+    embedding = Column(VectorColumn(384), nullable=True)  # Native pgvector (384-d FastEmbed)
     is_current = Column(Boolean, default=True)
 
     candidate = relationship("Candidate", back_populates="resumes")

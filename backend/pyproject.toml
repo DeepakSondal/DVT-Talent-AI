@@ -43,6 +43,7 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.45.2",
     "litellm>=1.40.0",
     "fastembed>=0.3.0",
+    "pgvector>=0.2.0",
 ]
 
 [project.optional-dependencies]

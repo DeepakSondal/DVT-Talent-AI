@@ -38,6 +38,7 @@ websockets>=14.0
 # AI & Semantic Search Tools
 litellm>=1.40.0
 fastembed>=0.3.0
+pgvector>=0.2.0
 
 # Document Parsing
 python-docx>=1.1.0
