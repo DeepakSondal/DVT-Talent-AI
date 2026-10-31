@@ -13,7 +13,7 @@ celery>=5.4.0
 httpx>=0.28.1
 openai>=1.60.0
 pydantic-ai==1.107.7
-logfire>=3.0.0
+logfire[fastapi]>=5.4.0
 mcp>=2.3.0
 
 # Auth — kept pinned for security stability
@@ -42,11 +42,11 @@ python-dateutil>=2.9.0
 
 # Observability
 sentry-sdk[fastapi]>=2.20.0
-opentelemetry-sdk>=1.30.0
-opentelemetry-exporter-otlp>=1.30.0
+opentelemetry-sdk>=1.45.2
+opentelemetry-exporter-otlp>=1.45.2
 
 # Testing
 pytest>=9.2.0
-pytest-asyncio>=0.23.6
+pytest-asyncio>=1.4.1
 aiosqlite>=0.20.0
 filelock>=4.2.4
