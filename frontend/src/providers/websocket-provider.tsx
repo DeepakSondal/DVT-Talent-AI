@@ -32,7 +32,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       if (!token) return;
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      // Using standard backend port 8000 for standard dev setup or inferred from environment
+      const explicitWsUrl = process.env.NEXT_PUBLIC_WS_URL;
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
       let host = apiUrl.replace("http://", "").replace("https://", "").split("/api")[0];
       
@@ -41,7 +41,9 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         host = window.location.host;
       }
       
-      const wsUrl = `${protocol}//${host}/api/v1/ws/pipeline-events?token=${token}`;
+      const wsUrl = explicitWsUrl
+        ? `${explicitWsUrl.replace(/\/$/, "")}/pipeline-events?token=${token}`
+        : `${protocol}//${host}/api/v1/ws/pipeline-events?token=${token}`;
 
       console.log(`[WS] Syncing with Intelligence Stream at ${wsUrl}`);
       
@@ -81,15 +83,19 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         setIsConnected(false);
+        // Do not auto-reconnect if rejected for policy/auth violation
+        if (event.code === 1008) {
+          console.warn("[WS] Authentication rejected by server (code 1008). Token may be expired or invalid.");
+          return;
+        }
         console.warn("[WS] Disconnected. Re-syncing in 5s...");
         timeoutId = setTimeout(connect, 5000);
       };
 
-      ws.onerror = (err) => {
-        console.error("[WS] Stream Error:", err);
-        ws.close();
+      ws.onerror = () => {
+        console.warn("[WS] Connection stream notice: server closed or unreachable.");
       };
 
       socketRef.current = ws;
