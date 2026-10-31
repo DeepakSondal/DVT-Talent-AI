@@ -41,6 +41,8 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.20.0",
     "opentelemetry-sdk>=1.45.2",
     "opentelemetry-exporter-otlp>=1.45.2",
+    "litellm>=1.40.0",
+    "fastembed>=0.3.0",
 ]
 
 [project.optional-dependencies]

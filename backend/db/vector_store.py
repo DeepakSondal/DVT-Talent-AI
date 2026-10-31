@@ -14,6 +14,12 @@ except ImportError:
     ChromaSettings = object # Mock for type hints
 
 try:
+    from fastembed import TextEmbedding
+    FASTEMBED_AVAILABLE = True
+except ImportError:
+    FASTEMBED_AVAILABLE = False
+
+try:
     from sentence_transformers import SentenceTransformer
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
@@ -76,22 +82,46 @@ class VectorStore:
         )
 
     def _get_model(self):
-        """Lazy load the embedding model"""
-        if not SENTENCE_TRANSFORMERS_AVAILABLE:
-            return None
-        if self._model is None:
-            # Use a lightweight but powerful local model
+        """Lazy load the embedding model with FastEmbed (ONNX) priority over SentenceTransformers"""
+        if self._model is not None:
+            return self._model
+        if FASTEMBED_AVAILABLE:
+            try:
+                self._model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+                self._is_fastembed = True
+                return self._model
+            except Exception as e:
+                print(f"[VectorStore] FastEmbed init fallback: {e}")
+        if SENTENCE_TRANSFORMERS_AVAILABLE:
             self._model = SentenceTransformer("all-MiniLM-L6-v2")
-        return self._model
+            self._is_fastembed = False
+            return self._model
+        return None
 
     def embed_text(self, text: str) -> List[float]:
-        """Convert text string into a vector embedding"""
+        """Convert text string into a vector embedding (384 dimensions)"""
         model = self._get_model()
         if not model:
             # Return a dummy vector if model unavailable
             return [0.0] * 384
+        if getattr(self, "_is_fastembed", False):
+            try:
+                embeddings = list(model.embed([text[:2000]]))
+                return embeddings[0].tolist()
+            except Exception:
+                return [0.0] * 384
         # Chroma expects a list of floats
         return model.encode(text[:2000]).tolist()
+
+    @staticmethod
+    def cosine_similarity(v1: List[float], v2: List[float]) -> float:
+        """Calculate cosine similarity between two vector embeddings (useful for pgvector)"""
+        dot = sum(a * b for a, b in zip(v1, v2))
+        norm1 = sum(a * a for a in v1) ** 0.5
+        norm2 = sum(b * b for b in v2) ** 0.5
+        if not norm1 or not norm2:
+            return 0.0
+        return dot / (norm1 * norm2)
 
     # ── Resumes ─────────────────────────────────────────────────────────────
     def upsert_resume(self, tenant_id: str, resume_id: str, text: str, metadata: dict):

@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { CandidateCardData } from "@/components/candidates/CandidateCard";
 import { CandidateKanbanBoard } from "@/components/candidates/CandidateKanbanBoard";
 import { CandidateDrawer } from "@/components/candidates/CandidateDrawer";
+import { CandidateTanstackTable } from "@/components/candidates/CandidateTanstackTable";
 
 const INITIAL_CANDIDATES: CandidateCardData[] = [
     {
@@ -458,100 +459,13 @@ export default function CandidatesPage() {
                     onAddCandidate={() => setIsUploadOpen(true)}
                 />
             ) : (
-                <Card className="overflow-hidden border-border bg-card rounded-2xl shadow-xs">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-muted/30 border-b border-border/80">
-                                    <th className="p-4 w-10">
-                                        <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-primary transition-colors">
-                                            {selectedIds.length === filteredCandidates.length && filteredCandidates.length > 0 ? (
-                                                <CheckSquare className="w-4 h-4 text-primary" />
-                                            ) : (
-                                                <Square className="w-4 h-4" />
-                                            )}
-                                        </button>
-                                    </th>
-                                    <th className="p-4 text-xs font-semibold text-muted-foreground">Candidate Profile</th>
-                                    <th className="p-4 text-xs font-semibold text-muted-foreground">AI Fit Score</th>
-                                    <th className="p-4 text-xs font-semibold text-muted-foreground">Pipeline Stage</th>
-                                    <th className="p-4 text-xs font-semibold text-muted-foreground">Skills &amp; Exp</th>
-                                    <th className="p-4 text-right text-xs font-semibold text-muted-foreground">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/60 text-xs">
-                                {filteredCandidates.map((cand) => (
-                                    <tr 
-                                        key={cand.id}
-                                        className="hover:bg-muted/20 transition-colors cursor-pointer"
-                                        onClick={() => setDrawerCandidate(cand)}
-                                    >
-                                        <td className="p-4" onClick={(e) => e.stopPropagation()}>
-                                            <button onClick={() => toggleSelect(cand.id)} className="text-muted-foreground hover:text-primary">
-                                                {selectedIds.includes(cand.id) ? (
-                                                    <CheckSquare className="w-4 h-4 text-primary" />
-                                                ) : (
-                                                    <Square className="w-4 h-4" />
-                                                )}
-                                            </button>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary font-bold flex items-center justify-center text-xs">
-                                                    {cand.first_name[0]}{cand.last_name[0]}
-                                                </div>
-                                                <div>
-                                                    <p className="font-semibold text-foreground">{cand.first_name} {cand.last_name}</p>
-                                                    <p className="text-[11px] text-muted-foreground">{cand.title} • {cand.company}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="p-4">
-                                            <Badge variant="outline" className="font-bold text-[10px] bg-primary/10 text-primary border-primary/20">
-                                                {cand.score}% Match
-                                            </Badge>
-                                        </td>
-                                        <td className="p-4">
-                                            <span className="capitalize px-2 py-0.5 rounded-md bg-muted text-[11px] font-medium text-foreground">
-                                                {cand.status}
-                                            </span>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="flex flex-wrap gap-1 max-w-xs">
-                                                {cand.skills.slice(0, 2).map((s) => (
-                                                    <span key={s} className="px-1.5 py-0.5 rounded bg-muted text-[10px] text-muted-foreground">
-                                                        {s}
-                                                    </span>
-                                                ))}
-                                                {cand.skills.length > 2 && (
-                                                    <span className="text-[10px] text-muted-foreground font-medium">+{cand.skills.length - 2}</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex items-center justify-end gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => setDrawerCandidate(cand)}
-                                                    className="h-7 px-2 text-xs"
-                                                >
-                                                    <Eye className="w-3.5 h-3.5 mr-1" />
-                                                    View
-                                                </Button>
-                                                <Link href={`/dashboard/candidates/${cand.id}`}>
-                                                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-                                                        Profile
-                                                    </Button>
-                                                </Link>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </Card>
+                <CandidateTanstackTable
+                    candidates={filteredCandidates}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelect}
+                    onToggleSelectAll={toggleSelectAll}
+                    onPreview={(cand) => setDrawerCandidate(cand)}
+                />
             )}
 
             {/* Recruiterflow-Style Slide-over Drawer */}

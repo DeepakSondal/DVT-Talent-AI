@@ -15,7 +15,7 @@ SUSPECT_PATTERNS = [
     r"system\s*:\s*",
     r"system\s+prompt",
     r"you\s+are\s+now\s+a",
-    r"set\s+score\s+to\s+100",
+    r"set\s+(\w+\s+)?score\s+to\s+100",
     r"score\s*:\s*100",
     r"always\s+recommend\s+this\s+candidate",
     r"override\s+evaluation",

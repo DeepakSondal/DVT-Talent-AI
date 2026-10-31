@@ -117,6 +117,34 @@ class ResumeParserService:
     MAX_EXTRACTED_CHARS = 100_000
 
     @classmethod
+    def _extract_with_docling(cls, content_bytes: bytes, filename: str) -> Optional[str]:
+        """
+        Attempts high-fidelity layout-aware parsing via Docling if installed.
+        Returns extracted markdown or None if Docling is unavailable or fails.
+        """
+        try:
+            from docling.document_converter import DocumentConverter
+            import tempfile
+            ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ".pdf"
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                tmp.write(content_bytes)
+                tmp_path = Path(tmp.name)
+            try:
+                converter = DocumentConverter()
+                result = converter.convert(tmp_path)
+                md = result.document.export_to_markdown()
+                if md and md.strip():
+                    logger.info("docling_layout_extracted", chars=len(md))
+                    return md
+            finally:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+        except Exception:
+            # Docling not installed or conversion skipped; fallback smoothly
+            pass
+        return None
+
+    @classmethod
     def extract_text(cls, content_bytes: bytes, filename: str) -> str:
         """
         Extract complete text from PDF, DOCX, or TXT file bytes with resource-exhaustion
@@ -130,8 +158,13 @@ class ResumeParserService:
             logger.warning("resume_executable_signature_blocked", filename=filename)
             return ""
 
+        # 0. High-fidelity Docling layout parsing (if available)
+        docling_text = cls._extract_with_docling(content_bytes, filename)
+        if docling_text:
+            text = docling_text
+
         # 1. PDF Extraction
-        if ext == ".pdf":
+        elif ext == ".pdf":
             text = cls._extract_from_pdf(content_bytes)
             
         # 2. Word (DOCX / DOC) Extraction
@@ -153,6 +186,19 @@ class ResumeParserService:
         except Exception:
             pass
         return clean_text[:cls.MAX_EXTRACTED_CHARS]
+
+    @classmethod
+    def extract_anonymized_text(cls, content_bytes: bytes, filename: str) -> Tuple[str, Dict[str, Any]]:
+        """
+        Extracts resume text and strips candidate PII under GDPR Article 17 prior to LLM routing.
+        """
+        raw_clean = cls.extract_text(content_bytes, filename)
+        try:
+            from services.pii_service import pii_service
+            return pii_service.mask_pii(raw_clean)
+        except Exception as e:
+            logger.warning("pii_masking_fallback_error", error=str(e))
+            return raw_clean, {"redactions_count": 0, "entities_found": [], "engine": "error_fallback"}
 
     @classmethod
     def _extract_from_pdf(cls, content_bytes: bytes) -> str:
