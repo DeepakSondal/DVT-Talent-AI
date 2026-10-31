@@ -4,7 +4,6 @@ Provides FastEmbed ONNX vector embeddings, batch processing, BM25 hybrid search,
 and native PostgreSQL pgvector storage with zero ChromaDB hard dependency.
 """
 import uuid
-import json
 import re
 from collections import Counter
 from typing import Dict, List, Any, Optional
@@ -14,12 +13,12 @@ log = structlog.get_logger(__name__)
 
 # Optional ChromaDB integration (Legacy — decommissioned as primary)
 try:
-    import chromadb
-    from chromadb.config import Settings as ChromaSettings
+    import chromadb  # pyrefly: ignore[missing-import]  # type: ignore
+    from chromadb.config import Settings as ChromaSettings  # pyrefly: ignore[missing-import]  # type: ignore
     CHROMA_AVAILABLE = True
 except ImportError:
     CHROMA_AVAILABLE = False
-    ChromaSettings = object
+    ChromaSettings = object  # type: ignore
 
 # Modern Embedding Engine: FastEmbed (ONNX, CPU-optimized)
 try:
@@ -30,12 +29,15 @@ except ImportError:
 
 # Fallback Embedding Engine
 try:
-    from sentence_transformers import SentenceTransformer
+    from sentence_transformers import SentenceTransformer  # pyrefly: ignore[missing-import]  # type: ignore
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
-from config import settings
+try:
+    from backend.config import settings
+except ImportError:
+    from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
 
 
 class VectorStore:
@@ -252,7 +254,7 @@ class VectorStore:
         return scored_candidates[:limit]
 
     # ── 3. Upsert & Search Resumes (Option 1 & 3) ────────────────────────────
-    def upsert_resume(self, tenant_id: str, resume_id: str, text: str, metadata: dict):
+    def upsert_resume(self, tenant_id: str, resume_id: str, text: str, metadata: Optional[Dict[str, Any]] = None):
         """Add or update a resume with forced tenant metadata isolation"""
         extended_metadata = {k: str(v) for k, v in metadata.items()}
         extended_metadata["tenant_id"] = str(tenant_id)
@@ -326,7 +328,7 @@ class VectorStore:
 
         return len(items)
 
-    def search_resumes(self, tenant_id: str, query_text: str, limit: int = 10, filters: dict = None) -> List[dict]:
+    def search_resumes(self, tenant_id: str, query_text: str, limit: int = 10, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Find most similar resumes ONLY within the specified tenant space"""
         query_embedding = self.embed_text(query_text)
 
@@ -385,7 +387,10 @@ class VectorStore:
         Executes native cosine distance query on the Resume model.
         """
         from sqlalchemy import select
-        from db.models import Resume
+        try:
+            from backend.db.models import Resume
+        except ImportError:
+            from db.models import Resume  # pyrefly: ignore[missing-import]  # type: ignore
 
         query_vector = self.embed_text(query_text)
         try:
@@ -471,7 +476,7 @@ class VectorStore:
                     self.resumes.delete(ids=ids_to_delete, where={"tenant_id": str(tenant_id)})
                 except Exception as e:
                     log.warning("chroma_delete_by_ids_failed", error=str(e), ids=ids_to_delete)
-                    raise e
+                    raise
 
             if candidate_id:
                 try:
@@ -484,12 +489,12 @@ class VectorStore:
                     self.resumes.delete(where=where_filter)
                 except Exception as e:
                     log.warning("chroma_delete_by_filter_failed", error=str(e), candidate_id=candidate_id)
-                    raise e
+                    raise
 
         return True
 
     # ── 6. Jobs Upsert & Search ──────────────────────────────────────────────
-    def upsert_job(self, job_id: str, text: str, metadata: dict, tenant_id: Optional[str] = None):
+    def upsert_job(self, job_id: str, text: str, metadata: Optional[Dict[str, Any]] = None, tenant_id: Optional[str] = None):
         """Add or update a job post in the vector store with tenant isolation metadata"""
         extended_metadata = {k: str(v) for k, v in (metadata or {}).items()}
         if tenant_id:
@@ -515,7 +520,7 @@ class VectorStore:
             "embedding": embedding
         }
 
-    def search_jobs(self, query_text: str, limit: int = 10, tenant_id: Optional[str] = None) -> List[dict]:
+    def search_jobs(self, query_text: str, limit: int = 10, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Find most similar jobs to a candidate profile / text, optionally scoped to tenant_id"""
         query_embedding = self.embed_text(query_text)
 
