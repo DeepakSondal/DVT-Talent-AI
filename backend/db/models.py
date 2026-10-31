@@ -19,9 +19,9 @@ from sqlalchemy.sql import func
 import enum
 
 try:
-    from config import settings
+    from backend.config import settings
 except ImportError:
-    from config import settings
+    from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
 
 
 # ── Engine & Session ────────────────────────────────────────────────────────
