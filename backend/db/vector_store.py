@@ -5,6 +5,9 @@ Handles embeddings and semantic similarity matching for resumes and jobs.
 import uuid
 import json
 from typing import Dict, List, Any, Optional
+import structlog
+
+log = structlog.get_logger(__name__)
 try:
     import chromadb
     from chromadb.config import Settings as ChromaSettings

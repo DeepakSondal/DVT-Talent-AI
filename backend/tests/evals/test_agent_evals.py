@@ -67,3 +67,4 @@ async def test_llm_gateway_fallbacks():
     fallbacks = llm_gateway.get_available_fallbacks()
     assert isinstance(fallbacks, list)
     assert len(fallbacks) >= 1
+
