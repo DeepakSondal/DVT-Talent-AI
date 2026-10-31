@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ThemeProvider } from "./theme-provider";
 import { WebSocketProvider } from "./websocket-provider";
 import { Toaster } from "sonner";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -20,7 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <WebSocketProvider>
-          {children}
+          <NuqsAdapter>{children}</NuqsAdapter>
           <Toaster
             position="bottom-right"
             toastOptions={{

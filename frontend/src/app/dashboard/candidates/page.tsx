@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryState, parseAsString, parseAsStringLiteral } from "nuqs";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { 
     Search, Filter, Plus, MoreHorizontal, 
@@ -108,9 +109,9 @@ const INITIAL_CANDIDATES: CandidateCardData[] = [
 
 export default function CandidatesPage() {
     const [candidates, setCandidates] = useState<CandidateCardData[]>(INITIAL_CANDIDATES);
-    const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+    const [search, setSearch] = useQueryState("q", parseAsString.withDefault(""));
+    const [statusFilter, setStatusFilter] = useQueryState("status", parseAsString.withDefault("all"));
+    const [viewMode, setViewMode] = useQueryState("view", parseAsStringLiteral(["kanban", "table"] as const).withDefault("kanban"));
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [drawerCandidate, setDrawerCandidate] = useState<CandidateCardData | null>(null);
     const [isUploadOpen, setIsUploadOpen] = useState(false);

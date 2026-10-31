@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { tenantsApi } from "@/lib/api";
@@ -27,7 +27,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <>
       <SidebarLayout>
-        {children}
+        {/* nuqs reads useSearchParams; Next needs a Suspense boundary for static prerender */}
+        <Suspense>{children}</Suspense>
       </SidebarLayout>
       
       {showWizard && (

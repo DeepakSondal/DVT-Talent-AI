@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useQueryState, parseAsString, parseAsStringLiteral } from "nuqs";
 import { 
   Briefcase, Plus, Search, Filter, 
   Users, Clock, Zap,
@@ -25,9 +25,9 @@ export default function JobsPage() {
   const shouldReduceMotion = useReducedMotion();
   const transitionConfig = shouldReduceMotion ? { duration: 0 } : springPreset;
 
-  const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "remote" | "full-time" | "active">("all");
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [search, setSearch] = useQueryState("q", parseAsString.withDefault(""));
+  const [filterType, setFilterType] = useQueryState("filter", parseAsStringLiteral(["all", "remote", "full-time", "active"] as const).withDefault("all"));
+  const [viewMode, setViewMode] = useQueryState("view", parseAsStringLiteral(["grid", "table"] as const).withDefault("grid"));
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["jobs", search],
