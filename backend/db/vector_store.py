@@ -18,7 +18,7 @@ try:
     CHROMA_AVAILABLE = True
 except ImportError:
     CHROMA_AVAILABLE = False
-    ChromaSettings = object  # type: ignore
+    ChromaSettings = object
 
 # Modern Embedding Engine: FastEmbed (ONNX, CPU-optimized)
 try:
@@ -256,7 +256,7 @@ class VectorStore:
     # ── 3. Upsert & Search Resumes (Option 1 & 3) ────────────────────────────
     def upsert_resume(self, tenant_id: str, resume_id: str, text: str, metadata: Optional[Dict[str, Any]] = None):
         """Add or update a resume with forced tenant metadata isolation"""
-        extended_metadata = {k: str(v) for k, v in metadata.items()}
+        extended_metadata = {k: str(v) for k, v in (metadata or {}).items()}
         extended_metadata["tenant_id"] = str(tenant_id)
         embedding = self.embed_text(text)
 
