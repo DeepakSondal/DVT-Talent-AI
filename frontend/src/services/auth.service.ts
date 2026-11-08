@@ -28,9 +28,14 @@ export const authService = {
     return res.data;
   },
 
-  register: async (data: { email: string; password: string; full_name: string; role?: string; company_name?: string }): Promise<AuthResponse> => {
+  register: async (data: { email: string; password: string; full_name: string; role?: string; company_name?: string; otp?: string }): Promise<AuthResponse> => {
     const res = await http.post<AuthResponse>("/auth/register", data);
     persistAuthSession(res.data);
+    return res.data;
+  },
+
+  sendRegistrationOtp: async (email: string): Promise<{ status: string; message: string; dev_code?: string }> => {
+    const res = await http.post<{ status: string; message: string; dev_code?: string }>("/auth/register/send-otp", { email });
     return res.data;
   },
 

@@ -42,7 +42,7 @@ db_url = settings.database_url
 from sqlalchemy import event
 from sqlalchemy.pool import NullPool
 
-# Use NullPool during test execution so connections are not shared across pytest async event loops
+# Use NullPool during test execution or SQLite mode so connections are not held open across async tasks causing lock contention
 is_testing = "pytest" in sys.modules or os.environ.get("TESTING") == "true"
 is_sqlite = "sqlite" in db_url
 connect_args = {"timeout": 30} if is_sqlite else {}
@@ -52,7 +52,7 @@ db_echo = os.getenv("DB_ECHO", "false").lower() == "true"
 pool_size = max(settings.db_pool_size, 50)
 max_overflow = max(settings.db_max_overflow, 25)
 
-if is_testing:
+if is_testing or is_sqlite:
     engine = create_async_engine(
         db_url,
         echo=db_echo,

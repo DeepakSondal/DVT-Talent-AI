@@ -53,10 +53,7 @@ export default function CandidateDetailPage() {
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduleNotes, setScheduleNotes] = useState("");
   const [copied, setCopied] = useState(false);
-  const [notes, setNotes] = useState<string[]>([
-    "Profile enriched via Sourcing Lab. Verified corporate email domain.",
-    "Strong technical fit for distributed computing roles."
-  ]);
+  const [notes, setNotes] = useState<string[]>([]);
   const [newNote, setNewNote] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -76,7 +73,14 @@ export default function CandidateDetailPage() {
           setCandidate(candData);
           setCandidateStatus(candData.status || "sourced");
           setResumeDetails(resumeData);
-
+          const storedNotes = typeof window !== "undefined" ? localStorage.getItem(`dvt_cand_notes_${id}`) : null;
+          if (storedNotes) {
+            try {
+              setNotes(JSON.parse(storedNotes));
+            } catch {
+              setNotes([]);
+            }
+          }
         }
       } catch (err) {
         console.warn("Failed to load candidate:", err);
@@ -102,7 +106,11 @@ export default function CandidateDetailPage() {
 
   const handleAddNote = () => {
     if (!newNote.trim()) return;
-    setNotes(prev => [newNote.trim(), ...prev]);
+    const updated = [newNote.trim(), ...notes];
+    setNotes(updated);
+    if (typeof window !== "undefined" && id) {
+      localStorage.setItem(`dvt_cand_notes_${id}`, JSON.stringify(updated));
+    }
     setNewNote("");
     toast.success("Note Saved to Candidate Record");
   };
@@ -495,12 +503,16 @@ export default function CandidateDetailPage() {
             </div>
 
             <div className="space-y-2 pt-2 border-t border-border/60">
-              {notes.map((note, idx) => (
-                <div key={idx} className="p-2.5 rounded-xl bg-muted/30 border border-border/60 text-xs text-foreground">
-                  <p className="leading-snug">{note}</p>
-                  <span className="text-[10px] text-muted-foreground/80 mt-1 block">Recruiter • Recently</span>
-                </div>
-              ))}
+              {notes.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground py-2 text-center">No evaluation notes recorded yet.</p>
+              ) : (
+                notes.map((note, idx) => (
+                  <div key={idx} className="p-2.5 rounded-xl bg-muted/30 border border-border/60 text-xs text-foreground">
+                    <p className="leading-snug">{note}</p>
+                    <span className="text-[10px] text-muted-foreground/80 mt-1 block">Recruiter • Saved</span>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
 

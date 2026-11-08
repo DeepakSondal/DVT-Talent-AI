@@ -22,6 +22,8 @@ from db.models import (
     TeamInvitation,
     InvitationStatus,
     Tenant,
+    CreditTransaction,
+    CreditTransactionType,
 )
 from api.routes.auth import get_current_user, hash_password, create_access_token
 from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
@@ -496,6 +498,19 @@ async def accept_team_invitation(
             status_code=400,
             detail="This invitation is no longer active, expired, or was already accepted by another session."
         )
+
+    # 🎁 Team Collaboration Incentive: Grant +15 bonus credits to tenant
+    if invitation.tenant_id:
+        tenant_obj = await db.get(Tenant, invitation.tenant_id)
+        if tenant_obj:
+            tenant_obj.credits_balance = (tenant_obj.credits_balance or 0) + 15
+            team_bonus_tx = CreditTransaction(
+                tenant_id=invitation.tenant_id,
+                amount=15,
+                type=CreditTransactionType.CREDIT,
+                description=f"Team Collaboration Incentive (+15 Credits) for onboarding {new_user.full_name}",
+            )
+            db.add(team_bonus_tx)
 
     try:
         await db.commit()

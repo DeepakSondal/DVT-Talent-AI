@@ -5,7 +5,10 @@ JWT-based auth with secure HttpOnly cookies
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import uuid
+import secrets
 import asyncio
+import os
+import structlog
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Cookie
 from fastapi.responses import JSONResponse
@@ -17,14 +20,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from config import settings
-from db.models import User, UserRole, Tenant, Candidate, CandidateStatus, get_db
+from db.models import User, UserRole, Tenant, Candidate, CandidateStatus, CreditTransaction, CreditTransactionType, get_db
 from services.redis_service import (
     is_token_revoked,
     revoke_token,
     record_rate_limit,
     get_rate_limit_count,
     reset_rate_limit,
+    store_email_otp,
+    verify_email_otp,
 )
+from services.email_service import email_service
 from api.middleware.rate_limit import (
     get_real_client_ip,
     enforce_endpoint_rate_limit,
@@ -39,12 +45,17 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 # ── Pydantic Schemas ──────────────────────────────────────────────────────
+class SendOtpRequest(BaseModel):
+    email: EmailStr
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str
     role: Optional[str] = "recruiter"
     company_name: Optional[str] = None
+    otp: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -162,6 +173,69 @@ async def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────
+@router.post("/register/send-otp", status_code=status.HTTP_200_OK)
+async def send_registration_otp(
+    request: Request,
+    payload: SendOtpRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dispatches a 6-digit email OTP for sign-up verification.
+    Rate limited to 5 OTP requests per 10 minutes per IP/email.
+    """
+    clean_email = payload.email.strip().lower()
+
+    # Rate limiting
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="auth_send_otp",
+        identifier=clean_email,
+        limit=5,
+        window_seconds=600,
+        detail="Too many OTP requests. Please wait a few minutes before trying again.",
+    )
+
+    # Check if user already exists
+    existing = (await db.execute(select(User).where(User.email == clean_email))).scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email address already exists. Please sign in instead.",
+        )
+
+    # Generate cryptographically secure 6-digit OTP
+    otp_code = f"{secrets.randbelow(900000) + 100000}"
+    await store_email_otp(clean_email, otp_code, ttl_seconds=600)
+
+    # Dispatch via email service
+    subject = f"Your DVT Talent AI Verification Code: {otp_code}"
+    body = (
+        f"Hello,\n\n"
+        f"Your 6-digit verification code for DVT Talent AI is:\n\n"
+        f"   {otp_code}\n\n"
+        f"This code will expire in 10 minutes. If you did not request this, please disregard this email.\n\n"
+        f"— DVT Talent AI Security Team"
+    )
+
+    try:
+        await email_service.send_email(
+            email_id=f"otp_{uuid.uuid4().hex[:12]}",
+            to_address=clean_email,
+            subject=subject,
+            body=body,
+        )
+    except Exception as exc:
+        log.warning("otp_email_send_exception", error=str(exc))
+
+    is_dev = not settings.is_production or os.getenv("APP_ENV") != "production"
+    return {
+        "status": "success",
+        "message": f"Verification code sent to {clean_email}",
+        "expires_in": 600,
+        "dev_code": otp_code if is_dev else None,
+    }
+
+
 @router.post("/register", status_code=201)
 async def register(
     user_data: UserCreate,
@@ -183,6 +257,15 @@ async def register(
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # OTP Verification Gate:
+    # If otp is provided, or in production mode, verify email ownership
+    if user_data.otp or settings.is_production:
+        if not user_data.otp or not await verify_email_otp(user_data.email, user_data.otp):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification code. Please request a new code.",
+            )
+
     is_candidate = (user_data.role or "").strip().lower() == "candidate"
     
     tenant_id = None
@@ -200,16 +283,27 @@ async def register(
             is_active=True,
             sender_name=user_data.full_name,
             sender_email=user_data.email,
+            credits_balance=50,
+            credits_last_reset_at=datetime.now(timezone.utc),
         )
         db.add(tenant)
         await db.flush()
         tenant_id = tenant.id
 
+        # 🎁 Grant 50 Welcome Pilot Credits to kickstart autonomous sourcing
+        welcome_tx = CreditTransaction(
+            tenant_id=tenant.id,
+            amount=50,
+            type=CreditTransactionType.CREDIT,
+            description="Welcome Pilot Credits (50 Free Trial Credits)",
+        )
+        db.add(welcome_tx)
+
     user = User(
         email=user_data.email,
         full_name=user_data.full_name,
         hashed_password=await hash_password(user_data.password),
-        role=UserRole.CANDIDATE if is_candidate else UserRole.RECRUITER,
+        role=UserRole.CANDIDATE if is_candidate else UserRole.ADMIN,
         tenant_id=tenant_id,
     )
     db.add(user)

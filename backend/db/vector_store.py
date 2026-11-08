@@ -11,6 +11,8 @@ elif __name__.startswith("db."):
     sys.modules["backend." + __name__] = sys.modules[__name__]
 
 import uuid
+import os
+import json
 import re
 from collections import Counter
 from typing import Dict, List, Any, Optional
@@ -62,7 +64,7 @@ class VectorStore:
         return cls._instance
 
     def _init_store(self):
-        """Initialize in-memory fallback index and optional Chroma connection"""
+        """Initialize persistent local fallback index and optional Chroma connection"""
         self._local_index = {
             "resumes": {},
             "jobs": {}
@@ -71,6 +73,8 @@ class VectorStore:
         self.client = None
         self.resumes = None
         self.jobs = None
+        self._index_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "chroma_db", "vector_index.json")
+        self._load_local_index()
 
         if not CHROMA_AVAILABLE:
             log.info("vector_store_mode", backend="native_fastembed_pgvector", chroma="decommissioned")
@@ -94,6 +98,31 @@ class VectorStore:
                     self.client = None
             else:
                 self.client = None
+
+    def _load_local_index(self):
+        """Load persisted vector index from disk when not running isolated unit tests."""
+        if "pytest" in sys.modules or os.environ.get("TESTING") == "true":
+            return
+        try:
+            if os.path.exists(self._index_file):
+                with open(self._index_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        self._local_index["resumes"] = data.get("resumes", {})
+                        self._local_index["jobs"] = data.get("jobs", {})
+        except Exception as e:
+            log.warning("local_vector_index_load_failed", error=str(e))
+
+    def _persist_local_index(self):
+        """Persist local vector index to disk so embeddings survive server restarts on SQLite."""
+        if "pytest" in sys.modules or os.environ.get("TESTING") == "true":
+            return
+        try:
+            os.makedirs(os.path.dirname(self._index_file), exist_ok=True)
+            with open(self._index_file, "w", encoding="utf-8") as f:
+                json.dump(self._local_index, f)
+        except Exception as e:
+            log.warning("local_vector_index_persist_failed", error=str(e))
 
     def _ensure_collections(self):
         """Create collections if Chroma client is online"""
@@ -315,6 +344,7 @@ class VectorStore:
             "metadata": extended_metadata,
             "embedding": embedding
         }
+        self._persist_local_index()
 
     def upsert_resumes_batch(self, tenant_id: str, items: List[Dict[str, Any]]) -> int:
         """
@@ -359,6 +389,7 @@ class VectorStore:
                 "metadata": m,
                 "embedding": emb
             }
+        self._persist_local_index()
 
         return len(items)
 
@@ -470,6 +501,7 @@ class VectorStore:
             computed_vecs = self.embed_batch(texts_to_embed)
             for idx, vec in zip(missing_res_indices, computed_vecs):
                 batch_embs[idx] = vec
+                resumes[idx].embedding = vec
 
         ranked = []
         for idx, r in enumerate(resumes):
@@ -534,6 +566,7 @@ class VectorStore:
                     log.warning("chroma_delete_by_filter_failed", error=str(e), candidate_id=candidate_id)
                     raise
 
+        self._persist_local_index()
         return True
 
     # ── 6. Jobs Upsert & Search ──────────────────────────────────────────────
@@ -562,6 +595,7 @@ class VectorStore:
             "metadata": extended_metadata,
             "embedding": embedding
         }
+        self._persist_local_index()
 
     def search_jobs(self, query_text: str, limit: int = 10, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Find most similar jobs to a candidate profile / text, optionally scoped to tenant_id"""

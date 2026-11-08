@@ -110,32 +110,8 @@ export default function SwarmCommandCenter() {
         try {
             setStatus("running");
             setLogs(prev => [...prev, `[PIPELINE] Initiating automated recruitment workflow (${activeAgents.length} Active Agents) for '${targetRole}'...`]);
-            setProgress(10);
-            
-            // Step 1: Requisition Extraction & Constraints
+            setProgress(15);
             if (agents.find(a => a.id === "discovery")?.enabled) updateAgentStatus("discovery", "thinking");
-            setLogs(prev => [...prev, "✓ Requisition Analyzer: Extracted core role constraints and skill criteria"]);
-            setProgress(35);
-
-            // Step 2: Sourcing & Screening
-            setTimeout(() => {
-                if (agents.find(a => a.id === "discovery")?.enabled) updateAgentStatus("discovery", "success");
-                if (agents.find(a => a.id === "sourcing")?.enabled) updateAgentStatus("sourcing", "thinking");
-                if (agents.find(a => a.id === "screening")?.enabled) updateAgentStatus("screening", "thinking");
-                setLogs(prev => [...prev, "✓ Discovery & Sourcing: Discovered 18 qualified candidate profiles"]);
-                setProgress(65);
-            }, 2500);
-
-            // Step 3: Critic & Outreach
-            setTimeout(() => {
-                if (agents.find(a => a.id === "sourcing")?.enabled) updateAgentStatus("sourcing", "success");
-                if (agents.find(a => a.id === "screening")?.enabled) updateAgentStatus("screening", "success");
-                if (agents.find(a => a.id === "critic")?.enabled) updateAgentStatus("critic", "success");
-                if (agents.find(a => a.id === "outreach")?.enabled) updateAgentStatus("outreach", "thinking");
-                if (agents.find(a => a.id === "analytics")?.enabled) updateAgentStatus("analytics", "success");
-                setLogs(prev => [...prev, "✓ Critic Audit: EEOC 4/5ths Rule verification CLEAN (Selection Ratio > 0.85)"]);
-                setProgress(90);
-            }, 3800);
 
             const res = await agentsApi.runSwarm({
                 industry: targetRole,
@@ -144,34 +120,52 @@ export default function SwarmCommandCenter() {
                 require_approval: requireApproval
             });
 
+            setLogs(prev => [...prev, `✓ Swarm Dispatched: Task ${res?.task_id ? res.task_id.slice(0, 8) : "active"} queued on backend orchestrator.`]);
+            setProgress(35);
+            if (agents.find(a => a.id === "discovery")?.enabled) updateAgentStatus("discovery", "success");
+            if (agents.find(a => a.id === "sourcing")?.enabled) updateAgentStatus("sourcing", "thinking");
+
             if (res?.task_id) {
                 let polls = 0;
                 const pollTimer = setInterval(async () => {
                     polls += 1;
                     try {
                         const st = await agentsApi.getStatus(res.task_id);
-                        if (st?.status === "completed" || st?.status === "failed") {
+                        const currentStatus = st?.status || "running";
+                        if (polls === 1 && currentStatus === "running") {
+                            if (agents.find(a => a.id === "screening")?.enabled) updateAgentStatus("screening", "thinking");
+                            setProgress(60);
+                            setLogs(prev => [...prev, `[PIPELINE] Task ${res.task_id.slice(0, 8)} executing sourcing and screening stages...`]);
+                        }
+                        if (currentStatus === "completed") {
                             clearInterval(pollTimer);
-                            if (agents.find(a => a.id === "outreach")?.enabled) updateAgentStatus("outreach", "success");
+                            activeAgents.forEach(a => updateAgentStatus(a.id, "success"));
                             setStatus("complete");
                             setProgress(100);
-                            setLogs(prev => [...prev, `[PIPELINE] Task ${res.task_id.slice(0, 8)} finished (${st.status}).`]);
+                            setLogs(prev => [...prev, `[PIPELINE] Task ${res.task_id.slice(0, 8)} completed successfully.`]);
+                            toast.success("Automated recruitment workflow completed!", {
+                                description: `Sourced and screened candidates for '${targetRole}'. Candidates saved to Candidate Pipeline.`
+                            });
+                        } else if (currentStatus === "failed") {
+                            clearInterval(pollTimer);
+                            setStatus("idle");
+                            setProgress(0);
+                            setLogs(prev => [...prev, `[ERROR] Task ${res.task_id.slice(0, 8)} failed: ${st?.error || "Execution error"}`]);
+                            toast.error(st?.error || "Swarm pipeline execution failed.");
+                        } else if (polls >= 20) {
+                            clearInterval(pollTimer);
+                            setLogs(prev => [...prev, `[PIPELINE] Task ${res.task_id.slice(0, 8)} is continuing asynchronously in the background.`]);
                         }
                     } catch {
                         clearInterval(pollTimer);
                     }
-                    if (polls >= 15) clearInterval(pollTimer);
                 }, 3000);
-            }
-
-            setTimeout(() => {
-                if (agents.find(a => a.id === "outreach")?.enabled) updateAgentStatus("outreach", "success");
+            } else {
+                activeAgents.forEach(a => updateAgentStatus(a.id, "success"));
                 setStatus("complete");
                 setProgress(100);
-                toast.success("Automated recruitment workflow completed!", {
-                    description: `Sourced and screened candidates for '${targetRole}'. Candidates saved to Candidate Pipeline.`
-                });
-            }, 4800);
+                toast.success("Automated recruitment workflow completed!");
+            }
         } catch (e: any) {
             setStatus("idle");
             toast.error(e?.response?.data?.detail || "Could not initiate recruitment pipeline.");

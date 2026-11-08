@@ -60,8 +60,10 @@ async def lifespan(app: FastAPI):
     # Verify database connectivity (schema lifecycle managed exclusively by Alembic migrations)
     try:
         from sqlalchemy import text
-        async with engine.connect() as conn:
+        async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
+            if "postgresql" in settings.database_url.lower():
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         log.info("database_connected")
     except Exception as e:
         log.warning("database_connection_warning", error=str(e))

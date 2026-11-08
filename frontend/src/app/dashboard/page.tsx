@@ -16,6 +16,7 @@ import Link from "next/link";
 import api, { monitoringApi, candidatesApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { RecruiterBriefing } from "@/components/dashboard/recruiter-briefing";
+import { OnboardingWorkflow } from "@/components/dashboard/OnboardingWorkflow";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
 
@@ -46,6 +47,7 @@ export default function DashboardHome() {
         href: string;
     }>>([]);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isDemoActive, setIsDemoActive] = useState(false);
 
     const fetchStats = async () => {
         try {
@@ -121,13 +123,20 @@ export default function DashboardHome() {
         },
     ];
 
-    const totalPipeline = stats.candidates || 1;
+    const effectiveStats = isDemoActive
+        ? { candidates: 6, actions: 14, hours: 21, matchScore: 92 }
+        : stats;
+    const effectivePipelineCounts = isDemoActive
+        ? { sourced: 2, screened: 2, shortlisted: 1, contacted: 1, interviewing: 0 }
+        : pipelineCounts;
+
+    const totalPipeline = effectiveStats.candidates || 1;
     const pipelineStages = [
-        { label: "Sourced", count: pipelineCounts.sourced, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.sourced / totalPipeline) * 100)}%` : "0%", color: "bg-blue-500" },
-        { label: "Screened", count: pipelineCounts.screened, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.screened / totalPipeline) * 100)}%` : "0%", color: "bg-purple-500" },
-        { label: "Shortlisted", count: pipelineCounts.shortlisted, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.shortlisted / totalPipeline) * 100)}%` : "0%", color: "bg-emerald-500" },
-        { label: "In Outreach", count: pipelineCounts.contacted, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.contacted / totalPipeline) * 100)}%` : "0%", color: "bg-amber-500" },
-        { label: "Interviewing", count: pipelineCounts.interviewing, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.interviewing / totalPipeline) * 100)}%` : "0%", color: "bg-teal-500" },
+        { label: "Sourced", count: effectivePipelineCounts.sourced, percentage: effectiveStats.candidates > 0 ? `${Math.round((effectivePipelineCounts.sourced / totalPipeline) * 100)}%` : "0%", color: "bg-blue-500" },
+        { label: "Screened", count: effectivePipelineCounts.screened, percentage: effectiveStats.candidates > 0 ? `${Math.round((effectivePipelineCounts.screened / totalPipeline) * 100)}%` : "0%", color: "bg-purple-500" },
+        { label: "Shortlisted", count: effectivePipelineCounts.shortlisted, percentage: effectiveStats.candidates > 0 ? `${Math.round((effectivePipelineCounts.shortlisted / totalPipeline) * 100)}%` : "0%", color: "bg-emerald-500" },
+        { label: "In Outreach", count: effectivePipelineCounts.contacted, percentage: effectiveStats.candidates > 0 ? `${Math.round((effectivePipelineCounts.contacted / totalPipeline) * 100)}%` : "0%", color: "bg-amber-500" },
+        { label: "Interviewing", count: effectivePipelineCounts.interviewing, percentage: effectiveStats.candidates > 0 ? `${Math.round((effectivePipelineCounts.interviewing / totalPipeline) * 100)}%` : "0%", color: "bg-teal-500" },
     ];
 
     return (
@@ -137,6 +146,14 @@ export default function DashboardHome() {
             transition={transitionConfig}
             className="space-y-6 pb-16 max-w-7xl mx-auto font-sans"
         >
+            {/* Interactive Onboarding Hub & Quick Launcher */}
+            <OnboardingWorkflow
+                stats={effectiveStats}
+                pipelineCounts={effectivePipelineCounts}
+                onDemoToggle={setIsDemoActive}
+                isDemoActive={isDemoActive}
+            />
+
             {/* Header Section */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-br from-card via-card to-muted/40 p-6 sm:p-8 rounded-2xl border border-border shadow-xs">
                 <div>

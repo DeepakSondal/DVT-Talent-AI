@@ -93,45 +93,10 @@ export default function ScreeningPage() {
         description: `Created ${res.data?.questions?.length || 0} questions with benchmark answers.`,
       });
     } catch (err: any) {
-      // Mock fallback if offline or during testing
-      setPlan({
-        role_title: roleTitle || "Software Engineer",
-        overview: "Structured evaluation guide focusing on technical competency, system design, and cultural alignment.",
-        estimated_duration_minutes: 45,
-        evaluation_criteria_summary: "Evaluate candidates on problem-solving speed, clear architectural trade-offs, and communication.",
-        questions: [
-          {
-            category: "Technical Architecture",
-            difficulty: "Hard",
-            question: "How would you design a distributed job processing queue to guarantee exactly-once delivery and sub-millisecond status lookups?",
-            ideal_answer: "Candidate highlights distributed consensus or idempotent consumer patterns with message deduplication keys. Discusses database partitioning and caching layers.",
-            key_signals: [
-              "Identifies idempotency keys as the standard deduplication mechanism.",
-              "Addresses head-of-line blocking and partition rebalancing.",
-              "Considers Redis/RocksDB for low-latency lookups."
-            ],
-            red_flags: [
-              "Claims standard HTTP retries alone guarantee exactly-once execution.",
-              "Ignores network partitions or split-brain scenarios."
-            ],
-            follow_up_probe: "What happens if a worker crashes midway through transaction execution?"
-          },
-          {
-            category: "System Reliability",
-            difficulty: "Medium",
-            question: "Describe your approach to zero-downtime database migrations when altering multi-million row tables in production.",
-            ideal_answer: "Candidate outlines the expand-and-contract pattern. Adds new column/table, dual writes, backfills historical data asynchronously, and validates before dropping old schema.",
-            key_signals: [
-              "Mentions dual writes and non-blocking background backfills.",
-              "Discusses lock timeouts and schema replication lag."
-            ],
-            red_flags: [
-              "Suggests running synchronous ALTER TABLE directly on live production tables without locks analysis."
-            ]
-          }
-        ]
-      });
-      toast.success("Screening Guide Loaded");
+      toast.error(
+        err?.response?.data?.detail ||
+          "Failed to generate screening guide. Please verify your AI provider configuration and try again."
+      );
     } finally {
       setLoading(false);
     }

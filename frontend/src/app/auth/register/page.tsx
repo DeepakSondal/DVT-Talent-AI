@@ -8,7 +8,8 @@ import {
   Bot, Shield, Target, Zap, 
   Mail, ArrowRight, Lock, User,
   CheckCircle2, Briefcase, UserCheck,
-  Eye, EyeOff, Loader2, Building2
+  Eye, EyeOff, Loader2, Building2,
+  KeyRound, ArrowLeft, RefreshCw
 } from "lucide-react";
 import { authApi } from "@/lib/api";
 import { toast } from "sonner";
@@ -44,9 +45,22 @@ function RegisterContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Email Verification OTP State
+  const [step, setStep] = useState<"form" | "otp">("form");
+  const [otpCode, setOtpCode] = useState("");
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
   const transitionConfig = shouldReduceMotion ? { duration: 0 } : springPreset;
 
-  const handleRegister = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
+  const handleInitiateRegister = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!fullName.trim()) {
@@ -68,17 +82,62 @@ function RegisterContent() {
 
     setIsLoading(true);
     try {
+      const otpRes = await authApi.sendRegistrationOtp(email.trim().toLowerCase());
+      toast.success("Verification code dispatched!", {
+        description: `Please enter the 6-digit code sent to ${email.trim()}`,
+      });
+      if (otpRes?.dev_code) {
+        setDevOtpHint(otpRes.dev_code);
+      }
+      setStep("otp");
+      setResendCooldown(30);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || "Could not dispatch verification code.";
+      toast.error("Verification Error", {
+        description: typeof msg === "string" ? msg : "Please check your email address.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+    try {
+      const otpRes = await authApi.sendRegistrationOtp(email.trim().toLowerCase());
+      toast.success("New verification code sent!");
+      if (otpRes?.dev_code) {
+        setDevOtpHint(otpRes.dev_code);
+      }
+      setResendCooldown(30);
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "Failed to resend code.");
+    }
+  };
+
+  const handleVerifyAndRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanOtp = otpCode.trim();
+    if (!cleanOtp || cleanOtp.length < 6) {
+      toast.error("Please enter the complete 6-digit verification code.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
       const res = await authApi.register({
         email: email.trim().toLowerCase(),
         password,
         full_name: fullName.trim(),
-        role: portal, company_name: company.trim() || undefined,
+        role: portal,
+        company_name: company.trim() || undefined,
+        otp: cleanOtp,
       });
 
-      toast.success("Account created successfully!", {
+      toast.success("Email verified and account activated!", {
         description: portal === "candidate"
           ? "Welcome to Career-Ops! Entering candidate portal..."
-          : "Your recruiter workspace is ready. Entering dashboard...",
+          : "Workspace provisioned with 50 Welcome Credits. Entering dashboard...",
         icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />
       });
 
@@ -86,9 +145,9 @@ function RegisterContent() {
       const destination = isCandidateUser ? "/portal" : "/dashboard";
       router.push(destination);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || "Registration failed. This email may already be registered.";
-      toast.error("Registration Failed", {
-        description: typeof msg === "string" ? msg : "Please check your information.",
+      const msg = err.response?.data?.detail || "Invalid or expired verification code.";
+      toast.error("Verification Failed", {
+        description: typeof msg === "string" ? msg : "Please check your 6-digit code.",
       });
     } finally {
       setIsLoading(false);
@@ -114,177 +173,268 @@ function RegisterContent() {
       >
         <Card className="bg-card border-border shadow-md p-6 sm:p-10 space-y-6 rounded-xl">
           {/* Segmented Persona Switcher with Spring Active Pill */}
-          <div className="relative grid grid-cols-2 p-1 bg-muted rounded-2xl text-xs font-bold border border-border">
-            <button
-              type="button"
-              id="register-recruiter-tab"
-              onClick={() => setPortal("recruiter")}
-              className={cn(
-                "relative py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 z-10",
-                portal === "recruiter" ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {portal === "recruiter" && (
-                <motion.div
-                  layoutId="register-portal-pill"
-                  className="absolute inset-0 bg-primary rounded-xl shadow-md -z-10"
-                  transition={springPreset}
-                />
-              )}
-              <Briefcase className="w-4 h-4" />
-              <span>Recruiter Account</span>
-            </button>
+          {step === "form" && (
+            <div className="relative grid grid-cols-2 p-1 bg-muted rounded-2xl text-xs font-bold border border-border">
+              <button
+                type="button"
+                id="register-recruiter-tab"
+                onClick={() => setPortal("recruiter")}
+                className={cn(
+                  "relative py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 z-10",
+                  portal === "recruiter" ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {portal === "recruiter" && (
+                  <motion.div
+                    layoutId="register-portal-pill"
+                    className="absolute inset-0 bg-primary rounded-xl shadow-md -z-10"
+                    transition={springPreset}
+                  />
+                )}
+                <Briefcase className="w-4 h-4" />
+                <span>Recruiter Account</span>
+              </button>
 
-            <button
-              type="button"
-              id="register-candidate-tab"
-              onClick={() => setPortal("candidate")}
-              className={cn(
-                "relative py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 z-10",
-                portal === "candidate" ? "text-white" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {portal === "candidate" && (
-                <motion.div
-                  layoutId="register-portal-pill"
-                  className="absolute inset-0 bg-emerald-600 rounded-xl shadow-md -z-10"
-                  transition={springPreset}
-                />
-              )}
-              <Target className="w-4 h-4" />
-              <span>Candidate Account</span>
-            </button>
-          </div>
-
-          {/* Header Title */}
-          <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-border bg-muted/50 shadow-inner">
-              {portal === "recruiter" ? (
-                <Briefcase className="w-6 h-6 text-primary" />
-              ) : (
-                <UserCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-              )}
+              <button
+                type="button"
+                id="register-candidate-tab"
+                onClick={() => setPortal("candidate")}
+                className={cn(
+                  "relative py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 z-10",
+                  portal === "candidate" ? "text-white" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {portal === "candidate" && (
+                  <motion.div
+                    layoutId="register-portal-pill"
+                    className="absolute inset-0 bg-emerald-600 rounded-xl shadow-md -z-10"
+                    transition={springPreset}
+                  />
+                )}
+                <Target className="w-4 h-4" />
+                <span>Candidate Account</span>
+              </button>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground break-words">
-              {portal === "recruiter" ? "Start Your Recruiter Workspace" : "Join the Talent Network"}
-            </h1>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-              {portal === "recruiter"
-                ? "14-day free trial &bull; Unlimited requisitions &bull; Instant sandbox access"
-                : "100% free forever for job seekers &bull; Complete employer privacy shielding"}
-            </p>
-          </div>
+          )}
 
-          {/* Form */}
-          <form onSubmit={handleRegister} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground" htmlFor="register-name">
-                Full Name
-              </label>
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          {step === "otp" ? (
+            /* OTP Verification Screen */
+            <form onSubmit={handleVerifyAndRegister} className="space-y-5">
+              <div className="text-center space-y-2">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-border bg-primary/10 text-primary shadow-inner">
+                  <KeyRound className="w-6 h-6" />
+                </div>
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground break-words">
+                  Verify Your Email Address
+                </h1>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+                  We sent a 6-digit confirmation code to <br />
+                  <span className="font-semibold text-foreground">{email}</span>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-foreground text-center block" htmlFor="register-otp-input">
+                  Enter 6-Digit Verification Code
+                </label>
                 <input
-                  id="register-name"
+                  id="register-otp-input"
                   type="text"
                   required
-                  placeholder="Jane Doe"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full pl-10 pr-4 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"
+                  maxLength={6}
+                  autoFocus
+                  placeholder="• • • • • •"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ""))}
+                  className="w-full text-center tracking-[0.4em] font-mono text-xl font-bold h-12 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-foreground transition-colors"
                 />
+                {devOtpHint && (
+                  <p className="text-[11px] bg-primary/10 text-primary border border-primary/20 p-2 rounded-lg text-center font-medium">
+                    Dev mode OTP: <span className="font-mono font-bold">{devOtpHint}</span>
+                  </p>
+                )}
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground" htmlFor="register-email">
-                Work Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  id="register-email"
-                  type="email"
-                  required
-                  placeholder={portal === "recruiter" ? "jane@company.com" : "jane@personal.com"}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"
-                />
-              </div>
-            </div>
+              <Button
+                id="register-verify-btn"
+                type="submit"
+                disabled={isLoading || otpCode.length < 6}
+                className={cn(
+                  "w-full h-11 rounded-xl text-xs font-bold transition-colors duration-150 shadow-md",
+                  portal === "candidate"
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                    : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20"
+                )}
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Activating Workspace...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    Verify &amp; Launch Workspace <ArrowRight className="w-4 h-4" />
+                  </span>
+                )}
+              </Button>
 
-            {portal === "recruiter" && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground" htmlFor="register-company">
-                  Company / Organization
-                </label>
-                <div className="relative">
-                  <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    id="register-company"
-                    type="text"
-                    required
-                    placeholder="Acme Recruiting Labs"
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                    className="w-full pl-10 pr-4 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground" htmlFor="register-password">
-                Create Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  id="register-password"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  placeholder="At least 8 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"
-                />
+              <div className="flex items-center justify-between pt-1 text-xs">
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setStep("form")}
+                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 font-medium transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Edit Details</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={resendCooldown > 0}
+                  onClick={handleResendOtp}
+                  className={cn(
+                    "font-semibold transition-colors",
+                    resendCooldown > 0 ? "text-muted-foreground cursor-not-allowed" : "text-primary hover:underline"
+                  )}
+                >
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
                 </button>
               </div>
-              <span className="text-[11px] text-muted-foreground block">
-                Must be at least 8 characters long.
-              </span>
-            </div>
+            </form>
+          ) : (
+            /* Details Form */
+            <>
+              {/* Header Title */}
+              <div className="text-center space-y-2">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-border bg-muted/50 shadow-inner">
+                  {portal === "recruiter" ? (
+                    <Briefcase className="w-6 h-6 text-primary" />
+                  ) : (
+                    <UserCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                  )}
+                </div>
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground break-words">
+                  {portal === "recruiter" ? "Start Your Recruiter Workspace" : "Join the Talent Network"}
+                </h1>
+                <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+                  {portal === "recruiter"
+                    ? "50 Welcome Credits • Isolated Multi-Tenant • Instant Setup"
+                    : "100% free forever for job seekers • Complete employer privacy shielding"}
+                </p>
+              </div>
 
-            <Button
-              id="register-submit-btn"
-              type="submit"
-              disabled={isLoading}
-              className={cn(
-                "w-full h-11 rounded-xl text-xs font-bold transition-colors duration-150 shadow-md mt-2",
-                portal === "candidate"
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
-                  : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20"
-              )}
-            >
-              {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Creating Account...
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5">
-                  {portal === "candidate" ? "Join Candidate Network" : "Create Recruiter Account"} <ArrowRight className="w-4 h-4" />
-                </span>
-              )}
-            </Button>
-          </form>
+              {/* Form */}
+              <form onSubmit={handleInitiateRegister} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground" htmlFor="register-name">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      id="register-name"
+                      type="text"
+                      required
+                      placeholder="Jane Doe"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="w-full pl-10 pr-4 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground" htmlFor="register-email">
+                    Work Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      id="register-email"
+                      type="email"
+                      required
+                      placeholder={portal === "recruiter" ? "jane@company.com" : "jane@personal.com"}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {portal === "recruiter" && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground" htmlFor="register-company">
+                      Company / Organization
+                    </label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        id="register-company"
+                        type="text"
+                        required
+                        placeholder="Acme Recruiting Labs"
+                        value={company}
+                        onChange={(e) => setCompany(e.target.value)}
+                        className="w-full pl-10 pr-4 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground" htmlFor="register-password">
+                    Create Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input
+                      id="register-password"
+                      type={showPassword ? "text" : "password"}
+                      required
+                      placeholder="At least 8 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-10 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm text-foreground placeholder:text-muted-foreground/60 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground block">
+                    Must be at least 8 characters long.
+                  </span>
+                </div>
+
+                <Button
+                  id="register-submit-btn"
+                  type="submit"
+                  disabled={isLoading}
+                  className={cn(
+                    "w-full h-11 rounded-xl text-xs font-bold transition-colors duration-150 shadow-md mt-2",
+                    portal === "candidate"
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                      : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20"
+                  )}
+                >
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending Verification Code...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      Continue &amp; Verify Email <ArrowRight className="w-4 h-4" />
+                    </span>
+                  )}
+                </Button>
+              </form>
+            </>
+          )}
 
           {/* Bottom Switcher */}
           <p className="text-center text-xs text-muted-foreground pt-1">

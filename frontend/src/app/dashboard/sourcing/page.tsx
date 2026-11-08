@@ -60,33 +60,40 @@ function SourcingLabContent() {
 
     const [sourcedCandidates, setSourcedCandidates] = useState<SourcedCandidate[]>([]);
 
+    const loadWorkspaceCandidates = async (): Promise<number> => {
+        try {
+            const res = await candidatesApi.list();
+            const items = res?.items || [];
+            if (items.length > 0) {
+                const liveMapped: SourcedCandidate[] = items.map((c: any) => ({
+                    id: c.id,
+                    first_name: c.first_name || "Verified",
+                    last_name: c.last_name || "Candidate",
+                    title: c.title || "Software Engineer",
+                    company: c.company || "Talent Pool",
+                    location: c.location || "Remote",
+                    email: c.email || "",
+                    phone: c.phone || "+1 (555) 019-2834",
+                    score: Math.round(Number(c.score) || 88),
+                    skills: Array.isArray(c.skills) && c.skills.length > 0 ? c.skills : ["Software Engineering"],
+                    experience_years: Number(c.experience_years) || 5,
+                    linkedin_url: c.linkedin_url || "https://linkedin.com",
+                    github_url: c.github_url || "https://github.com",
+                    source: c.source || "Workspace Talent Grid",
+                    saved_to_grid: true,
+                    reasoning: c.ai_summary || "Synced from workspace Talent Grid.",
+                }));
+                setSourcedCandidates(liveMapped);
+                return liveMapped.length;
+            }
+        } catch {
+            // ignore transient poll errors
+        }
+        return 0;
+    };
+
     useEffect(() => {
-        candidatesApi.list()
-            .then((res) => {
-                const items = res?.items || [];
-                if (items.length > 0) {
-                    const liveMapped: SourcedCandidate[] = items.map((c: any) => ({
-                        id: c.id,
-                        first_name: c.first_name || "Verified",
-                        last_name: c.last_name || "Candidate",
-                        title: c.title || "Software Engineer",
-                        company: c.company || "Talent Pool",
-                        location: c.location || "Remote",
-                        email: c.email || "",
-                        phone: c.phone || "+1 (555) 019-2834",
-                        score: Math.round(Number(c.score) || 88),
-                        skills: Array.isArray(c.skills) && c.skills.length > 0 ? c.skills : ["Software Engineering"],
-                        experience_years: Number(c.experience_years) || 5,
-                        linkedin_url: c.linkedin_url || "https://linkedin.com",
-                        github_url: c.github_url || "https://github.com",
-                        source: c.source || "Workspace Talent Grid",
-                        saved_to_grid: true,
-                        reasoning: c.ai_summary || "Synced from workspace Talent Grid.",
-                    }));
-                    setSourcedCandidates(liveMapped);
-                }
-            })
-            .catch(() => {});
+        loadWorkspaceCandidates();
     }, []);
 
     const handleSourcing = async () => {
@@ -138,7 +145,19 @@ function SourcingLabContent() {
                 return;
             }
 
-            toast.info(`No additional matching candidates found in workspace for "${queryText}". Background sourcing swarm is continuing.`);
+            toast.info(`Background sourcing swarm running for "${queryText}". Syncing results as they arrive...`);
+            const initialCount = sourcedCandidates.length;
+            let attempts = 0;
+            const pollInterval = setInterval(async () => {
+                attempts += 1;
+                const latestCount = await loadWorkspaceCandidates();
+                if (latestCount > initialCount) {
+                    clearInterval(pollInterval);
+                    toast.success(`Synced ${latestCount} candidate profile(s) from background sourcing!`);
+                } else if (attempts >= 6) {
+                    clearInterval(pollInterval);
+                }
+            }, 3000);
         } catch (e: any) {
             toast.error(e?.response?.data?.detail || "Sourcing request failed. Please check your connection.");
         } finally {
