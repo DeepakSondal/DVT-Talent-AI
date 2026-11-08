@@ -1,3 +1,4 @@
+# Core runtime
 fastapi>=0.116.1
 uvicorn[standard]>=0.34.0
 pydantic[email]>=2.10.0
@@ -11,12 +12,9 @@ redis>=5.2.0
 celery>=5.4.0
 
 httpx>=0.28.1
-openai>=1.60.0
-pydantic-ai==1.107.7
 logfire[fastapi]>=5.4.0
-mcp>=2.3.0
 
-# Auth — kept pinned for security stability
+# Auth
 python-jose[cryptography]>=3.5.0
 passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
@@ -35,12 +33,7 @@ jinja2>=3.1.6
 aiofiles>=23.2.1
 websockets>=14.0
 
-# AI & Semantic Search Tools
-litellm>=1.40.0
-fastembed>=0.3.0
-pgvector>=0.2.0
-
-# Document Parsing
+# Document parsing
 python-docx>=1.1.0
 pypdf>=6.21.4
 python-dateutil>=2.9.0
@@ -49,6 +42,10 @@ python-dateutil>=2.9.0
 sentry-sdk[fastapi]>=2.20.0
 opentelemetry-sdk>=1.45.2
 opentelemetry-exporter-otlp>=1.45.2
+
+# Vector / semantic search
+pgvector>=0.2.0
+fastembed>=0.3.0
 
 # Testing
 pytest>=9.2.0

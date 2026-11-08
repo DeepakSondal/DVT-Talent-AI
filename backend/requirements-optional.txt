@@ -1,0 +1,16 @@
+# Optional AI-provider and model-integration dependencies.
+# Keep these out of the base runtime to prevent pip/uv resolution blowups in CI.
+#
+# Install with:
+#   python -m pip install -r requirements-optional.txt
+#   uv pip install -r requirements-optional.txt
+
+pydantic-ai==1.107.7
+openai>=1.60.0
+litellm>=1.40.0
+mcp>=2.3.0
+
+# Add provider SDKs only when needed by the actual active model integrations:
+# anthropic>=0.124.0
+# google-generativeai>=0.8.0
+# groq>=0.10.0
