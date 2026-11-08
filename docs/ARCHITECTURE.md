@@ -17,18 +17,18 @@ DVT Talent AI is a production-grade, dual-sided AI talent platform that unifies 
                    │                                  │
                    ▼ (/*)                             ▼ (/api/*, /ws/*)
 ┌─────────────────────────────────────┐  ┌───────────────────────────────┐
-│        NEXT.JS 14 WEB CLIENT        │  │     FASTAPI ASYNC API         │
+│        NEXT.JS 15 WEB CLIENT        │  │     FASTAPI ASYNC API         │
 ├──────────────────┬──────────────────┤  ├───────────────────────────────┤
 │ 💼 RECRUITER     │ 🎯 CANDIDATE     │  │ AUTH & IDENTITY:              │
 │ DASHBOARD        │ PORTAL           │  │ • Role-Aware JWT & Blacklist  │
 │ (/dashboard/*)   │ (/portal/*)      │  │ • Dual-Tenant Scoping         │
-│ • Requisitions   │ • Job Board      │  │ • SAML SSO & OAuth2           │
+│ • Requisitions   │ • Job Board      │  │ • SAML SSO & Social OAuth     │
 │ • AI Sourcing    │ • 5D Match Score │  ├───────────────────────────────┤
 │ • HITL Copilot   │ • Ghost Job Scan │  │ CORE DOMAIN ROUTERS:          │
 │ • Bias Audit     │ • ATS CV Tailor  │  │ • /agents & /copilot          │
 │ • Team Invites   │ • STAR Rehearsal │  │ • /jobs & /candidates         │
 │ • ATS Sync       │ • Privacy Shield │  │ • /candidate-portal           │
-│ • Dynamic /m/*   │ • Applications   │  │ • /compliance & /billing      │
+│ • Dynamic /m/*   │ • Applications   │  │ • /billing (Dodo MoR) & /email│
 └──────────────────┴──────────────────┘  └───────┬──────────────┬────────┘
                                                  │              │
                     ┌────────────────────────────┘              └───────────┐
@@ -38,19 +38,21 @@ DVT Talent AI is a production-grade, dual-sided AI talent platform that unifies 
 │          (Pydantic AI)               │                ├───────────────────────────────────┤
 │ • MarketIQ & Discovery Agents        │                │ PRIMARY PRODUCTION DB:            │
 │ • Sourcing Agent (Self-Healing Loop) │                │ • PostgreSQL 16 (dvt_talent)      │
-│ • Critic Agent (Anti-Bias Audit)     │                │ • 26 Tables, 8 Enums, Alembic     │
-│ • Outreach, Analytics, Screening     │                │ • Partial Unique Candidate Index  │
-│ • Redis Semantic Swarm Memory        │                ├───────────────────────────────────┤
-│ • LLM Guardrails (RPM/TPM + Breaker) │                │ STAGING & TEST DB:                │
-└──────────────────┬───────────────────┘                │ • PostgreSQL 15 (dvt_staging)     │
-                   │                                    ├───────────────────────────────────┤
-                   ▼                                    │ IN-MEMORY & ASYNC QUEUE:          │
-┌──────────────────────────────────────┐                │ • Redis 7 (Broker, Result Backend,│
-│   CELERY ASYNC WORKER & BEAT         │                │   Semantic Cache, Pub/Sub Signals)│
-│ • Background AI Pipelines            │                ├───────────────────────────────────┤
-│ • Scheduled Discovery & Daily Runs   │                │ OBJECT & RESUME STORAGE:          │
-│ • ATS Sync (Ashby, Greenhouse, Lever)│                │ • StorageService (Local / AWS S3) │
-└──────────────────────────────────────┘                └───────────────────────────────────┘
+│ • Critic Agent (Anti-Bias Audit)     │                │ • Native pgvector (384-d Cosine)  │
+│ • Outreach, Analytics, Screening     │                │ • 26 Tables, 8 Enums, Alembic     │
+│ • Redis Semantic Swarm Memory        │                │ • Partial Unique Candidate Index  │
+│ • LLM Guardrails (RPM/TPM + Breaker) │                │ • Composite Company Domain Index  │
+└──────────────────┬───────────────────┘                ├───────────────────────────────────┤
+                   │                                    │ STAGING & TEST DB:                │
+                   ▼                                    │ • PostgreSQL 15 (pgvector:pg15)   │
+┌──────────────────────────────────────┐                ├───────────────────────────────────┤
+│   CELERY ASYNC WORKER & BEAT         │                │ IN-MEMORY & ASYNC QUEUE:          │
+│ • Background AI Pipelines            │                │ • Redis 7 (Broker, Result Backend,│
+│ • Scheduled Discovery & Daily Runs   │                │   Semantic Cache, Pub/Sub Signals)│
+│ • ATS Sync (Ashby, Greenhouse, Lever)│                ├───────────────────────────────────┤
+│ • Post-Restore Erasure Reconciliation│                │ OBJECT & RESUME STORAGE:          │
+└──────────────────────────────────────┘                │ • StorageService (Local / AWS S3) │
+                                                        └───────────────────────────────────┘
 ```
 
 ---
@@ -115,7 +117,8 @@ The recruiter swarm automates candidate sourcing and screening using **Pydantic 
 2. **`discovery_agent` (`backend/agents/discovery_pydantic.py`)**:
    - Ingests raw job requirements, extracts essential vs preferred skills, salary bands, and models hard technical constraints.
 3. **`sourcing_agent` (`backend/agents/sourcing_pydantic.py`)**:
-   - Scans candidate profiles across web nodes and internal databases.
+   - Discovers candidates across web nodes and internal databases.
+   - Computes cosine similarity via native PostgreSQL `pgvector` embeddings (`VectorColumn(384)`).
    - Respects candidate privacy shields (`is_searchable == False` and `hide_from_companies`).
    - **Self-Healing Fallback Protocol:** If fewer than 3 candidates are discovered, the orchestrator triggers `discovery_agent` with loosened constraints and re-runs sourcing automatically.
 4. **`critic_agent` (`backend/agents/critic_pydantic.py`)**:
@@ -149,10 +152,22 @@ The Candidate Portal incorporates the specialized **Career-Ops AI Engine** locat
 ## 6. Persistence & Data Isolation Layer
 
 ### Dual-Database Architecture
-- **Staging / Testing:** PostgreSQL 15 Alpine (`dvt-postgres`), host port `5432`, database `dvt_staging`.
-- **Production:** PostgreSQL 16 Alpine (`dvt_db`), internal port `5432`, database `dvt_talent` on dedicated volume `postgres_prod_data`.
+- **Staging / Testing:** PostgreSQL 15 Alpine (`dvt-postgres`, image `pgvector/pgvector:pg15`), host port `5432`, database `dvt_staging`.
+- **Production:** PostgreSQL 16 Alpine (`dvt_db`), internal port `5432`, database `dvt_talent` on dedicated volume `postgres_prod_data`, native `vector` extension.
 
-### Schema & Candidate Isolation
+### Schema, Candidate & Company Isolation
 - **26 Tables, 8 Enums:** Governed exclusively by Alembic migrations (current stamp: `007_team_invitations`).
-- **Partial Unique Index:** Replaced global email uniqueness with `CREATE UNIQUE INDEX uq_candidate_tenant_email ON candidates (tenant_id, email) WHERE tenant_id IS NOT NULL;` ensuring true multi-tenant candidate isolation.
+- **Candidate Isolation Partial Index:**
+  ```sql
+  CREATE UNIQUE INDEX uq_candidate_tenant_email 
+  ON candidates (tenant_id, email) 
+  WHERE tenant_id IS NOT NULL;
+  ```
+- **Company Domain Isolation Composite Index:**
+  ```sql
+  CREATE UNIQUE INDEX uq_companies_tenant_domain 
+  ON companies (tenant_id, domain);
+  ```
+- **Vector Search Engine (`backend/db/vector_store.py`):** FastEmbed CPU ONNX (`BAAI/bge-small-en-v1.5`, 384 dimensions) with PostgreSQL `pgvector`. ChromaDB is completely decommissioned.
 - **Unified Storage Service (`backend/services/storage_service.py`):** Pluggable drivers (`LocalStorageDriver` and `S3StorageDriver`) supporting AWS S3, MinIO, and Cloudflare R2 with streaming uploads and path traversal protection.
+- **GDPR Article 17 Purge Protocol:** 4-tier atomic wipe sweeping Primary DB (`pii_erased = True`), disk storage (`uploads/resumes/`), pgvector embeddings, and Redis caches.

@@ -2,10 +2,20 @@
 DVT Talent AI — Analytics Agent (Pydantic AI Version)
 Generates high-level performance reports and conversion insights.
 """
+import sys
+
+if __name__.startswith("backend.agents."):
+    sys.modules[__name__.replace("backend.agents.", "agents.")] = sys.modules[__name__]
+elif __name__.startswith("agents."):
+    sys.modules["backend." + __name__] = sys.modules[__name__]
+
 from typing import Dict, List
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent
-from agents.pydantic_config import get_pydantic_model, AgentDeps
+try:
+    from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
+except ImportError:
+    from agents.pydantic_config import get_pydantic_model, AgentDeps  # pyrefly: ignore[missing-import]  # type: ignore
 
 class PerformanceMetrics(BaseModel):
     model_config = ConfigDict(extra="allow")

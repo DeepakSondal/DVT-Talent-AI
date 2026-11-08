@@ -436,7 +436,10 @@ async def upload_resume(
     for r in old_resumes:
         r.is_current = False
 
-    # 6. Save Resume record
+    # 6. Compute vector embedding & index into VectorStore for instant hybrid sourcing
+    from db.vector_store import vector_store
+    resume_embedding = vector_store.embed_text(raw_text)
+
     resume = Resume(
         id=resume_id,
         candidate_id=candidate_id,
@@ -445,11 +448,28 @@ async def upload_resume(
         file_url=file_path,
         raw_text=raw_text,
         parsed_data=parsed_data,
+        embedding=resume_embedding,
         is_current=True,
     )
     db.add(resume)
     await db.commit()
     await db.refresh(resume)
+
+    vector_store.upsert_resume(
+        tenant_id=str(current_user.tenant_id),
+        resume_id=str(resume_id),
+        text=raw_text,
+        metadata={
+            "candidate_id": str(candidate_id),
+            "name": f"{candidate.first_name} {candidate.last_name}".strip(),
+            "title": candidate.title or "",
+            "skills": ", ".join(candidate.skills or []),
+            "location": candidate.location or "Remote",
+            "email": candidate.email or "",
+            "company": candidate.current_company or "",
+            "experience_years": str(candidate.experience_years or 3),
+        },
+    )
 
     # Background: dispatch task if broker is available
     background_tasks.add_task(
@@ -704,6 +724,9 @@ async def intake_candidate_resume(
     for r in old_res:
         r.is_current = False
 
+    from db.vector_store import vector_store
+    resume_embedding = vector_store.embed_text(raw_text)
+
     resume = Resume(
         id=resume_id,
         candidate_id=cand_id,
@@ -712,11 +735,28 @@ async def intake_candidate_resume(
         file_url=file_path,
         raw_text=raw_text,
         parsed_data=parsed_data,
+        embedding=resume_embedding,
         is_current=True,
     )
     db.add(resume)
     await db.commit()
     await db.refresh(candidate)
+
+    vector_store.upsert_resume(
+        tenant_id=str(current_user.tenant_id),
+        resume_id=str(resume_id),
+        text=raw_text,
+        metadata={
+            "candidate_id": str(cand_id),
+            "name": f"{candidate.first_name} {candidate.last_name}".strip(),
+            "title": candidate.title or "",
+            "skills": ", ".join(candidate.skills or []),
+            "location": candidate.location or "Remote",
+            "email": candidate.email or "",
+            "company": candidate.current_company or "",
+            "experience_years": str(candidate.experience_years or 3),
+        },
+    )
 
     # Background task
     background_tasks.add_task(

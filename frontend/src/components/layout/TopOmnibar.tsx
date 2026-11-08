@@ -221,24 +221,11 @@ export function TopOmnibar({
                 >
                   <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
                     <span className="text-xs font-semibold text-foreground">Recent Activity & Alerts</span>
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5">3 New</Badge>
+                    <Badge variant="outline" className="text-[10px] py-0 px-1.5">0 New</Badge>
                   </div>
-                  <div className="space-y-2 text-xs">
-                    <div className="p-2 rounded-lg bg-muted/40 hover:bg-muted transition-colors">
-                      <p className="font-semibold text-foreground">AI Match Complete</p>
-                      <p className="text-[11px] text-muted-foreground">Elena Rostova scored 96% for Distributed Systems role.</p>
-                      <span className="text-[10px] text-muted-foreground/70 mt-1 block">5m ago</span>
-                    </div>
-                    <div className="p-2 rounded-lg bg-muted/40 hover:bg-muted transition-colors">
-                      <p className="font-semibold text-foreground">Resume Ingested</p>
-                      <p className="text-[11px] text-muted-foreground">Parsed devon_chen_cv_infra.pdf with verified skills.</p>
-                      <span className="text-[10px] text-muted-foreground/70 mt-1 block">18m ago</span>
-                    </div>
-                    <div className="p-2 rounded-lg bg-muted/40 hover:bg-muted transition-colors">
-                      <p className="font-semibold text-foreground">Email Sequence Opened</p>
-                      <p className="text-[11px] text-muted-foreground">Marcus Vance opened initial outreach email.</p>
-                      <span className="text-[10px] text-muted-foreground/70 mt-1 block">1h ago</span>
-                    </div>
+                  <div className="py-6 text-center text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground">No new alerts</p>
+                    <p className="text-[11px] text-muted-foreground/80 mt-0.5">Live sourcing and match events will appear here.</p>
                   </div>
                 </motion.div>
               </>

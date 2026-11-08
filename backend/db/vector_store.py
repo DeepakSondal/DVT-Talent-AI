@@ -3,6 +3,13 @@ DVT Talent AI — Vector Store & Semantic Search Service
 Provides FastEmbed ONNX vector embeddings, batch processing, BM25 hybrid search,
 and native PostgreSQL pgvector storage with zero ChromaDB hard dependency.
 """
+import sys
+
+if __name__.startswith("backend.db."):
+    sys.modules[__name__.replace("backend.db.", "db.")] = sys.modules[__name__]
+elif __name__.startswith("db."):
+    sys.modules["backend." + __name__] = sys.modules[__name__]
+
 import uuid
 import re
 from collections import Counter
@@ -60,6 +67,7 @@ class VectorStore:
             "resumes": {},
             "jobs": {}
         }
+        self._query_cache: Dict[str, List[float]] = {}
         self.client = None
         self.resumes = None
         self.jobs = None
@@ -72,6 +80,7 @@ class VectorStore:
             self.client = chromadb.HttpClient(
                 host=getattr(settings, "chroma_host", "localhost"),
                 port=getattr(settings, "chroma_port", 8000),
+                # pyrefly: ignore[unexpected-keyword]
                 settings=ChromaSettings(allow_reset=True)
             )
             self._ensure_collections()
@@ -122,9 +131,19 @@ class VectorStore:
 
     # ── 1. Batch & Single Embedding (Option 3) ──────────────────────────────
     def embed_text(self, text: str) -> List[float]:
-        """Convert a single text string into a 384-dimensional dense vector"""
+        """Convert a single text string into a 384-dimensional dense vector with bounded caching"""
+        cache_key = (text or "")[:2000]
+        cache = getattr(self, "_query_cache", None)
+        if cache is not None and cache_key in cache:
+            return cache[cache_key]
         results = self.embed_batch([text])
-        return results[0] if results else [0.0] * 384
+        vec = results[0] if results else [0.0] * 384
+        if cache is not None:
+            if len(cache) >= 512:
+                # Evict oldest inserted key
+                cache.pop(next(iter(cache)), None)
+            cache[cache_key] = vec
+        return vec
 
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
         """
@@ -226,7 +245,22 @@ class VectorStore:
         query_vec = self.embed_text(query_text)
         scored_candidates = []
 
-        for cand in pool:
+        # Batch-embed any candidates missing precomputed embeddings in a single ONNX pass
+        pool_items = [dict(c) for c in pool]
+        missing_indices = [
+            idx for idx, cand in enumerate(pool_items)
+            if not cand.get("embedding") and not isinstance(cand.get("score"), (int, float))
+        ]
+        if missing_indices:
+            missing_texts = [
+                pool_items[idx].get("document") or pool_items[idx].get("text") or ""
+                for idx in missing_indices
+            ]
+            batch_vecs = self.embed_batch(missing_texts)
+            for idx, vec in zip(missing_indices, batch_vecs):
+                pool_items[idx]["embedding"] = vec
+
+        for cand in pool_items:
             doc_text = cand.get("document") or cand.get("text") or ""
 
             # Semantic cosine score
@@ -425,12 +459,21 @@ class VectorStore:
         # Python cosine fallback for SQLite / test environments
         stmt = select(Resume).where(Resume.tenant_id == t_uuid)
         result = await session.execute(stmt)
-        resumes = result.scalars().all()
+        resumes = list(result.scalars().all())
+        missing_res_indices = [
+            idx for idx, r in enumerate(resumes)
+            if not r.embedding and r.raw_text
+        ]
+        batch_embs: Dict[int, List[float]] = {}
+        if missing_res_indices:
+            texts_to_embed = [resumes[idx].raw_text for idx in missing_res_indices]
+            computed_vecs = self.embed_batch(texts_to_embed)
+            for idx, vec in zip(missing_res_indices, computed_vecs):
+                batch_embs[idx] = vec
+
         ranked = []
-        for r in resumes:
-            emb = r.embedding
-            if not emb and r.raw_text:
-                emb = self.embed_text(r.raw_text)
+        for idx, r in enumerate(resumes):
+            emb = r.embedding or batch_embs.get(idx)
             sim = self.cosine_similarity(query_vector, emb) if emb else 0.0
             ranked.append({
                 "id": str(r.id),

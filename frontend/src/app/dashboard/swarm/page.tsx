@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { agentsApi } from "@/lib/api";
+import { useWebSocket } from "@/providers/websocket-provider";
 
 type AgentStatus = "idle" | "thinking" | "researching" | "success" | "error";
 
@@ -56,7 +57,7 @@ export default function SwarmCommandCenter() {
         { id: "analytics", name: "Analytics", role: "Recruiting Funnel Telemetry", icon: BarChart3, status: "idle", enabled: true, color: "cyan" },
     ]);
 
-    const wsRef = useRef<WebSocket | null>(null);
+    const { lastMessage } = useWebSocket();
 
     const updateAgentStatus = useCallback((id: string, status: AgentStatus) => {
         setAgents(prev => prev.map(a => a.id === id ? { ...a, status } : a));
@@ -75,31 +76,10 @@ export default function SwarmCommandCenter() {
     }, [updateAgentStatus]);
 
     useEffect(() => {
-        const token = localStorage.getItem("dvt_token");
-        if (!token) return;
-
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
-        const wsHost = API_URL.replace(/^http/, 'ws');
-        const wsUrl = `${wsHost}/ws/pipeline-events?token=${token}`;
-        
-        try {
-            const ws = new WebSocket(wsUrl);
-            wsRef.current = ws;
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    handleSignal(data);
-                } catch (e) {
-                    setLogs(prev => [...prev.slice(-40), `> ${event.data}`]);
-                }
-            };
-
-            return () => ws.close();
-        } catch (err) {
-            console.log("WebSocket fallback mode");
+        if (lastMessage) {
+            handleSignal(lastMessage);
         }
-    }, [handleSignal]);
+    }, [lastMessage, handleSignal]);
 
     const toggleAgentEnabled = (id: string) => {
         setAgents(prev => prev.map(a => {
@@ -157,13 +137,33 @@ export default function SwarmCommandCenter() {
                 setProgress(90);
             }, 3800);
 
-            await agentsApi.runSwarm({
+            const res = await agentsApi.runSwarm({
                 industry: targetRole,
                 location: targetLocation,
                 mock_mode: false,
                 require_approval: requireApproval
             });
-            
+
+            if (res?.task_id) {
+                let polls = 0;
+                const pollTimer = setInterval(async () => {
+                    polls += 1;
+                    try {
+                        const st = await agentsApi.getStatus(res.task_id);
+                        if (st?.status === "completed" || st?.status === "failed") {
+                            clearInterval(pollTimer);
+                            if (agents.find(a => a.id === "outreach")?.enabled) updateAgentStatus("outreach", "success");
+                            setStatus("complete");
+                            setProgress(100);
+                            setLogs(prev => [...prev, `[PIPELINE] Task ${res.task_id.slice(0, 8)} finished (${st.status}).`]);
+                        }
+                    } catch {
+                        clearInterval(pollTimer);
+                    }
+                    if (polls >= 15) clearInterval(pollTimer);
+                }, 3000);
+            }
+
             setTimeout(() => {
                 if (agents.find(a => a.id === "outreach")?.enabled) updateAgentStatus("outreach", "success");
                 setStatus("complete");
@@ -172,12 +172,9 @@ export default function SwarmCommandCenter() {
                     description: `Sourced and screened candidates for '${targetRole}'. Candidates saved to Candidate Pipeline.`
                 });
             }, 4800);
-        } catch (e) {
-            updateAgentStatus("outreach", "success");
-            setStatus("complete");
-            toast.success("Automated recruitment workflow initiated!", {
-                description: `AI recruiting pipeline triggered for '${targetRole}'. Candidates queued for review.`
-            });
+        } catch (e: any) {
+            setStatus("idle");
+            toast.error(e?.response?.data?.detail || "Could not initiate recruitment pipeline.");
         }
     };
 

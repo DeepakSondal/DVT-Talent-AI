@@ -210,4 +210,3 @@ export function ApiKeysSettings() {
   );
 }
 
-export default ApiKeysSettings;

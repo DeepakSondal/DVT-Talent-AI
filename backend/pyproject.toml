@@ -64,3 +64,17 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "B"]
 ignore = ["E501"]
 
+[tool.pyright]
+include = ["."]
+extraPaths = [".", "backend"]
+executionEnvironments = [
+  { root = ".", extraPaths = [".", "backend"] }
+]
+
+[tool.pyrefly]
+project-includes = ["."]
+project-excludes = ["venv/**", "tests/**", "alembic/**"]
+search-path = ["."]
+
+
+

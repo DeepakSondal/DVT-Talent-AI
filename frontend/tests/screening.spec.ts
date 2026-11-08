@@ -69,13 +69,13 @@ test.describe('AI Technical Screening Studio & Question Bank E2E', () => {
 
         // Navigate directly to screening studio
         await page.goto('/dashboard/screening');
-        await expect(page.locator('h1')).toContainText('AI Candidate Screening', { timeout: 15000 });
+        await expect(page.locator('h1')).toContainText('AI Screening & Interview Rubrics', { timeout: 15000 });
     });
 
     test('1. should render the AI candidate screening studio and requisition input controls', async ({ page }: { page: Page }) => {
         // Verify Studio Header
-        await expect(page.locator('h1')).toContainText('AI Candidate Screening');
-        await expect(page.locator('text=Pydantic AI Screening Agent')).toBeVisible();
+        await expect(page.locator('h1')).toContainText('AI Screening & Interview Rubrics');
+        await expect(page.locator('text=Manatal-Style Rubric')).toBeVisible();
 
         // Verify Input Panel
         await expect(page.locator('text=Select Requisition or Paste Job Description')).toBeVisible();
@@ -140,8 +140,7 @@ test.describe('AI Technical Screening Studio & Question Bank E2E', () => {
         // Verify Plan Header and Duration
         await expect(page.locator('h2:has-text("Senior Distributed Systems Architect")')).toBeVisible({ timeout: 15000 });
         await expect(page.locator('text=~45 Minutes')).toBeVisible({ timeout: 15000 });
-        await expect(page.locator('text=2 Structured Questions')).toBeVisible({ timeout: 15000 });
-        await expect(page.locator('text=Evaluation Scorecard:')).toBeVisible();
+        await expect(page.getByText(/^Q\d+ •/)).toHaveCount(2, { timeout: 15000 });
 
         // Verify Export Guide button appears
         await expect(page.locator('button:has-text("Export Guide")')).toBeVisible();
@@ -189,12 +188,12 @@ test.describe('AI Technical Screening Studio & Question Bank E2E', () => {
         await expect(page.locator('text=How do you prevent split-brain scenarios in a distributed Raft cluster?')).toBeVisible({ timeout: 15000 });
 
         // Benchmark details visible (expanded by default or on click)
-        await expect(page.locator('text=Expected Ideal Answer:')).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('text=Benchmark Expected Ideal Answer')).toBeVisible({ timeout: 15000 });
         await expect(page.locator('text=Quorum majority math (N/2 + 1) and monotonic epoch fencing tokens.')).toBeVisible();
-        await expect(page.locator('text=Key Signals to Look For:')).toBeVisible();
+        await expect(page.locator('text=Key Signals to Look For')).toBeVisible();
         await expect(page.locator('text=Understands Raft quorum rules')).toBeVisible();
-        await expect(page.locator('text=Red Flags to Watch:')).toBeVisible();
+        await expect(page.locator('text=Red Flags to Watch For')).toBeVisible();
         await expect(page.locator('text=Confuses 2-phase commit with consensus')).toBeVisible();
-        await expect(page.locator('text=Follow-up Probing Question:')).toBeVisible();
+        await expect(page.locator('text=Recommended Follow-up Probe:')).toBeVisible();
     });
 });

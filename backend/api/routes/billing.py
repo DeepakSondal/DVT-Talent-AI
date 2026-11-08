@@ -13,8 +13,23 @@ import httpx
 import structlog
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Request, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from urllib.parse import urlparse
 from fastapi.responses import JSONResponse
+
+def _resolve_safe_return_url(raw_url: Optional[str], default_path: str) -> str:
+    """Ensure checkout/portal return URLs stay within the configured frontend origin to prevent open redirects."""
+    default_url = f"{settings.frontend_url.rstrip('/')}{default_path}"
+    if not raw_url:
+        return default_url
+    cleaned = raw_url.strip()
+    if cleaned.startswith("/") and not cleaned.startswith("//"):
+        return f"{settings.frontend_url.rstrip('/')}{cleaned}"
+    parsed = urlparse(cleaned)
+    frontend_parsed = urlparse(settings.frontend_url)
+    if parsed.scheme in ("http", "https") and parsed.netloc and parsed.netloc == frontend_parsed.netloc:
+        return cleaned
+    raise HTTPException(status_code=400, detail="Invalid return URL: must match application frontend origin")
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -104,7 +119,9 @@ async def create_checkout(
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
 
-    success_url = req.success_url or f"{settings.frontend_url}/dashboard/billing?success=1"
+    success_url = _resolve_safe_return_url(req.success_url, "/dashboard/billing?success=1")
+    if req.cancel_url:
+        _resolve_safe_return_url(req.cancel_url, "/dashboard/billing")
     
     # If Dodo API key is configured, create real checkout session via Dodo Payments API
     if DODO_PAYMENTS_API_KEY:
@@ -258,15 +275,15 @@ async def dodo_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """Direct webhook endpoint for Dodo Payments (Standard Webhook payload)."""
-    dodo_webhook_key = os.getenv("DODO_PAYMENTS_WEBHOOK_KEY", "")
+    dodo_webhook_key = getattr(settings, "dodo_payments_webhook_key", "") or os.getenv("DODO_PAYMENTS_WEBHOOK_KEY", "")
     sig_header = request.headers.get("webhook-signature")
     raw_body = await request.body()
-    if dodo_webhook_key:
-        if not sig_header:
+    if dodo_webhook_key or settings.is_production:
+        if not dodo_webhook_key or not sig_header:
             raise HTTPException(status_code=400, detail="Missing webhook signature header")
         expected_sig = hmac.new(dodo_webhook_key.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
         clean_sig = sig_header.split(",")[-1].replace("v1=", "").strip()
-        if not (hmac.compare_digest(expected_sig, clean_sig) or sig_header.startswith("test_")):
+        if not hmac.compare_digest(expected_sig.lower(), clean_sig.lower()):
             raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     try:

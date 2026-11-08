@@ -45,16 +45,11 @@ services:
       target: api
     ports:
       - "8000:8000"
-    environment:
-      CHROMA_HOST: chromadb
-      CHROMA_PORT: 8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      chromadb:
-        condition: service_started
     volumes:
       - ./backend:/app
     command: uvicorn main:app --host 0.0.0.0 --port 8000
@@ -73,8 +68,6 @@ services:
       context: ./backend
       target: worker
     environment:
-      CHROMA_HOST: chromadb
-      CHROMA_PORT: 8000
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
@@ -83,8 +76,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      chromadb:
-        condition: service_started
     volumes:
       - ./backend:/app
     command: celery -A workers.celery_app worker --loglevel=info
@@ -105,8 +96,6 @@ services:
       - ./backend:/app
     command: celery -A workers.celery_app beat --loglevel=info
     environment:
-      CHROMA_HOST: chromadb
-      CHROMA_PORT: 8000
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
@@ -115,13 +104,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      chromadb:
-        condition: service_started
 
-  # ── PostgreSQL ────────────────────────────────────────────
+  # ── PostgreSQL with pgvector ──────────────────────────────
   postgres:
     container_name: dvt-postgres
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     env_file: ./backend/.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -152,20 +139,6 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       retries: 5
-
-  # ── ChromaDB ─────────────────────────────────────────────
-  chromadb:
-    container_name: dvt-chromadb
-    image: chromadb/chroma:0.4.24
-    environment:
-      IS_PERSISTENT: TRUE
-      PERSIST_DIRECTORY: /chroma/chroma
-      ANONYMIZED_TELEMETRY: FALSE
-    volumes:
-      - chroma_data:/chroma/chroma
-    networks:
-      - dvt-net
-    restart: unless-stopped
 
   # ── Flower ────────────────────────────────────────────────
   flower:
@@ -207,6 +180,5 @@ networks:
 volumes:
   postgres_data:
   redis_data:
-  chroma_data:
   caddy_data:
   caddy_config:

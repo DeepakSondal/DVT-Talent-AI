@@ -61,6 +61,12 @@ class PipelineTrigger(BaseModel):
     mock_mode: bool = False
 
 
+class FastSourcingRequest(BaseModel):
+    query: str
+    location: Optional[str] = "Remote"
+    limit: int = 5
+
+
 VALID_AGENTS = [
     "discovery",
     "sourcing",
@@ -136,21 +142,92 @@ async def run_swarm_pipeline(
     print(f"🚀 [SWARM TRACE] Received initiation request for industry: {config.industry}")
     """Trigger the unified swarm pipeline via native background tasks (No Celery required)"""
     from agents.orchestrator import AgentOrchestrator
-    
-    orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
-    
-    # Fire and forget via native background task
-    background_tasks.add_task(
-        orchestrator.run_full_swarm,
-        industry=config.industry,
-        location=config.location,
-        mock_mode=config.mock_mode
+    from db.models import AsyncSessionLocal
+    from datetime import datetime, timezone
+
+    agent_task = AgentTask(
+        tenant_id=tenant_uuid,
+        agent_name="swarm",
+        task_type="full_pipeline",
+        status=AgentTaskStatus.RUNNING,
+        input_data=config.model_dump(),
+        started_at=datetime.now(timezone.utc),
+        user_id=current_user.id,
     )
-    
+    db.add(agent_task)
+    await db.commit()
+    await db.refresh(agent_task)
+    task_id = agent_task.id
+
+    async def _run_and_persist():
+        orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
+        res = await orchestrator.run_full_swarm(
+            industry=config.industry,
+            location=config.location,
+            mock_mode=config.mock_mode,
+        )
+        async with AsyncSessionLocal() as session:
+            t_row = await session.get(AgentTask, task_id)
+            if t_row:
+                t_row.output_data = res
+                t_row.completed_at = datetime.now(timezone.utc)
+                if res.get("error"):
+                    t_row.status = AgentTaskStatus.FAILED
+                    t_row.error_message = str(res["error"])
+                else:
+                    t_row.status = AgentTaskStatus.COMPLETED
+                await session.commit()
+
+    from workers.tasks import is_celery_broker_available, run_full_autonomous_pipeline, safe_dispatch_task
+
+    if is_celery_broker_available():
+        dispatched = safe_dispatch_task(
+            run_full_autonomous_pipeline,
+            industry=config.industry,
+            location=config.location,
+            send_emails=config.send_emails,
+            mock_mode=config.mock_mode,
+            tenant_id=str(tenant_uuid),
+        )
+        if dispatched:
+            agent_task.celery_task_id = dispatched.id
+            await db.commit()
+            return {
+                "message": "Unified swarm protocol queued via Celery",
+                "status": "active",
+                "task_id": str(task_id),
+                "celery_task_id": dispatched.id,
+                "mock": config.mock_mode,
+            }
+
+    background_tasks.add_task(_run_and_persist)
+
     return {
-        "message": "Unified swarm protocol initiated", 
+        "message": "Unified swarm protocol initiated",
         "status": "active",
-        "mock": config.mock_mode
+        "task_id": str(task_id),
+        "mock": config.mock_mode,
+    }
+
+
+@router.post("/sourcing/fast")
+async def fast_sourcing(
+    req: FastSourcingRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Sub-second hybrid vector + multi-keyword candidate sourcing scoped strictly to caller's tenant."""
+    tenant_uuid = _require_agent_access(current_user)
+    from agents.sourcing_pydantic import fast_hybrid_candidate_search
+    candidates = await fast_hybrid_candidate_search(
+        tenant_id=str(tenant_uuid),
+        keywords=f"{req.query} {req.location or ''}".strip(),
+        limit=min(max(1, req.limit), 25),
+    )
+    return {
+        "status": "completed",
+        "candidates": candidates,
+        "count": len(candidates),
     }
 
 
@@ -169,19 +246,22 @@ async def run_swarm_phase(
         raise HTTPException(status_code=400, detail="Invalid phase")
 
     from agents.orchestrator import AgentOrchestrator
-    # Pass user/tenant context to the orchestrator for notifications
     orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
     
-    # Run the phase async
-    # In a real production env, this would be a Celery task, 
-    # but for HITL Copilot, we run it as a background task to allow immediate UI response.
     import asyncio
     task = asyncio.create_task(orchestrator.run_swarm_phase(phase, mode=mode, **(params or {})))
+
+    fast_candidates: List[Dict[str, Any]] = []
+    if phase == "sourcing":
+        from agents.sourcing_pydantic import fast_hybrid_candidate_search
+        query_str = (params or {}).get("job_description") or ""
+        fast_candidates = await fast_hybrid_candidate_search(str(tenant_uuid), query_str, limit=5)
     
     return {
         "status": "initiated",
         "phase": phase,
         "mode": mode,
+        "candidates": fast_candidates,
         "message": f"Swarm {phase} sequence started in {mode} mode."
     }
 

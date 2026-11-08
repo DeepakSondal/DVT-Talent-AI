@@ -75,6 +75,31 @@ export default function CompliancePage() {
     }
   };
 
+  const handleExportCsv = () => {
+    const rows = [
+      ["ID", "Decision Type", "Provider", "Model", "Score", "Confidence", "Human Action", "Override", "Created At"],
+      ...decisionLedger.map((item) => [
+        item.id,
+        item.decision_type,
+        item.model_provider,
+        item.model_name,
+        String(item.qualification_score ?? ""),
+        item.confidence_level,
+        item.human_action,
+        String(item.is_override),
+        item.created_at || "",
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `AI_Decision_Ledger_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    toast.success("Audit ledger exported as CSV");
+  };
+
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -95,7 +120,7 @@ export default function CompliancePage() {
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-          <Button variant="primary" size="sm" className="gap-2">
+          <Button variant="primary" size="sm" onClick={handleExportCsv} className="gap-2">
             <Download className="w-4 h-4" />
             Export Audit Ledger (CSV)
           </Button>

@@ -13,7 +13,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import Link from "next/link";
-import { monitoringApi } from "@/lib/api";
+import api, { monitoringApi, candidatesApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { RecruiterBriefing } from "@/components/dashboard/recruiter-briefing";
 
@@ -24,23 +24,67 @@ export default function DashboardHome() {
     const transitionConfig = shouldReduceMotion ? { duration: 0 } : springPreset;
 
     const [stats, setStats] = useState({ 
-        candidates: 42, 
-        actions: 128, 
-        hours: 142, 
-        matchScore: 94 
+        candidates: 0, 
+        actions: 0, 
+        hours: 0, 
+        matchScore: 0 
     });
+    const [pipelineCounts, setPipelineCounts] = useState({
+        sourced: 0,
+        screened: 0,
+        shortlisted: 0,
+        contacted: 0,
+        interviewing: 0,
+    });
+    const [topMatches, setTopMatches] = useState<Array<{
+        id: string;
+        name: string;
+        title: string;
+        company: string;
+        score: number;
+        stage: string;
+        href: string;
+    }>>([]);
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     const fetchStats = async () => {
         try {
             setIsRefreshing(true);
-            const tasks = await monitoringApi.getRecentSignals(100);
-            if (tasks.length > 0) {
-                setStats(prev => ({
-                    ...prev,
-                    actions: tasks.length,
-                    hours: Math.floor(tasks.length * 1.5)
-                }));
+            const [tasks, kpisRes, candsRes] = await Promise.all([
+                monitoringApi.getRecentSignals(100).catch(() => []),
+                api.get("/analytics/dashboard").then(r => r.data).catch(() => null),
+                candidatesApi.list({ page: 1 }).catch(() => ({ items: [] })),
+            ]);
+            const dbCands = (candsRes as any)?.items || (Array.isArray(candsRes) ? candsRes : []);
+            const totalCandidates = kpisRes?.candidates?.total ?? dbCands.length;
+            const avgScore = dbCands.length > 0
+                ? Math.round(dbCands.reduce((a: number, c: any) => a + (Number(c.score) || 88), 0) / dbCands.length)
+                : 0;
+            setStats({
+                candidates: totalCandidates,
+                actions: tasks.length,
+                hours: Math.floor(tasks.length * 1.5),
+                matchScore: avgScore,
+            });
+            setPipelineCounts({
+                sourced: dbCands.filter((c: any) => !c.status || c.status.toLowerCase() === "sourced").length,
+                screened: dbCands.filter((c: any) => c.status?.toLowerCase() === "screened").length,
+                shortlisted: dbCands.filter((c: any) => c.status?.toLowerCase() === "shortlisted").length,
+                contacted: dbCands.filter((c: any) => c.status?.toLowerCase() === "contacted").length,
+                interviewing: dbCands.filter((c: any) => ["interviewing", "interviewed", "offered"].includes(c.status?.toLowerCase())).length,
+            });
+            if (dbCands.length > 0) {
+                setTopMatches(dbCands.slice(0, 3).map((c: any) => ({
+                    id: String(c.id),
+                    name: `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Candidate",
+                    title: c.title || "Software Engineer",
+                    company: c.current_company || "Organization",
+                    score: Math.round(c.score || 90),
+                    stage: (c.status || "Sourced"),
+                    href: `/dashboard/candidates/${c.id}`,
+                })));
+            } else {
+                setTopMatches([]);
             }
         } catch (e) {
             console.error("Signal fetch error:", e);
@@ -77,39 +121,13 @@ export default function DashboardHome() {
         },
     ];
 
+    const totalPipeline = stats.candidates || 1;
     const pipelineStages = [
-        { label: "Sourced", count: 42, percentage: "100%", color: "bg-blue-500" },
-        { label: "Screened", count: 28, percentage: "67%", color: "bg-purple-500" },
-        { label: "Shortlisted", count: 19, percentage: "45%", color: "bg-emerald-500" },
-        { label: "In Outreach", count: 12, percentage: "28%", color: "bg-amber-500" },
-        { label: "Interviewing", count: 6, percentage: "14%", color: "bg-teal-500" },
-    ];
-
-    const priorityCandidates = [
-        {
-            id: "cand_src_01",
-            name: "Elena Rostova",
-            title: "Senior Distributed Systems Engineer",
-            company: "HighThroughput Systems",
-            score: 96,
-            stage: "Shortlisted"
-        },
-        {
-            id: "cand_src_04",
-            name: "Sarah Kovacs",
-            title: "Principal Quantum Algorithm Researcher",
-            company: "Quantum Compute Inc",
-            score: 94,
-            stage: "Interviewing"
-        },
-        {
-            id: "cand_src_03",
-            name: "Marcus Vance",
-            title: "Lead AI Systems Architect",
-            company: "Neural Vault Labs",
-            score: 92,
-            stage: "Contacted"
-        }
+        { label: "Sourced", count: pipelineCounts.sourced, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.sourced / totalPipeline) * 100)}%` : "0%", color: "bg-blue-500" },
+        { label: "Screened", count: pipelineCounts.screened, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.screened / totalPipeline) * 100)}%` : "0%", color: "bg-purple-500" },
+        { label: "Shortlisted", count: pipelineCounts.shortlisted, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.shortlisted / totalPipeline) * 100)}%` : "0%", color: "bg-emerald-500" },
+        { label: "In Outreach", count: pipelineCounts.contacted, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.contacted / totalPipeline) * 100)}%` : "0%", color: "bg-amber-500" },
+        { label: "Interviewing", count: pipelineCounts.interviewing, percentage: stats.candidates > 0 ? `${Math.round((pipelineCounts.interviewing / totalPipeline) * 100)}%` : "0%", color: "bg-teal-500" },
     ];
 
     return (
@@ -220,7 +238,9 @@ export default function DashboardHome() {
 
                     <div className="p-3 rounded-xl bg-muted/30 border border-border/60 flex items-center justify-between text-xs text-muted-foreground">
                         <span>Overall Conversion Rate (Sourced ➔ Interviewing):</span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400">14.3% (Top 10% Industry Benchmark)</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            {stats.candidates > 0 ? `${Math.round((pipelineCounts.interviewing / stats.candidates) * 100)}%` : "0% (Pipeline ready to activate)"}
+                        </span>
                     </div>
                 </Card>
 
@@ -237,10 +257,21 @@ export default function DashboardHome() {
                     </div>
 
                     <div className="space-y-2.5">
-                        {priorityCandidates.map((cand) => (
+                        {topMatches.length === 0 ? (
+                            <div className="py-6 text-center text-xs text-muted-foreground space-y-2">
+                                <Users className="w-8 h-8 text-muted-foreground/40 mx-auto" />
+                                <p>No candidates in pipeline yet.</p>
+                                <Link href="/dashboard/sourcing">
+                                    <Button variant="outline" size="sm" className="h-7 text-[11px] rounded-lg">
+                                        Source Talent
+                                    </Button>
+                                </Link>
+                            </div>
+                        ) : (
+                            topMatches.map((cand) => (
                             <Link 
                                 key={cand.id} 
-                                href={`/dashboard/candidates/${cand.id}`}
+                                href={cand.href}
                                 className="p-3 rounded-xl border border-border/70 hover:border-primary/40 bg-muted/20 hover:bg-muted/40 transition-colors block space-y-1"
                             >
                                 <div className="flex items-center justify-between">
@@ -255,7 +286,7 @@ export default function DashboardHome() {
                                     <span className="capitalize font-medium text-foreground">{cand.stage}</span>
                                 </div>
                             </Link>
-                        ))}
+                        )))}
                     </div>
 
                     <Link href="/dashboard/candidates">

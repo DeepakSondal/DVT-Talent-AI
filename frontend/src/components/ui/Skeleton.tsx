@@ -30,16 +30,6 @@ export function CardSkeleton({ className }: { className?: string }) {
   );
 }
 
-export function TableRowSkeleton({ columns = 5 }: { columns?: number }) {
-  return (
-    <div className="flex items-center gap-4 py-3 px-4 border-b border-border">
-      {Array.from({ length: columns }).map((_, i) => (
-        <Skeleton key={i} className="h-4 flex-1" />
-      ))}
-    </div>
-  );
-}
-
 export function TableSkeleton({
   rows = 5,
   columns = 4,

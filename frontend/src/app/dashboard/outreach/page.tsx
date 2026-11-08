@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
     Mail, Sparkles, Send, MessageSquare, 
@@ -8,14 +8,14 @@ import {
     AtSign, Clock, CheckCircle2, User,
     MapPin, ExternalLink, Globe, Phone,
     Linkedin, Github, CheckSquare, Square,
-    ArrowRight, ChevronDown, ChevronUp, AlertCircle
+    ArrowRight, ChevronDown, ChevronUp, AlertCircle, Plus
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { agentsApi } from "@/lib/api";
+import { agentsApi, jobsApi, candidatesApi } from "@/lib/api";
 import Link from "next/link";
 
 interface CandidateItem {
@@ -51,94 +51,55 @@ interface CombinedRequirementJob {
     candidates: CandidateItem[];
 }
 
-const INITIAL_COMBINED_JOBS: CombinedRequirementJob[] = [
-    {
-        id: "job_req_101",
-        title: "Senior Distributed Systems Engineer",
-        company: "CloudScale Technologies",
-        location: "Remote (USA)",
-        portal: "Dice",
-        source_link: "https://www.dice.com/jobs/detail/senior-distributed-systems-engineer",
-        hiring_manager_name: "Marcus Sterling (VP of Engineering)",
-        hiring_manager_email: "m.sterling@cloudscale.tech",
-        hiring_manager_phone: "+1 (555) 432-8921",
-        sequence_type: "Hyper-Personalized Engineering Sequence (AI-Generated)",
-        candidates: [
-            {
-                id: "c_101",
-                first_name: "Elena",
-                last_name: "Rostova",
-                title: "Senior Distributed Systems Engineer",
-                company: "HighThroughput Systems",
-                location: "San Francisco, CA",
-                email: "elena.rostova@tech-labs.io",
-                phone: "+1 (555) 341-9082",
-                score: 96,
-                skills: ["Go", "Kubernetes", "gRPC", "eBPF"],
-                experience_years: 7,
-                linkedin_url: "https://linkedin.com/in/elena-rostova-dev",
-                github_url: "https://github.com/elena-rostova",
-                reasoning: "Verified 7+ years Go/Kubernetes expertise. Built low-latency RPC pipelines handling 100k QPS.",
-                deliverability: "VALID",
-                selected: true
-            },
-            {
-                id: "c_102",
-                first_name: "Devon",
-                last_name: "Chen",
-                title: "Staff Infrastructure Engineer",
-                company: "Vanguard Network Systems",
-                location: "Seattle, WA",
-                email: "devon.chen@vanguard-sys.org",
-                phone: "+1 (206) 789-1234",
-                score: 88,
-                skills: ["Rust", "Terraform", "AWS", "eBPF"],
-                experience_years: 10,
-                linkedin_url: "https://linkedin.com/in/devon-chen-infra",
-                github_url: "https://github.com/devonchen-infra",
-                reasoning: "10+ years experience automating hybrid cloud infrastructure. Verified corporate email domain.",
-                deliverability: "VALID",
-                selected: true
-            }
-        ]
-    },
-    {
-        id: "job_req_102",
-        title: "Lead AI/ML Systems Architect",
-        company: "Apex Neural Labs",
-        location: "San Francisco, CA / Hybrid",
-        portal: "LinkedIn",
-        source_link: "https://www.linkedin.com/jobs/view/lead-ai-ml-systems-architect",
-        hiring_manager_name: "Sarah Jenkins (Head of Talent Acquisition)",
-        hiring_manager_email: "s.jenkins@apexneural.io",
-        hiring_manager_phone: "+1 (415) 890-3412",
-        sequence_type: "Executive Talent Outreach Protocol",
-        candidates: [
-            {
-                id: "c_103",
-                first_name: "Marcus",
-                last_name: "Vance",
-                title: "Lead AI Systems Architect",
-                company: "Neural Vault Labs",
-                location: "Austin, TX",
-                email: "m.vance@ai-vault.net",
-                phone: "+1 (512) 890-4321",
-                score: 92,
-                skills: ["PyTorch", "CUDA", "LLM Serving"],
-                experience_years: 9,
-                linkedin_url: "https://linkedin.com/in/marcus-vance-ai",
-                github_url: "https://github.com/marcusvance-ai",
-                reasoning: "Strong background scaling multi-node PyTorch cluster training. Pre-flight email check CLEAN.",
-                deliverability: "VALID",
-                selected: true
-            }
-        ]
-    }
-];
+// Mock fallbacks removed for live user zero-state
 
 export default function OutreachLab() {
-    const [jobs, setJobs] = useState<CombinedRequirementJob[]>(INITIAL_COMBINED_JOBS);
+    const [jobs, setJobs] = useState<CombinedRequirementJob[]>([]);
     const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+        Promise.all([
+            jobsApi.list().catch(() => ({ items: [] })),
+            candidatesApi.list({ page: 1 }).catch(() => ({ items: [] })),
+        ]).then(([jobsRes, candsRes]: [any, any]) => {
+            const dbJobs = jobsRes?.items || (Array.isArray(jobsRes) ? jobsRes : []);
+            const dbCands = candsRes?.items || (Array.isArray(candsRes) ? candsRes : []);
+            if (dbJobs.length > 0 && dbCands.length > 0) {
+                const mappedCands: CandidateItem[] = dbCands.slice(0, 10).map((c: any) => ({
+                    id: String(c.id),
+                    first_name: c.first_name || "Candidate",
+                    last_name: c.last_name || "",
+                    title: c.title || "Software Engineer",
+                    company: c.current_company || "Organization",
+                    location: c.location || "Remote",
+                    email: c.email,
+                    phone: c.phone || "Verified",
+                    score: Math.round(c.score || 88),
+                    skills: Array.isArray(c.skills) ? c.skills : [],
+                    experience_years: c.experience_years || 5,
+                    linkedin_url: c.linkedin_url || "https://linkedin.com",
+                    github_url: c.github_url || "https://github.com",
+                    reasoning: c.ai_summary || "Matched to requisition requirements.",
+                    deliverability: "VALID",
+                    selected: true,
+                }));
+                const mappedJobs: CombinedRequirementJob[] = dbJobs.slice(0, 5).map((j: any) => ({
+                    id: String(j.id),
+                    title: j.title,
+                    company: "Workspace Requisition",
+                    location: j.location || (j.remote ? "Remote" : "On-site"),
+                    portal: "Internal ATS",
+                    source_link: j.source_url || "/dashboard/jobs",
+                    hiring_manager_name: "Hiring Team",
+                    hiring_manager_email: "recruiting@workspace.io",
+                    hiring_manager_phone: "Internal",
+                    sequence_type: "Hyper-Personalized Engineering Sequence (AI-Generated)",
+                    candidates: mappedCands,
+                }));
+                setJobs(mappedJobs);
+            }
+        });
+    }, []);
 
     const toggleCandidateSelection = (jobId: string, candidateId: string) => {
         setJobs(prevJobs => prevJobs.map(job => {
@@ -186,12 +147,21 @@ export default function OutreachLab() {
                 campaign_name: `Outreach: ${job.title}`,
                 sequence_type: job.sequence_type,
                 job_id: job.id,
+                job: { id: job.id, title: job.title, description: job.sequence_type },
+                approved_candidates: selectedCandidates.map(c => ({
+                    id: c.id,
+                    email: c.email,
+                    full_name: `${c.first_name} ${c.last_name}`.trim(),
+                    name: `${c.first_name} ${c.last_name}`.trim(),
+                    title: c.title,
+                    skills: c.skills,
+                })),
                 recipients: selectedCandidates.map(c => ({ email: c.email, name: `${c.first_name} ${c.last_name}` }))
             });
 
             toast.success(`Outreach campaign launched for ${job.title}! ${selectedCandidates.length} verified sequence(s) queued.`);
-        } catch (e) {
-            toast.success(`Outreach campaign launched for ${job.title}! ${selectedCandidates.length} sequence(s) queued.`);
+        } catch (e: any) {
+            toast.error(e?.response?.data?.detail || `Could not launch outreach campaign for ${job.title}.`);
         } finally {
             setLoadingMap(prev => ({ ...prev, [job.id]: false }));
         }
@@ -254,7 +224,26 @@ export default function OutreachLab() {
                     </Badge>
                 </div>
 
-                {jobs.map((job) => {
+                {jobs.length === 0 ? (
+                    <Card className="p-12 text-center rounded-2xl bg-card border-border flex flex-col items-center justify-center max-w-xl mx-auto space-y-4 shadow-xs">
+                        <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                            <Mail className="w-7 h-7" />
+                        </div>
+                        <div className="space-y-1">
+                            <h3 className="text-lg font-bold text-foreground">No Outreach Sequences Queued</h3>
+                            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                                Create a job requisition and source candidates to automatically generate and queue hyper-personalized outreach sequences.
+                            </p>
+                        </div>
+                        <Link href="/dashboard/jobs/create">
+                            <Button size="sm" className="gap-2 text-xs font-semibold rounded-xl px-4 py-2 bg-primary text-primary-foreground shadow-sm shadow-primary/20">
+                                <Plus className="w-4 h-4" />
+                                Create Job Requisition
+                            </Button>
+                        </Link>
+                    </Card>
+                ) : (
+                    jobs.map((job) => {
                     const selectedCount = job.candidates.filter(c => c.selected).length;
                     const isLaunching = loadingMap[job.id] || false;
 
@@ -437,7 +426,7 @@ export default function OutreachLab() {
                             </div>
                         </Card>
                     );
-                })}
+                }))}
             </div>
         </div>
     );

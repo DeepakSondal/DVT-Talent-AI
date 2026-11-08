@@ -1,5 +1,5 @@
 # DVT Talent AI — Complete Setup & Deployment Guide
-**Version:** 2.0.0 (October 2026)  
+**Version:** 2.1.0 (October 2026)  
 
 ---
 
@@ -7,7 +7,7 @@
 
 - **Local Development**:
   - Python 3.11+ / Python 3.14
-  - Node.js 18+ or 20+ (with npm)
+  - Node.js 18+ or 20+ LTS (with npm)
   - Git
   - *(Optional)* Docker Desktop & Redis
 - **Production VPS (Recommended Minimum)**:
@@ -41,21 +41,24 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Edit `backend/.env` with your preferred LLM provider key:
+Edit `backend/.env` with your preferred LLM provider keys and configuration:
 ```env
-# Primary LLM API Key (at least one required)
-OPENAI_API_KEY=sk-...
-# OR
-GROQ_API_KEY=gsk_...
-# OR
+# Primary LLM API Keys (at least one required)
 ANTHROPIC_API_KEY=sk-ant-...
+GROQ_API_KEY=gsk_...
+OPENAI_API_KEY=sk-...
+
+# Monetization via Dodo Payments (Merchant of Record)
+DODO_PAYMENTS_API_KEY=test_...
+DODO_PAYMENTS_WEBHOOK_KEY=whsec_...
+DODO_PAYMENTS_ENVIRONMENT=test_mode
 
 # Search & Sourcing (optional for local mock testing)
 SERPER_API_KEY=...
 GITHUB_TOKEN=ghp_...
 
-# Database (Default uses local SQLite; set PostgreSQL URL for prod)
-DATABASE_URL=sqlite+aiosqlite:///../dvt_talent.db
+# Database (PostgreSQL with pgvector)
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dvt_staging
 
 # JWT Secret
 SECRET_KEY=generate_a_secure_random_hex_key_here
@@ -64,8 +67,6 @@ SECRET_KEY=generate_a_secure_random_hex_key_here
 Run database migrations:
 ```powershell
 python -m alembic upgrade head
-# Or run direct initialization script
-python run_migration.py
 ```
 
 Start the FastAPI backend server:
@@ -77,7 +78,7 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8000
 
 ---
 
-### Step 3: Frontend Setup (Next.js 14 App Router)
+### Step 3: Frontend Setup (Next.js 15 App Router)
 
 In a separate terminal window:
 ```powershell
@@ -117,12 +118,15 @@ cp .env.example .env
 
 # Build and start all services
 docker compose up --build -d
+
+# Run migrations
+docker compose exec api alembic upgrade head
 ```
 
 ### Services Launched:
-- `backend`: FastAPI API server on port 8000
-- `frontend`: Next.js web application on port 3000
-- `postgres`: PostgreSQL 15 database on port 5432
+- `api`: FastAPI API server on port 8000
+- `frontend`: Next.js 15 web application on port 3000
+- `postgres`: PostgreSQL 15 database with `pgvector` on port 5432
 - `redis`: Redis cache & event bus on port 6379
 
 Verify running containers:
@@ -155,6 +159,7 @@ nano .env
 ### 3. Launch Production Stack
 ```bash
 docker compose -f docker-compose.prod.yml up --build -d
+docker compose -f docker-compose.prod.yml exec api alembic upgrade head
 ```
 
 ### 4. Automated HTTPS with Caddy
@@ -164,5 +169,7 @@ The included `Caddyfile` handles automated Let's Encrypt SSL/TLS certificates an
 
 ## 5. Decommissioned Service Configurations
 
+- **ChromaDB**: Fully replaced by PostgreSQL `pgvector`. No ChromaDB container or host port 8001 is required.
+- **Stripe**: Replaced by **Dodo Payments** Merchant of Record (MoR).
 - **MarketPulse / Celery Beat**: Periodic market scraping loops have been removed from backend startup.
 - **Twilio Voice AI**: Voice routes are unmounted; no telephony credentials are required.

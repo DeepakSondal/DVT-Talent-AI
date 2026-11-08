@@ -3,16 +3,24 @@ DVT Talent AI — Notification Service
 Handles system-to-recruiter alerts (e.g. Action Required, New Candidates).
 Uses the per-tenant SMTP settings if available, else falls back to system SMTP.
 """
+import sys
+import uuid
+
+if __name__.startswith("backend.services."):
+    sys.modules[__name__.replace("backend.services.", "services.")] = sys.modules[__name__]
+elif __name__.startswith("services."):
+    sys.modules["backend." + __name__] = sys.modules[__name__]
+
 import structlog
 from typing import Optional, List
 from jinja2 import Template
 
 try:
-    from services.email_service import email_service
-    from db.models import AsyncSessionLocal, User, Tenant, Candidate
+    from backend.services.email_service import email_service
+    from backend.db.models import AsyncSessionLocal, User, Tenant, Candidate
 except ImportError:
-    from services.email_service import email_service
-    from db.models import AsyncSessionLocal, User, Tenant, Candidate
+    from services.email_service import email_service  # pyrefly: ignore[missing-import]  # type: ignore
+    from db.models import AsyncSessionLocal, User, Tenant, Candidate  # pyrefly: ignore[missing-import]  # type: ignore
 from sqlalchemy import select
 
 log = structlog.get_logger(__name__)
@@ -43,14 +51,21 @@ class NotificationService:
     ):
         """Sends an 'Action Required' email to all admins/recruiters of a tenant."""
         async with AsyncSessionLocal() as session:
-            # 1. Get Tenant & Recruiters
-            tenant = await session.get(Tenant, tenant_id)
+            # 1. Get Tenant & Recruiters with defensive UUID conversion
+            tenant_uuid = None
+            if tenant_id and str(tenant_id) != "default":
+                try:
+                    tenant_uuid = uuid.UUID(str(tenant_id))
+                except (ValueError, TypeError):
+                    tenant_uuid = tenant_id
+
+            tenant = await session.get(Tenant, tenant_uuid if tenant_uuid is not None else tenant_id)
             if not tenant:
                 log.error("notification_failed_tenant_not_found", tenant_id=tenant_id)
                 return
 
             result = await session.execute(
-                select(User).where(User.tenant_id == tenant_id, User.role.in_(["admin", "recruiter"]))
+                select(User).where(User.tenant_id == (tenant_uuid if tenant_uuid is not None else tenant_id), User.role.in_(["admin", "recruiter"]))
             )
             recruiters = result.scalars().all()
 
@@ -73,9 +88,9 @@ class NotificationService:
                 # 3. Dispatch via Email Service
                 try:
                     await email_service.send_email(
-                        tenant_id=tenant_id,
-                        # pyrefly: ignore [unexpected-keyword]
-                        to_email=recruiter.email,
+                        email_id=str(uuid.uuid4()),
+                        tenant_id=tenant_uuid,
+                        to_address=recruiter.email,
                         subject=f"⚠️ Action Required: {action_type}",
                         body=html_content
                     )

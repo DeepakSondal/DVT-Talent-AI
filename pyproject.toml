@@ -1,0 +1,7 @@
+[tool.pyright]
+include = ["backend"]
+extraPaths = ["backend"]
+
+[tool.pyrefly]
+search-path = ["backend"]
+

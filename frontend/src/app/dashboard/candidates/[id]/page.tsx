@@ -25,123 +25,7 @@ import { IntegrityGuard } from "@/components/shared/integrity-guard";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-const SHOWCASE_CANDIDATES: Record<string, any> = {
-  "cand_src_01": {
-    id: "cand_src_01",
-    first_name: "Elena",
-    last_name: "Rostova",
-    email: "elena.rostova@tech-labs.io",
-    phone: "+1 (555) 341-9082",
-    title: "Senior Distributed Systems Engineer",
-    current_company: "HighThroughput Systems",
-    location: "San Francisco, CA",
-    score: 96,
-    skills: ["Go", "Kubernetes", "gRPC", "eBPF", "Kafka", "PostgreSQL", "Docker", "Prometheus"],
-    experience_years: 7,
-    status: "shortlisted",
-    source: "Sourcing Lab",
-    linkedin_url: "https://linkedin.com/in/elena-rostova-dev",
-    github_url: "https://github.com/elena-rostova",
-    ai_summary: "Verified 7+ years Go/Kubernetes expertise. Built low-latency RPC pipelines handling 100k QPS.",
-    created_at: "2026-10-09",
-    resume_file_name: "elena_rostova_resume_2026.pdf",
-    parsed_data: {
-      summary: "Senior Distributed Systems Architect with 7+ years leading cloud-native infrastructure engineering.",
-      experience: [
-        {
-          title: "Senior Staff Engineer",
-          company: "HighThroughput Systems",
-          dates: "2022 - Present",
-          description: "Lead architect for core microservice message brokers, processing 100k+ messages/sec across Kubernetes clusters.",
-          bullets: [
-            "Designed zero-copy eBPF telemetry gathering reducing CPU overhead by 35%.",
-            "Maintained 99.999% SLA across multi-region Kubernetes deployments."
-          ]
-        },
-        {
-          title: "Distributed Systems Engineer",
-          company: "CloudScale Infra",
-          dates: "2019 - 2022",
-          description: "Engineered high-concurrency gRPC backend services in Go.",
-          bullets: [
-            "Optimized database connection pooling reducing connection timeouts to 0%."
-          ]
-        }
-      ],
-      education: [
-        {
-          degree: "M.S. in Computer Science",
-          institution: "University of Washington",
-          year: "2019"
-        },
-        {
-          degree: "B.S. in Software Engineering",
-          institution: "UC Berkeley",
-          year: "2017"
-        }
-      ]
-    }
-  },
-  "cand_src_02": {
-    id: "cand_src_02",
-    first_name: "Devon",
-    last_name: "Chen",
-    email: "devon.chen@vanguard-sys.org",
-    phone: "+1 (206) 789-1234",
-    title: "Staff Infrastructure Engineer",
-    current_company: "Vanguard Network Systems",
-    location: "Seattle, WA",
-    score: 88,
-    skills: ["Rust", "Terraform", "AWS", "eBPF", "Linux Kernel", "CI/CD"],
-    experience_years: 10,
-    status: "sourced",
-    source: "Sourcing Lab",
-    linkedin_url: "https://linkedin.com/in/devon-chen-infra",
-    github_url: "https://github.com/devonchen-infra",
-    ai_summary: "10+ years experience automating hybrid cloud infrastructure. Verified corporate email domain.",
-    created_at: "2026-10-09",
-    resume_file_name: "devon_chen_cv_infra.pdf"
-  },
-  "cand_src_03": {
-    id: "cand_src_03",
-    first_name: "Marcus",
-    last_name: "Vance",
-    email: "m.vance@ai-vault.net",
-    phone: "+1 (512) 890-4321",
-    title: "Lead AI Systems Architect",
-    current_company: "Neural Vault Labs",
-    location: "Austin, TX",
-    score: 92,
-    skills: ["PyTorch", "CUDA", "LLM Serving", "Distributed Training"],
-    experience_years: 9,
-    status: "contacted",
-    source: "Sourcing Lab",
-    linkedin_url: "https://linkedin.com/in/marcus-vance-ai",
-    github_url: "https://github.com/marcusvance-ai",
-    ai_summary: "Strong background scaling multi-node PyTorch cluster training. Pre-flight email check CLEAN.",
-    created_at: "2026-10-08",
-    resume_file_name: "marcus_vance_resume.pdf"
-  },
-  "cand_src_04": {
-    id: "cand_src_04",
-    first_name: "Sarah",
-    last_name: "Kovacs",
-    email: "s.kovacs@quantum-compute.io",
-    phone: "+1 (415) 678-9012",
-    title: "Principal Quantum Algorithm Researcher",
-    current_company: "Quantum Compute Inc",
-    location: "Palo Alto, CA",
-    score: 94,
-    skills: ["Qiskit", "Python", "Linear Algebra", "C++"],
-    experience_years: 8,
-    status: "shortlisted",
-    source: "Resume Upload",
-    linkedin_url: "https://linkedin.com/in/sarah-kovacs-quantum",
-    ai_summary: "PhD in Applied Physics. Led quantum circuit optimization research at Stanford AI Lab.",
-    created_at: "2026-10-07",
-    resume_file_name: "sarah_kovacs_cv_2026.pdf"
-  }
-};
+// Showcase fallback removed
 
 const STAGES = [
   { id: "sourced", label: "Sourced" },
@@ -192,15 +76,7 @@ export default function CandidateDetailPage() {
           setCandidate(candData);
           setCandidateStatus(candData.status || "sourced");
           setResumeDetails(resumeData);
-        } else if (SHOWCASE_CANDIDATES[id as string]) {
-          const showcase = SHOWCASE_CANDIDATES[id as string];
-          setCandidate(showcase);
-          setCandidateStatus(showcase.status || "sourced");
-          setResumeDetails({
-            file_name: showcase.resume_file_name,
-            raw_text: showcase.parsed_data?.summary || showcase.ai_summary,
-            parsed_data: showcase.parsed_data,
-          });
+
         }
       } catch (err) {
         console.warn("Failed to load candidate:", err);

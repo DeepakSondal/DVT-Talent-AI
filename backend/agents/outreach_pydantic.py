@@ -2,10 +2,20 @@
 DVT Talent AI — Outreach Agent (Pydantic AI Version)
 Handles hyper-personalized communication across LinkedIn and Email.
 """
+import sys
+
+if __name__.startswith("backend.agents."):
+    sys.modules[__name__.replace("backend.agents.", "agents.")] = sys.modules[__name__]
+elif __name__.startswith("agents."):
+    sys.modules["backend." + __name__] = sys.modules[__name__]
+
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
-from agents.pydantic_config import get_pydantic_model, AgentDeps
+try:
+    from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
+except ImportError:
+    from agents.pydantic_config import get_pydantic_model, AgentDeps  # pyrefly: ignore[missing-import]  # type: ignore
 
 class OutreachDraft(BaseModel):
     model_config = ConfigDict(extra="allow")

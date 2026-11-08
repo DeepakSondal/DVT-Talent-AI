@@ -27,22 +27,18 @@ export interface EmailSent {
   created_at: string;
 }
 
-export interface EmailSenderConfig {
-  smtp_host: string;
-  smtp_port: number;
-  smtp_user: string;
-  smtp_password: string;
-  sender_name: string;
-  sender_email: string;
+export interface OAuthConnectPayload {
+  sender_name?: string;
+  sender_email?: string;
+  code?: string;
 }
 
 export interface EmailSenderOut {
-  smtp_host: string | null;
-  smtp_port: number | null;
-  smtp_user: string | null;
-  smtp_password_hint: string | null;
+  oauth_provider?: "google" | "microsoft" | string | null;
+  connection_mode?: string;
   sender_name: string | null;
   sender_email: string | null;
   sender_verified: boolean;
   configured: boolean;
+  connected_at?: string | null;
 }

@@ -4,17 +4,24 @@ Dashboard KPIs, funnel metrics, campaign performance
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 
 from db.models import (
     Job, Candidate, EmailSent, Interview,
-    CandidateStatus, EmailStatus, get_db
+    CandidateStatus, EmailStatus, UserRole, get_db
 )
 from api.routes.auth import get_current_user, User
 
 router = APIRouter()
+
+
+def _require_analytics_access(current_user: User):
+    role_val = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if not current_user.tenant_id or role_val == "candidate":
+        raise HTTPException(status_code=403, detail="Workspace permissions required to access analytics.")
+    return current_user.tenant_id
 
 
 @router.get("/dashboard")
@@ -24,8 +31,8 @@ async def get_dashboard_kpis(
     current_user: User = Depends(get_current_user),
 ):
     """Main dashboard KPIs"""
+    tenant_id = _require_analytics_access(current_user)
     since = datetime.now(timezone.utc) - timedelta(days=days)
-    tenant_id = current_user.tenant_id
 
     # Job Requisitions (single aggregate query)
     jobs_total, jobs_active = (await db.execute(
@@ -102,9 +109,10 @@ async def get_candidate_funnel(
     current_user: User = Depends(get_current_user),
 ):
     """Candidate pipeline funnel breakdown"""
+    tenant_id = _require_analytics_access(current_user)
     rows = (await db.execute(
         select(Candidate.status, func.count(Candidate.id))
-        .where(Candidate.tenant_id == current_user.tenant_id)
+        .where(Candidate.tenant_id == tenant_id)
         .group_by(Candidate.status)
     )).all()
     counts = {(s.value if hasattr(s, "value") else s): c for s, c in rows}
@@ -118,6 +126,7 @@ async def get_email_performance(
     current_user: User = Depends(get_current_user),
 ):
     """Daily email performance over time"""
+    tenant_id = _require_analytics_access(current_user)
     since = datetime.now(timezone.utc) - timedelta(days=days)
     # Group by day
     result = await db.execute(
@@ -129,7 +138,7 @@ async def get_email_performance(
         )
         .where(
             and_(
-                EmailSent.tenant_id == current_user.tenant_id,
+                EmailSent.tenant_id == tenant_id,
                 EmailSent.sent_at >= since
             )
         )

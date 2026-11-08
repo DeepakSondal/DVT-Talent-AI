@@ -46,9 +46,9 @@ DVT Talent AI provides two standardized container stacks:
 | Container Name | Service | Base Image | Role | Port Mapping |
 |---|---|---|---|---|
 | `dvt-proxy` | `proxy` | `caddy:alpine` | Automated TLS, compression, reverse proxy | `80:80`, `443:443` |
-| `dvt-frontend` | `frontend` | `node:18-alpine` | Next.js 14 App Router production bundle | `3000` (internal) |
+| `dvt-frontend` | `frontend` | `node:18-alpine` | Next.js 15 App Router production bundle | `3000` (internal) |
 | `dvt-api` | `api` | `python:3.11-slim` | FastAPI async API gateway | `8000` (internal) |
-| `dvt_db` | `postgres` | `postgres:16-alpine` | Production database (`dvt_talent`, volume `postgres_prod_data`) | `5432` (internal) |
+| `dvt_db` | `postgres` | `postgres:16-alpine` | Production database (`dvt_talent`, volume `postgres_prod_data`, `vector` ext) | `5432` (internal) |
 | `dvt_redis` | `redis` | `redis:7-alpine` | Cache, Celery broker, WebSocket Pub/Sub | `6379` (internal) |
 | `dvt-worker` | `worker` | `python:3.11-slim` | Background Celery task processing | None |
 | `dvt-scheduler` | `scheduler` | `python:3.11-slim` | Celery Beat periodic job scheduler | None |
@@ -58,7 +58,7 @@ DVT Talent AI provides two standardized container stacks:
 ## 3. Staging / Testing Stack (`docker-compose.yml`)
 
 Used for automated integration testing, CI pipelines, and local development:
-- **Database Container:** `dvt-postgres` (PostgreSQL 15 Alpine).
+- **Database Container:** `dvt-postgres` (`pgvector/pgvector:pg15`).
 - **Database Name:** `dvt_staging` on exposed host port `5432:5432`.
 - **Purpose:** Isolated testing environment with pre-seeded fixtures that guarantees production `dvt_talent` data is never touched or polluted during test execution.
 

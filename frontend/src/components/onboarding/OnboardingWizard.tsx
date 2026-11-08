@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import { tenantsApi, emailSenderApi, EmailSenderConfig } from "@/lib/api";
+import { tenantsApi, emailSenderApi, OAuthConnectPayload } from "@/lib/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -75,11 +75,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         industry: "Technology & Software"
     });
 
-    const [emailConfig, setEmailConfig] = useState<EmailSenderConfig>({
-        smtp_host: "smtp.gmail.com",
-        smtp_port: 587,
-        smtp_user: "",
-        smtp_password: "",
+    const [emailConfig, setEmailConfig] = useState<OAuthConnectPayload & { provider: "google" | "microsoft" }>({
+        provider: "google" as "google" | "microsoft",
         sender_name: "",
         sender_email: "",
     });
@@ -94,7 +91,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     industry: data.industry || prev.industry
                 }));
             }
-        }).catch(() => {});
+        }).catch(() => {}); emailSenderApi.getConfig().then(cfg => { if (cfg) setEmailConfig(prev => ({ ...prev, sender_name: cfg.sender_name || prev.sender_name, sender_email: cfg.sender_email || prev.sender_email })); }).catch(() => {});
     }, []);
 
     const nextStep = () => setStep(s => Math.min(4, s + 1));
@@ -161,17 +158,13 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
     // Step 2: Email outreach configuration
     const handleSaveEmail = async () => {
-        if (!emailConfig.smtp_user || !emailConfig.smtp_password) {
-            nextStep();
-            return;
-        }
         setLoading(true);
         try {
-            await emailSenderApi.saveConfig(emailConfig);
+            await emailSenderApi.connectOAuth(emailConfig.provider, { sender_name: emailConfig.sender_name || undefined, sender_email: emailConfig.sender_email || undefined });
             toast.success("Outreach email configured");
             nextStep();
         } catch (err: any) {
-            toast.error("SMTP Configuration Note", { 
+            toast.info("Outreach Mailbox Note", { 
                 description: "Saved settings. You can test your connection anytime in Settings." 
             });
             nextStep();
@@ -517,73 +510,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-3 gap-3">
-                                            <div className="col-span-2 space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-300">
-                                                    SMTP Relay Host
-                                                </label>
-                                                <Input 
-                                                    placeholder="smtp.gmail.com"
-                                                    value={emailConfig.smtp_host}
-                                                    onChange={e => setEmailConfig({ ...emailConfig, smtp_host: e.target.value })}
-                                                    className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl font-mono"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-300">
-                                                    Port
-                                                </label>
-                                                <Input 
-                                                    type="number"
-                                                    placeholder="587"
-                                                    value={emailConfig.smtp_port}
-                                                    onChange={e => setEmailConfig({ ...emailConfig, smtp_port: Number(e.target.value) || 587 })}
-                                                    className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl font-mono"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-300">
-                                                    SMTP Username
-                                                </label>
-                                                <Input 
-                                                    placeholder="login@email.com"
-                                                    value={emailConfig.smtp_user}
-                                                    onChange={e => setEmailConfig({ ...emailConfig, smtp_user: e.target.value })}
-                                                    className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-300">
-                                                    SMTP App Password
-                                                </label>
-                                                <div className="relative">
-                                                    <Input 
-                                                        type={showPassword ? "text" : "password"}
-                                                        placeholder="••••••••••••"
-                                                        value={emailConfig.smtp_password}
-                                                        onChange={e => setEmailConfig({ ...emailConfig, smtp_password: e.target.value })}
-                                                        className="h-11 bg-slate-950/60 border-slate-700/80 text-sm rounded-xl pr-10"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setShowPassword(!showPassword)}
-                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-                                                    >
-                                                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 flex items-start gap-2.5">
-                                            <Shield className="w-4 h-4 mt-0.5 shrink-0 text-blue-400" />
-                                            <span>
-                                                For Gmail/Google Workspace, generate an <strong>App Password</strong> in your Google Account security settings. Credentials are encrypted at rest.
-                                            </span>
-                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2"><Button type="button" onClick={() => { setEmailConfig({ ...emailConfig, provider: "google" }); handleSaveEmail(); }} disabled={loading} className="h-12 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-semibold"><Mail className="w-4 h-4 mr-2 text-blue-400" />Connect Google Workspace / Gmail</Button><Button type="button" onClick={() => { setEmailConfig({ ...emailConfig, provider: "microsoft" }); handleSaveEmail(); }} disabled={loading} className="h-12 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-semibold"><Mail className="w-4 h-4 mr-2 text-indigo-400" />Connect Microsoft 365 / Outlook</Button></div>
                                     </div>
 
                                     <div className="pt-4 flex items-center justify-between gap-3 border-t border-slate-800/60">

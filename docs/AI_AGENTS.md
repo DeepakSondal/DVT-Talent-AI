@@ -38,7 +38,7 @@ DVT Talent AI coordinates two complementary intelligence systems:
 |---|---|---|---|
 | **MarketIQ Agent** | `backend/agents/market_iq_pydantic.py` | Analyzes market compensation, talent pool availability, and hiring velocity. | Pydantic AI, Serper Search, Real-Time Market Indices |
 | **Discovery Agent** | `backend/agents/discovery_pydantic.py` | Extracts hard technical constraints and qualification rubrics from unstructured job descriptions. | Structured JSON Schema extraction, Bias-free syntax |
-| **Sourcing Agent** | `backend/agents/sourcing_pydantic.py` | Discovers candidates across web nodes and internal databases. Enforces Privacy Shield. | Serper API, GitHub API, ChromaDB / Semantic Matcher |
+| **Sourcing Agent** | `backend/agents/sourcing_pydantic.py` | Discovers candidates across web nodes and internal databases. Enforces Privacy Shield. | Serper API, GitHub API, PostgreSQL pgvector / FastEmbed Matcher |
 | **Critic Agent** | `backend/agents/critic_pydantic.py` | Sanitizes candidate payloads (trims PII) and audits match reasoning against EEOC / EU AI Act anti-bias rules. | Compliance Evaluator, NYC Local Law 144 Auditor |
 | **Outreach Agent** | `backend/agents/outreach_pydantic.py` | Drafts personalized multi-touch outreach sequences with dynamic candidate microsite tokens. | Dynamic Token Injector, Template Engine |
 | **Analytics Agent** | `backend/agents/analytics_pydantic.py` | Synthesizes execution reports, funnel conversion rates, and sourcing velocity metrics. | Statistical Aggregator, Telemetry Logger |
@@ -62,16 +62,18 @@ Before evaluating candidate profiles, the Critic Agent trims non-predictive PII 
 
 The platform supports flexible multi-model orchestration with automatic fallback:
 1. **Tenant BYOK Override:** If a tenant configures custom API keys in `TeamApiKeys`, requests route to Anthropic (`claude-3-5-sonnet`) or OpenAI (`gpt-4o`).
-2. **System Groq (`llama-3.3-70b-versatile`):** Default high-throughput, low-latency inference provider for high-volume sourcing operations.
-3. **System OpenAI (`gpt-4o`):** High-precision reasoning fallback.
-4. **DeepSeek:** Secondary fallback provider.
+2. **System Anthropic (`claude-3-5-sonnet-20241022`):** Primary provider for high-precision extraction and reasoning tasks.
+3. **System Groq (`llama-3.3-70b-versatile`):** Default high-throughput, low-latency inference provider for high-volume sourcing operations.
+4. **System OpenAI (`gpt-4o`):** High-precision reasoning fallback.
+5. **Kimi (`moonshot-v1-32k`):** Long-context analysis fallback for exhaustive resume dossiers.
+6. **DeepSeek (`deepseek-chat`):** Cost-effective secondary fallback provider.
 
 ---
 
 ## 4. Swarm Memory, Guardrails & Real-Time Telemetry
 
 ### 4.1 Redis Semantic Swarm Memory (`backend/agents/swarm_memory.py`)
-- Replaces legacy single-file SQLite memory (`swarm_memory.db`) with distributed Redis semantic caching.
+- Replaces legacy single-file SQLite memory with distributed Redis semantic caching.
 - Caches agent findings, query embeddings, and candidate metadata across distributed Celery worker nodes with configurable TTLs.
 
 ### 4.2 LLM Guardrails & Circuit Breaker (`backend/services/llm_guardrail_service.py`)

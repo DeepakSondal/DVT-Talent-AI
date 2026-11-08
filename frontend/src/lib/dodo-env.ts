@@ -3,9 +3,6 @@
  * Ensures safe environment narrowing, defaulting to test_mode to prevent accidental live usage.
  */
 
-export const dodoEnvironment =
-  process.env.DODO_PAYMENTS_ENVIRONMENT === "live_mode" ? "live_mode" : "test_mode";
-
 export const getDodoWebhookKey = (): string => {
   const key = process.env.DODO_PAYMENTS_WEBHOOK_KEY || process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
   if (!key) {

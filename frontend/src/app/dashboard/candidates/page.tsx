@@ -26,90 +26,10 @@ import { CandidateKanbanBoard } from "@/components/candidates/CandidateKanbanBoa
 import { CandidateDrawer } from "@/components/candidates/CandidateDrawer";
 import { CandidateTanstackTable } from "@/components/candidates/CandidateTanstackTable";
 
-const INITIAL_CANDIDATES: CandidateCardData[] = [
-    {
-        id: "cand_src_01",
-        first_name: "Elena",
-        last_name: "Rostova",
-        email: "elena.rostova@tech-labs.io",
-        phone: "+1 (555) 341-9082",
-        title: "Senior Distributed Systems Engineer",
-        company: "HighThroughput Systems",
-        location: "San Francisco, CA",
-        score: 96,
-        skills: ["Go", "Kubernetes", "gRPC", "eBPF", "Kafka"],
-        experience_years: 7,
-        status: "shortlisted",
-        source: "Sourcing Lab",
-        linkedin_url: "https://linkedin.com/in/elena-rostova-dev",
-        github_url: "https://github.com/elena-rostova",
-        ai_summary: "Verified 7+ years Go/Kubernetes expertise. Built low-latency RPC pipelines handling 100k QPS.",
-        created_at: "2026-10-09",
-        resume_file_name: "elena_rostova_resume_2026.pdf"
-    },
-    {
-        id: "cand_src_02",
-        first_name: "Devon",
-        last_name: "Chen",
-        email: "devon.chen@vanguard-sys.org",
-        phone: "+1 (206) 789-1234",
-        title: "Staff Infrastructure Engineer",
-        company: "Vanguard Network Systems",
-        location: "Seattle, WA",
-        score: 88,
-        skills: ["Rust", "Terraform", "AWS", "eBPF", "Linux"],
-        experience_years: 10,
-        status: "sourced",
-        source: "Sourcing Lab",
-        linkedin_url: "https://linkedin.com/in/devon-chen-infra",
-        github_url: "https://github.com/devonchen-infra",
-        ai_summary: "10+ years experience automating hybrid cloud infrastructure. Verified corporate email domain.",
-        created_at: "2026-10-09",
-        resume_file_name: "devon_chen_cv_infra.pdf"
-    },
-    {
-        id: "cand_src_03",
-        first_name: "Marcus",
-        last_name: "Vance",
-        email: "m.vance@ai-vault.net",
-        phone: "+1 (512) 890-4321",
-        title: "Lead AI Systems Architect",
-        company: "Neural Vault Labs",
-        location: "Austin, TX",
-        score: 92,
-        skills: ["PyTorch", "CUDA", "LLM Serving", "Distributed Training"],
-        experience_years: 9,
-        status: "contacted",
-        source: "Sourcing Lab",
-        linkedin_url: "https://linkedin.com/in/marcus-vance-ai",
-        github_url: "https://github.com/marcusvance-ai",
-        ai_summary: "Strong background scaling multi-node PyTorch cluster training. Pre-flight email check CLEAN.",
-        created_at: "2026-10-08",
-        resume_file_name: "marcus_vance_resume.pdf"
-    },
-    {
-        id: "cand_src_04",
-        first_name: "Sarah",
-        last_name: "Kovacs",
-        email: "s.kovacs@quantum-compute.io",
-        phone: "+1 (415) 678-9012",
-        title: "Principal Quantum Algorithm Researcher",
-        company: "Quantum Compute Inc",
-        location: "Palo Alto, CA",
-        score: 94,
-        skills: ["Qiskit", "Python", "Linear Algebra", "C++"],
-        experience_years: 8,
-        status: "interviewing",
-        source: "Resume Upload",
-        linkedin_url: "https://linkedin.com/in/sarah-kovacs-quantum",
-        ai_summary: "PhD in Applied Physics. Led quantum circuit optimization research at Stanford AI Lab.",
-        created_at: "2026-10-07",
-        resume_file_name: "sarah_kovacs_cv_2026.pdf"
-    }
-];
+
 
 export default function CandidatesPage() {
-    const [candidates, setCandidates] = useState<CandidateCardData[]>(INITIAL_CANDIDATES);
+    const [candidates, setCandidates] = useState<CandidateCardData[]>([]);
     const [search, setSearch] = useQueryState("q", parseAsString.withDefault(""));
     const [statusFilter, setStatusFilter] = useQueryState("status", parseAsString.withDefault("all"));
     const [viewMode, setViewMode] = useQueryState("view", parseAsStringLiteral(["kanban", "table"] as const).withDefault("kanban"));
@@ -123,41 +43,36 @@ export default function CandidatesPage() {
     const shouldReduceMotion = useReducedMotion();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Load actual candidates from backend API and merge with initial showcase records
+    // Load actual candidates from backend API
     useEffect(() => {
         candidatesApi.list({ page: 1 })
             .then((res: any) => {
                 const items = res?.items || (Array.isArray(res) ? res : []);
-                if (items.length > 0) {
-                    const mapped: CandidateCardData[] = items.map((c: any) => ({
-                        id: c.id,
-                        first_name: c.first_name,
-                        last_name: c.last_name,
-                        email: c.email,
-                        phone: c.phone || "Not specified",
-                        title: c.title || "Technical Specialist",
-                        company: c.current_company || "Organization",
-                        location: c.location || "Remote",
-                        score: Math.round(c.score || 85),
-                        skills: c.skills || [],
-                        experience_years: c.experience_years || 3,
-                        status: (c.status?.toLowerCase() as any) || "sourced",
-                        source: (c.source as any) || "Resume Upload",
-                        linkedin_url: c.linkedin_url,
-                        github_url: c.github_url,
-                        ai_summary: c.ai_summary,
-                        created_at: c.created_at ? c.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
-                        resume_file_name: c.resume_file_name || `${c.first_name.toLowerCase()}_resume.pdf`
-                    }));
-                    setCandidates(prev => {
-                        const existingEmails = new Set(mapped.map(m => m.email));
-                        const remaining = prev.filter(p => !existingEmails.has(p.email));
-                        return [...mapped, ...remaining];
-                    });
-                }
+                const mapped: CandidateCardData[] = items.map((c: any) => ({
+                    id: c.id,
+                    first_name: c.first_name,
+                    last_name: c.last_name,
+                    email: c.email,
+                    phone: c.phone || "Not specified",
+                    title: c.title || "Technical Specialist",
+                    company: c.current_company || "Organization",
+                    location: c.location || "Remote",
+                    score: Math.round(c.score || 85),
+                    skills: c.skills || [],
+                    experience_years: c.experience_years || 3,
+                    status: (c.status?.toLowerCase() as any) || "sourced",
+                    source: (c.source as any) || "Resume Upload",
+                    linkedin_url: c.linkedin_url,
+                    github_url: c.github_url,
+                    ai_summary: c.ai_summary,
+                    created_at: c.created_at ? c.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
+                    resume_file_name: c.resume_file_name || `${c.first_name.toLowerCase()}_resume.pdf`
+                }));
+                setCandidates(mapped);
             })
             .catch((err) => {
-                console.warn("Using talent cache:", err);
+                console.warn("Failed to load candidates:", err);
+                setCandidates([]);
             });
     }, []);
 
@@ -203,13 +118,17 @@ export default function CandidatesPage() {
         else setSelectedIds(filteredCandidates.map(c => c.id));
     };
 
-    const handleBulkShortlist = () => {
+    const handleBulkShortlist = async () => {
         if (selectedIds.length === 0) return;
-        setCandidates(prev => prev.map(c => selectedIds.includes(c.id) ? { ...c, status: "shortlisted" } : c));
-        toast.success(`Shortlisted ${selectedIds.length} candidate(s)`, {
+        const idsToUpdate = [...selectedIds];
+        setCandidates(prev => prev.map(c => idsToUpdate.includes(c.id) ? { ...c, status: "shortlisted" } : c));
+        setSelectedIds([]);
+        await Promise.allSettled(
+            idsToUpdate.map(id => candidatesApi.updateStatus(id, "shortlisted"))
+        );
+        toast.success(`Shortlisted ${idsToUpdate.length} candidate(s)`, {
             description: "Updated in your candidate pipeline."
         });
-        setSelectedIds([]);
     };
 
     const handleBulkOutreach = () => {
@@ -448,6 +367,38 @@ export default function CandidatesPage() {
                         </Button>
                     </div>
                 </div>
+            )}
+
+            {/* Empty State Banner when no candidates in pipeline */}
+            {candidates.length === 0 && (
+                <Card className="p-10 text-center rounded-2xl bg-card border-border flex flex-col items-center justify-center max-w-xl mx-auto space-y-4 shadow-xs">
+                    <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+                        <Users className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1">
+                        <h3 className="text-lg font-bold text-foreground">No candidates in your pipeline yet</h3>
+                        <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                            Source candidates using autonomous AI swarms or import resumes to begin scoring talent matches.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                        <Link href="/dashboard/sourcing">
+                            <Button size="sm" className="gap-2 text-xs font-semibold rounded-xl px-4 py-2 bg-primary text-primary-foreground shadow-sm shadow-primary/20">
+                                <Sparkles className="w-4 h-4" />
+                                Launch Sourcing Swarm
+                            </Button>
+                        </Link>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsUploadOpen(true)}
+                            className="gap-2 text-xs font-semibold rounded-xl px-4 py-2"
+                        >
+                            <Upload className="w-4 h-4" />
+                            Import Resumes
+                        </Button>
+                    </div>
+                </Card>
             )}
 
             {/* Main View Area: Kanban or Table */}

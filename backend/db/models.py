@@ -3,6 +3,12 @@ DVT Talent AI — Database Models
 Full PostgreSQL schema with SQLAlchemy async ORM
 """
 import sys
+
+if __name__.startswith("backend.db."):
+    sys.modules[__name__.replace("backend.db.", "db.")] = sys.modules[__name__]
+elif __name__.startswith("db."):
+    sys.modules["backend." + __name__] = sys.modules[__name__]
+
 import os
 import uuid
 from datetime import datetime
@@ -12,7 +18,7 @@ from sqlalchemy import (
     ForeignKey, JSON, Enum, Index
     # FIX [M-02]: Removed unused BigInteger import
 )
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
@@ -331,7 +337,7 @@ class Company(Base, TimestampMixin):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), index=True)
     name = Column(String(255), nullable=False, index=True)
-    domain = Column(String(255), unique=True)
+    domain = Column(String(255), index=True)
     website = Column(String(500))
     linkedin_url = Column(String(500))
     industry = Column(String(100))
@@ -355,6 +361,7 @@ class Company(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_companies_industry", "industry"),
         Index("ix_companies_score", "score"),
+        Index("uq_companies_tenant_domain", "tenant_id", "domain", unique=True, postgresql_where=(tenant_id.isnot(None))),
     )
 
 

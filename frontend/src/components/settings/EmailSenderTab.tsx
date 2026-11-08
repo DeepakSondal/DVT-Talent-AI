@@ -1,39 +1,26 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { emailSenderApi, EmailSenderOut, EmailSenderConfig } from "@/lib/api";
+import { emailSenderApi, EmailSenderOut } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import {
   Mail, CheckCircle2, AlertCircle, ShieldCheck, Trash2,
-  SendHorizonal, Eye, EyeOff, Zap, Save, Loader2
+  SendHorizonal, Zap, Loader2, ExternalLink
 } from "lucide-react";
 import { toast } from "sonner";
 
-export function SenderStatusBanner({ config }: { config: EmailSenderOut }) {
+function SenderStatusBanner({ config }: { config: EmailSenderOut }) {
   if (!config.configured) {
     return (
       <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
         <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">No sender configured</p>
+          <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">No mailbox connected</p>
           <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
-            All outreach emails currently use the DVT system address. Set up your own sender below to improve reply rates.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  if (!config.sender_verified) {
-    return (
-      <div className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-700">
-        <Mail className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Verification pending</p>
-          <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
-            A verification link was sent to <strong>{config.sender_email}</strong>. Click it to activate your sender.
+            Connect your Google Workspace / Gmail or Microsoft 365 mailbox with one click so candidate replies land directly in your inbox.
           </p>
         </div>
       </div>
@@ -43,9 +30,11 @@ export function SenderStatusBanner({ config }: { config: EmailSenderOut }) {
     <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-700">
       <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
       <div>
-        <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Active & Verified ✓</p>
+        <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+          Connected via {config.oauth_provider === "microsoft" ? "Microsoft 365" : "Google Workspace"} OAuth 2.0 ✓
+        </p>
         <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
-          All candidate outreach will be sent from <strong>{config.sender_name}</strong> &lt;{config.sender_email}&gt;
+          All candidate outreach will be sent directly from <strong>{config.sender_name}</strong> &lt;{config.sender_email}&gt;
         </p>
       </div>
     </div>
@@ -55,36 +44,20 @@ export function SenderStatusBanner({ config }: { config: EmailSenderOut }) {
 export function EmailSenderSettings() {
   const [config, setConfig] = useState<EmailSenderOut | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [connectingProvider, setConnectingProvider] = useState<"google" | "microsoft" | null>(null);
   const [testing, setTesting] = useState(false);
   const [removing, setRemoving] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  // Form state
-  const [form, setForm] = useState<EmailSenderConfig>({
-    smtp_host: "smtp.gmail.com",
-    smtp_port: 587,
-    smtp_user: "",
-    smtp_password: "",
-    sender_name: "",
-    sender_email: "",
-  });
+  const [senderName, setSenderName] = useState("");
+  const [senderEmail, setSenderEmail] = useState("");
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
     try {
       const data = await emailSenderApi.getConfig();
       setConfig(data);
-      if (data.configured) {
-        setForm((f) => ({
-          ...f,
-          smtp_host: data.smtp_host || "smtp.gmail.com",
-          smtp_port: data.smtp_port || 587,
-          smtp_user: data.smtp_user || "",
-          sender_name: data.sender_name || "",
-          sender_email: data.sender_email || "",
-        }));
-      }
+      setSenderName(data.sender_name || "");
+      setSenderEmail(data.sender_email || "");
     } catch {
       toast.error("Failed to load sender config");
     } finally {
@@ -96,22 +69,23 @@ export function EmailSenderSettings() {
     loadConfig();
   }, [loadConfig]);
 
-  const handleSave = async () => {
-    if (!form.smtp_user || !form.smtp_password || !form.sender_email || !form.sender_name) {
-      toast.error("All fields are required");
-      return;
-    }
-    setSaving(true);
+  const handleConnectOAuth = async (provider: "google" | "microsoft") => {
+    setConnectingProvider(provider);
     try {
-      const res = await emailSenderApi.saveConfig(form);
-      toast.success("Sender configured!", { description: res.message });
+      const res = await emailSenderApi.connectOAuth(provider, {
+        sender_name: senderName || undefined,
+        sender_email: senderEmail || undefined,
+      });
+      toast.success("Mailbox connected!", { description: res.message });
       await loadConfig();
-      setForm((f) => ({ ...f, smtp_password: "" }));
+      if (res.authorization_url) {
+        window.open(res.authorization_url, "_blank", "noopener,noreferrer");
+      }
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || "Failed to save. Check credentials.";
-      toast.error("SMTP Error", { description: detail });
+      const detail = err?.response?.data?.detail || "Failed to connect mailbox via OAuth 2.0.";
+      toast.error("OAuth Connection Error", { description: detail });
     } finally {
-      setSaving(false);
+      setConnectingProvider(null);
     }
   };
 
@@ -121,7 +95,7 @@ export function EmailSenderSettings() {
       const res = await emailSenderApi.testConnection();
       toast.success("Test email sent!", { description: res.message });
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || "Test failed. Verify your credentials.";
+      const detail = err?.response?.data?.detail || "Test failed. Reconnect your OAuth mailbox.";
       toast.error("Test failed", { description: detail });
     } finally {
       setTesting(false);
@@ -129,22 +103,14 @@ export function EmailSenderSettings() {
   };
 
   const handleRemove = async () => {
-    if (!confirm("Remove your sender configuration? All outreach will revert to the DVT system address.")) return;
+    if (!confirm("Disconnect your OAuth mailbox? All outreach will revert to the system fallback address.")) return;
     setRemoving(true);
     try {
       await emailSenderApi.deleteConfig();
-      toast.success("Sender removed");
+      toast.success("Mailbox disconnected");
       await loadConfig();
-      setForm({
-        smtp_host: "smtp.gmail.com",
-        smtp_port: 587,
-        smtp_user: "",
-        smtp_password: "",
-        sender_name: "",
-        sender_email: "",
-      });
     } catch {
-      toast.error("Failed to remove config");
+      toast.error("Failed to disconnect mailbox");
     } finally {
       setRemoving(false);
     }
@@ -153,7 +119,7 @@ export function EmailSenderSettings() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
-        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading sender config...
+        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading OAuth mailbox status...
       </div>
     );
   }
@@ -169,12 +135,11 @@ export function EmailSenderSettings() {
               <Zap className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground">Why set up your own sender?</p>
+              <p className="text-sm font-semibold text-foreground">One-Click OAuth 2.0 Mailbox Integration</p>
               <ul className="text-xs text-muted-foreground mt-1.5 space-y-1">
-                <li>• Candidates receive messages directly from <strong>your verified domain</strong> to maximize trust</li>
-                <li>• Emails sent from your domain avoid spam filters</li>
-                <li>• Replies land in <strong>your</strong> inbox for direct follow-up</li>
-                <li>• Works with Gmail App Passwords, Outlook, or any SMTP provider</li>
+                <li>• Sends directly through <strong>Gmail API</strong> or <strong>Microsoft Graph</strong> over HTTPS (no SMTP ports or App Passwords)</li>
+                <li>• Automatically passes SPF, DKIM, and DMARC from your work domain</li>
+                <li>• Sent campaigns appear in your own <strong>Sent</strong> folder and replies land in your inbox</li>
               </ul>
             </div>
           </div>
@@ -184,182 +149,124 @@ export function EmailSenderSettings() {
       <Card className="bg-card border-border shadow-sm rounded-xl">
         <CardHeader className="border-b border-border bg-muted/20 rounded-t-xl">
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4" /> SMTP Credentials
+            <ShieldCheck className="w-4 h-4" /> Connect Recruiter Mailbox (OAuth 2.0)
             <span className="ml-auto text-xs font-normal text-muted-foreground normal-case">
-              Encrypted at rest with AES-256
+              Tokens encrypted at rest with AES-256
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6 space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground">
-                Sender Name <span className="text-red-500">*</span>
-              </label>
+              <label className="text-sm font-semibold text-foreground">Recruiter Display Name</label>
               <Input
                 id="sender-name"
                 placeholder="e.g. Sarah at Acme Recruiting"
-                value={form.sender_name}
-                onChange={(e) => setForm({ ...form, sender_name: e.target.value })}
+                value={senderName}
+                onChange={(e) => setSenderName(e.target.value)}
                 className="bg-background"
               />
-              <p className="text-xs text-muted-foreground">What candidates see as the sender name</p>
+              <p className="text-xs text-muted-foreground">Shown to candidates as the From display name</p>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground">
-                Sender Email Address <span className="text-red-500">*</span>
-              </label>
+              <label className="text-sm font-semibold text-foreground">Recruiter Work Email</label>
               <Input
                 id="sender-email"
                 type="email"
                 placeholder="e.g. sarah@acmecorp.com"
-                value={form.sender_email}
-                onChange={(e) => setForm({ ...form, sender_email: e.target.value })}
+                value={senderEmail}
+                onChange={(e) => setSenderEmail(e.target.value)}
                 className="bg-background"
               />
-              <p className="text-xs text-muted-foreground">The "From" address candidates will reply to</p>
+              <p className="text-xs text-muted-foreground">Your Google Workspace or Microsoft 365 address</p>
             </div>
           </div>
 
-          <div className="border-t border-border pt-5 space-y-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              SMTP Server Settings
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2 space-y-2">
-                <label className="text-sm font-semibold text-foreground">SMTP Host</label>
-                <Input
-                  id="smtp-host"
-                  placeholder="smtp.gmail.com"
-                  value={form.smtp_host}
-                  onChange={(e) => setForm({ ...form, smtp_host: e.target.value })}
-                  className="bg-background font-mono"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">Port</label>
-                <Input
-                  id="smtp-port"
-                  type="number"
-                  placeholder="587"
-                  value={form.smtp_port}
-                  onChange={(e) => setForm({ ...form, smtp_port: parseInt(e.target.value) || 587 })}
-                  className="bg-background font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">
-                  SMTP Username / Login <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="smtp-user"
-                  placeholder="your-email@gmail.com"
-                  value={form.smtp_user}
-                  onChange={(e) => setForm({ ...form, smtp_user: e.target.value })}
-                  className="bg-background font-mono"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">
-                  SMTP Password / App Password <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Input
-                    id="smtp-password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder={config?.configured ? "••••••••••••  (Leave blank to keep current)" : "App Password"}
-                    value={form.smtp_password}
-                    onChange={(e) => setForm({ ...form, smtp_password: e.target.value })}
-                    className="bg-background font-mono pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-muted/40 border border-border text-xs text-muted-foreground">
-              <strong>Using Gmail?</strong> You need a{" "}
-              <a
-                href="https://myaccount.google.com/apppasswords"
-                target="_blank"
-                rel="noreferrer"
-                className="text-blue-600 dark:text-blue-400 underline hover:no-underline"
-              >
-                Gmail App Password
-              </a>{" "}
-              (not your regular password). Enable 2FA first, then generate an App Password for &quot;Mail&quot;.
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <Button
-              id="save-sender-btn"
-              onClick={handleSave}
-              disabled={saving}
-              variant="primary"
-              className="min-w-[160px]"
+              id="connect-google-oauth-btn"
+              onClick={() => handleConnectOAuth("google")}
+              disabled={connectingProvider !== null}
+              variant={config?.oauth_provider === "google" ? "secondary" : "primary"}
+              className="w-full justify-center py-6"
             >
-              {saving ? (
+              {connectingProvider === "google" ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />Validating SMTP...
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />Connecting Google OAuth...
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4 mr-2" />Save & Verify
+                  <Mail className="w-4 h-4 mr-2" />
+                  {config?.oauth_provider === "google"
+                    ? "Reconnect Google Workspace / Gmail"
+                    : "Connect Google Workspace / Gmail"}
+                  <ExternalLink className="w-3.5 h-3.5 ml-2 opacity-70" />
                 </>
               )}
             </Button>
 
-            {config?.configured && (
-              <>
-                <Button
-                  id="test-sender-btn"
-                  onClick={handleTest}
-                  disabled={testing || !config.sender_verified}
-                  variant="secondary"
-                  className="min-w-[140px]"
-                  title={!config.sender_verified ? "Verify your email first" : ""}
-                >
-                  {testing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />Sending...
-                    </>
-                  ) : (
-                    <>
-                      <SendHorizonal className="w-4 h-4 mr-2" />Send Test Email
-                    </>
-                  )}
-                </Button>
-
-                <Button
-                  id="remove-sender-btn"
-                  onClick={handleRemove}
-                  disabled={removing}
-                  variant="ghost"
-                  className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 ml-auto"
-                >
-                  {removing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />Removing...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-4 h-4 mr-2" />Remove Config
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
+            <Button
+              id="connect-microsoft-oauth-btn"
+              onClick={() => handleConnectOAuth("microsoft")}
+              disabled={connectingProvider !== null}
+              variant={config?.oauth_provider === "microsoft" ? "secondary" : "primary"}
+              className="w-full justify-center py-6"
+            >
+              {connectingProvider === "microsoft" ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />Connecting Microsoft 365...
+                </>
+              ) : (
+                <>
+                  <Mail className="w-4 h-4 mr-2" />
+                  {config?.oauth_provider === "microsoft"
+                    ? "Reconnect Microsoft 365 / Outlook"
+                    : "Connect Microsoft 365 / Outlook"}
+                  <ExternalLink className="w-3.5 h-3.5 ml-2 opacity-70" />
+                </>
+              )}
+            </Button>
           </div>
+
+          {config?.configured && (
+            <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-border">
+              <Button
+                id="test-sender-btn"
+                onClick={handleTest}
+                disabled={testing}
+                variant="secondary"
+                className="min-w-[160px]"
+              >
+                {testing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />Sending Test...
+                  </>
+                ) : (
+                  <>
+                    <SendHorizonal className="w-4 h-4 mr-2" />Send Test Email
+                  </>
+                )}
+              </Button>
+
+              <Button
+                id="remove-sender-btn"
+                onClick={handleRemove}
+                disabled={removing}
+                variant="ghost"
+                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 ml-auto"
+              >
+                {removing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />Disconnecting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />Disconnect Mailbox
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -367,25 +274,23 @@ export function EmailSenderSettings() {
         <Card className="bg-card border-border shadow-sm rounded-xl">
           <CardHeader className="border-b border-border bg-muted/20 rounded-t-xl">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              Active Configuration
+              Connected OAuth 2.0 Mailbox
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-border">
               {[
-                { label: "SMTP Server", value: `${config.smtp_host}:${config.smtp_port}` },
-                { label: "Login", value: config.smtp_user },
+                {
+                  label: "OAuth Provider",
+                  value: config.oauth_provider === "microsoft" ? "Microsoft 365 (Graph API)" : "Google Workspace (Gmail API)",
+                },
                 { label: "Sender Name", value: config.sender_name },
                 { label: "Sender Email", value: config.sender_email },
                 {
-                  label: "Verification Status",
-                  value: config.sender_verified ? (
+                  label: "Status",
+                  value: (
                     <Badge variant="success">
-                      <CheckCircle2 className="w-3 h-3 mr-1" />Verified
-                    </Badge>
-                  ) : (
-                    <Badge variant="warning">
-                      <AlertCircle className="w-3 h-3 mr-1" />Pending
+                      <CheckCircle2 className="w-3 h-3 mr-1" />OAuth 2.0 Active
                     </Badge>
                   ),
                 },
@@ -402,5 +307,3 @@ export function EmailSenderSettings() {
     </div>
   );
 }
-
-export default EmailSenderSettings;

@@ -1,18 +1,17 @@
 "use client";
 
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { 
-  Bot, Shield, Target, Zap, 
+import {
+  Bot, Target,
   Mail, Chrome as Google, Linkedin,
-  ArrowRight, Key, Sparkles, Loader2,
+  ArrowRight, Loader2,
   Eye, EyeOff, CheckCircle2, Lock
 } from "lucide-react";
 import { authApi } from "@/lib/api";
 import { toast } from "sonner";
-import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -20,19 +19,48 @@ import { cn } from "@/lib/utils";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
 
+function resolveSocialAuthUrl(provider: "google" | "linkedin"): string {
+  const rawBase = (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/$/, "");
+  const apiPrefix = rawBase.endsWith("/api/v1") ? rawBase : `${rawBase}/api/v1`;
+  return `${apiPrefix}/auth/login/${provider}`;
+}
+
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldReduceMotion = useReducedMotion();
   const initialPortal = searchParams.get("portal") === "candidate" ? "candidate" : "recruiter";
-  
+
   const [portal, setPortal] = useState<"recruiter" | "candidate">(initialPortal);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const transitionConfig = shouldReduceMotion ? { duration: 0 } : springPreset;
+
+  const handleForgotPassword = async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) {
+      toast.info("Enter your email address above first, then click Forgot password.");
+      document.getElementById("login-email")?.focus();
+      return;
+    }
+    setIsResetting(true);
+    try {
+      const res = await authApi.requestPasswordReset(trimmed);
+      toast.success("Password Reset Sent", {
+        description: res.message || `If an account exists for ${trimmed}, a reset link has been sent.`,
+      });
+    } catch {
+      toast.success("Password Reset Sent", {
+        description: `If an account exists for ${trimmed}, a reset link has been sent.`,
+      });
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,14 +72,19 @@ function LoginContent() {
     setIsLoading(true);
     try {
       const res = await authApi.login({ email: email.trim().toLowerCase(), password });
-      const isCandidateUser = res.role === "candidate" || portal === "candidate";
-      
+      const isCandidateUser = res.role ? res.role === "candidate" : portal === "candidate";
+
       toast.success("Welcome back!", {
-        description: isCandidateUser ? "Logged in to your Candidate Career-Ops portal." : "Logged in to your Recruiter workspace.",
-        icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+        description: isCandidateUser
+          ? "Logged in to your Candidate Career-Ops portal."
+          : "Logged in to your Recruiter workspace.",
+        icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
       });
 
-      const destination = searchParams.get("from") || (isCandidateUser ? "/portal" : "/dashboard");
+      const fromParam = searchParams.get("from");
+      const safeFrom =
+        fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") ? fromParam : null;
+      const destination = safeFrom || (isCandidateUser ? "/portal" : "/dashboard");
       router.push(destination);
     } catch (err: any) {
       const msg = err.response?.data?.detail || "Invalid email or password. Please try again.";
@@ -169,12 +202,15 @@ function LoginContent() {
                 <label className="text-xs font-semibold text-foreground" htmlFor="login-password">
                   Password
                 </label>
-                <Link
-                  href="/auth/register"
-                  className="text-[11px] font-semibold text-primary hover:underline"
+                <button
+                  type="button"
+                  id="forgot-password-btn"
+                  onClick={handleForgotPassword}
+                  disabled={isResetting}
+                  className="text-[11px] font-semibold text-primary hover:underline disabled:opacity-50"
                 >
-                  Forgot password?
-                </Link>
+                  {isResetting ? "Sending..." : "Forgot password?"}
+                </button>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -237,8 +273,7 @@ function LoginContent() {
             <button
               type="button"
               onClick={() => {
-                const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-                window.location.href = `${apiBase}/api/v1/auth/login/google`;
+                window.location.href = resolveSocialAuthUrl("google");
               }}
               className="h-10 rounded-xl bg-muted/30 border border-border hover:bg-muted transition-colors flex items-center justify-center gap-2 text-xs font-medium text-foreground"
             >
@@ -249,8 +284,7 @@ function LoginContent() {
             <button
               type="button"
               onClick={() => {
-                const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-                window.location.href = `${apiBase}/api/v1/auth/login/linkedin`;
+                window.location.href = resolveSocialAuthUrl("linkedin");
               }}
               className="h-10 rounded-xl bg-muted/30 border border-border hover:bg-muted transition-colors flex items-center justify-center gap-2 text-xs font-medium text-foreground"
             >

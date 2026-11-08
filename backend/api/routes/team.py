@@ -552,7 +552,7 @@ async def accept_team_invitation(
 @router.get("/members")
 async def list_team_members(db: AsyncSession = Depends(get_db), manager: User = Depends(require_manager)):
     """Lists team members under the manager."""
-    stmt = select(User).where(User.manager_id == manager.id)
+    stmt = select(User).where(User.manager_id == manager.id, User.tenant_id == manager.tenant_id)
     result = await db.execute(stmt)
     members = result.scalars().all()
     return {"members": [{"id": m.id, "email": m.email, "role": m.role} for m in members]}
@@ -561,9 +561,12 @@ async def list_team_members(db: AsyncSession = Depends(get_db), manager: User = 
 async def get_team_analytics(db: AsyncSession = Depends(get_db), manager: User = Depends(require_manager)):
     """Aggregate KPIs across the team."""
     # Count total candidates sourced by recruiters under this manager
-    stmt = select(func.count(Candidate.id)).where(Candidate.recruiter_id.in_(
-        select(User.id).where(User.manager_id == manager.id)
-    ))
+    subq = select(User.id).where(User.manager_id == manager.id, User.tenant_id == manager.tenant_id)
+    stmt = select(func.count(Candidate.id)).where(
+        Candidate.tenant_id == manager.tenant_id,
+        Candidate.pii_erased != True,
+        Candidate.recruiter_id.in_(subq),
+    )
     res = await db.execute(stmt)
     total_sourced = res.scalar() or 0
 
@@ -575,19 +578,37 @@ async def get_team_analytics(db: AsyncSession = Depends(get_db), manager: User =
 
 @router.patch("/members/{user_id}/quota")
 async def set_user_quota(user_id: str, limit: int, db: AsyncSession = Depends(get_db), manager: User = Depends(require_manager)):
-    """Set monthly credit limit for a recruiter."""
-    # Simplified mock for quota enforcement
+    """Set monthly credit limit for a recruiter within the manager's tenant."""
+    try:
+        target_uuid = uuid.UUID(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid user_id format")
+
+    target_user = (
+        await db.execute(
+            select(User).where(User.id == target_uuid, User.tenant_id == manager.tenant_id)
+        )
+    ).scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found in this organization")
+
     return {"message": f"Quota for {user_id} set to {limit} credits."}
 
 @router.get("/candidates")
 async def get_team_candidates(recruiter_id: Optional[str] = None, db: AsyncSession = Depends(get_db), manager: User = Depends(require_manager)):
-    """Gets all candidates across the team."""
-    subq = select(User.id).where(User.manager_id == manager.id)
-    stmt = select(Candidate).where(Candidate.recruiter_id.in_(subq))
-    
+    """Gets all candidates across the team, scoped strictly to the tenant and excluding GDPR-erased records."""
+    subq = select(User.id).where(User.manager_id == manager.id, User.tenant_id == manager.tenant_id)
+    stmt = select(Candidate).where(
+        Candidate.tenant_id == manager.tenant_id,
+        Candidate.pii_erased != True,
+        Candidate.recruiter_id.in_(subq),
+    )
     if recruiter_id:
-        stmt = stmt.where(Candidate.recruiter_id == recruiter_id)
-        
+        try:
+            r_uuid = uuid.UUID(recruiter_id)
+            stmt = stmt.where(Candidate.recruiter_id == r_uuid)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid recruiter_id format")
     result = await db.execute(stmt)
     cands = result.scalars().all()
     return {"candidates": [{"id": c.id, "name": f"{c.first_name} {c.last_name}"} for c in cands]}
@@ -623,7 +644,7 @@ async def get_team_api_keys(
 ):
     """Fetch masked team API keys."""
     # Find team
-    stmt = select(Team).where(Team.manager_id == manager.id)
+    stmt = select(Team).where(Team.manager_id == manager.id, Team.tenant_id == manager.tenant_id)
     result = await db.execute(stmt)
     team = result.scalar_one_or_none()
     if not team:
@@ -648,7 +669,7 @@ async def save_team_api_keys(
     manager: User = Depends(require_manager)
 ):
     """Save encrypted team API keys."""
-    stmt = select(Team).where(Team.manager_id == manager.id)
+    stmt = select(Team).where(Team.manager_id == manager.id, Team.tenant_id == manager.tenant_id)
     result = await db.execute(stmt)
     team = result.scalar_one_or_none()
     if not team:

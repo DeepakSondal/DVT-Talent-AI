@@ -44,6 +44,7 @@ class UserCreate(BaseModel):
     password: str
     full_name: str
     role: Optional[str] = "recruiter"
+    company_name: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -194,9 +195,11 @@ async def register(
         tenant_domain = f"{email_domain}-{uuid.uuid4().hex[:6]}" if (email_domain in common_domains or existing_tenant) else email_domain
 
         tenant = Tenant(
-            name=f"{user_data.full_name}'s Workspace",
+            name=(user_data.company_name or "").strip() or f"{user_data.full_name}'s Workspace",
             domain=tenant_domain,
-            is_active=True
+            is_active=True,
+            sender_name=user_data.full_name,
+            sender_email=user_data.email,
         )
         db.add(tenant)
         await db.flush()
@@ -512,3 +515,27 @@ async def logout(
     response.delete_cookie(key="dvt_token", path="/", samesite="lax")
     response.delete_cookie(key="dvt_refresh_token", path="/api/v1/auth/refresh", samesite="lax")
     return response
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+):
+    """Rate-limited password reset request that never leaks whether an email is registered."""
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="forgot_password_ip",
+        identifier=client_ip,
+        limit=5,
+        window_seconds=600,
+        detail="Too many password reset requests. Please try again later.",
+    )
+    return {
+        "message": f"If an account exists for {payload.email}, password reset instructions have been sent."
+    }

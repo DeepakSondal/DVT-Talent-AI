@@ -68,21 +68,23 @@ function RegisterContent() {
 
     setIsLoading(true);
     try {
-      await authApi.register({
+      const res = await authApi.register({
         email: email.trim().toLowerCase(),
         password,
         full_name: fullName.trim(),
-        role: portal,
+        role: portal, company_name: company.trim() || undefined,
       });
 
       toast.success("Account created successfully!", {
         description: portal === "candidate"
-          ? "Welcome to Career-Ops! Sign in to view verified jobs and score your match."
-          : "Your recruiter workspace is ready. Sign in to start sourcing.",
+          ? "Welcome to Career-Ops! Entering candidate portal..."
+          : "Your recruiter workspace is ready. Entering dashboard...",
         icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />
       });
 
-      router.push(`/auth/login?portal=${portal}`);
+      const isCandidateUser = (res as any)?.role ? (res as any).role === "candidate" : portal === "candidate";
+      const destination = isCandidateUser ? "/portal" : "/dashboard";
+      router.push(destination);
     } catch (err: any) {
       const msg = err.response?.data?.detail || "Registration failed. This email may already be registered.";
       toast.error("Registration Failed", {

@@ -2,6 +2,7 @@
 DVT Talent AI — Application Settings
 Centralized configuration using pydantic-settings
 """
+import hashlib
 import os
 import secrets
 from functools import lru_cache
@@ -96,9 +97,12 @@ class Settings(BaseSettings):
     gmail_refresh_token: str = ""
     gmail_sender_email: str = ""  # Replaced by per-tenant smtp_user
 
-    # Social Auth
+    # Social Auth & OAuth Providers
     google_client_id: str = ""
     google_client_secret: str = ""
+    microsoft_client_id: str = ""
+    microsoft_client_secret: str = ""
+    resend_api_key: str = ""
     github_client_id: str = ""
     github_client_secret: str = ""
     linkedin_client_id: str = ""
@@ -179,12 +183,13 @@ class Settings(BaseSettings):
 
     def model_post_init(self, __context) -> None:
         """
-        Auto-generates a high-entropy secret_key in development/test if default or unset,
-        preventing JWT forgery vulnerabilities while retaining strict production gatekeeping.
+        Auto-derives a deterministic high-entropy secret_key in development/test if default or unset,
+        preventing JWT invalidation across process reloads/workers while retaining strict production gatekeeping.
         """
         if not self.secret_key or self.secret_key == "change-me-in-production":
             if not self.is_production:
-                self.secret_key = secrets.token_urlsafe(32)
+                seed = f"dvt-dev-secret:{BASE_DIR}:{self.database_url}:{self.smtp_user}"
+                self.secret_key = hashlib.sha256(seed.encode("utf-8")).hexdigest()
 
     def validate_required_settings(self) -> list:
         """

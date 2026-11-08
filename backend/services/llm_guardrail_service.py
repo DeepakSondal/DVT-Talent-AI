@@ -25,10 +25,15 @@ class LLMGuardrailService:
     def __init__(self, redis_url: Optional[str] = None):
         self.redis_url = redis_url or settings.redis_url
         self._redis = None
+        self._redis_down_until: float = 0.0
 
     async def _get_redis(self):
         if self._redis is None:
-            self._redis = aioredis.from_url(self.redis_url)
+            self._redis = aioredis.from_url(
+                self.redis_url,
+                socket_connect_timeout=0.2,
+                socket_timeout=0.2,
+            )
         return self._redis
 
     async def check_rate_limit(
@@ -43,6 +48,8 @@ class LLMGuardrailService:
         Token-bucket rate limit check per tenant and provider.
         Returns (is_allowed, error_reason).
         """
+        if time.monotonic() < self._redis_down_until:
+            return True, None
         try:
             r = await self._get_redis()
             current_minute = int(time.time() // 60)
@@ -69,6 +76,7 @@ class LLMGuardrailService:
 
             return True, None
         except Exception as e:
+            self._redis_down_until = time.monotonic() + 15.0
             logger.warning("rate_limit_check_error_failing_open", error=str(e))
             return True, None
 

@@ -4,7 +4,6 @@ DVT Talent AI — Email Campaigns API  (FIXED [H-01]: was 7-line stub)
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from uuid import UUID
-import uuid as uuid_pkg
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request
 from pydantic import BaseModel
 from sqlalchemy import select, func, desc, or_

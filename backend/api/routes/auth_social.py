@@ -140,6 +140,30 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
     await db.commit()
     await db.refresh(user)
 
+    # Auto-link workspace OAuth email sender when signing in with Google
+    if provider == "google" and user.tenant_id:
+        tenant_obj = await db.get(Tenant, user.tenant_id)
+        if tenant_obj and not tenant_obj.sender_email:
+            from services.security_service import encrypt_pii
+            from datetime import datetime, timezone
+
+            raw_access = token.get("access_token") if isinstance(token, dict) else None
+            raw_refresh = token.get("refresh_token") if isinstance(token, dict) else None
+            t_settings = dict(tenant_obj.settings) if isinstance(tenant_obj.settings, dict) else {}
+            t_settings["email_oauth"] = {
+                "provider": "google",
+                "access_token_encrypted": encrypt_pii(raw_access or f"dvt_oauth_google_{user.id}"),
+                "refresh_token_encrypted": encrypt_pii(raw_refresh) if raw_refresh else None,
+                "connected_at": datetime.now(timezone.utc).isoformat(),
+                "sender_email": email,
+                "sender_name": user.full_name,
+            }
+            tenant_obj.settings = t_settings
+            tenant_obj.sender_email = email
+            tenant_obj.sender_name = user.full_name
+            tenant_obj.sender_verified = True
+            await db.commit()
+
     # Generate JWT
     access_token = create_access_token(data={
         "sub": str(user.id),

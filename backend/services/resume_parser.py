@@ -2,6 +2,12 @@
 DVT Talent AI — Multi-Format Resume Parser & Document Service
 Extracts full text and structured career data from PDF, DOCX, and TXT resumes.
 """
+import sys
+
+if __name__.startswith("backend.services."):
+    sys.modules[__name__.replace("backend.services.", "services.")] = sys.modules[__name__]
+elif __name__.startswith("services."):
+    sys.modules["backend." + __name__] = sys.modules[__name__]
 
 import io
 import os
@@ -414,9 +420,56 @@ class ResumeParserService:
 
         return sections
 
+    _SKILL_SYNONYMS: Dict[str, str] = {
+        "golang": "Go",
+        "go-lang": "Go",
+        "k8s": "Kubernetes",
+        "kube": "Kubernetes",
+        "postgres": "PostgreSQL",
+        "psql": "PostgreSQL",
+        "nextjs": "Next.js",
+        "next.js": "Next.js",
+        "nodejs": "Node.js",
+        "node.js": "Node.js",
+        "reactjs": "React",
+        "react.js": "React",
+        "vuejs": "Vue",
+        "vue.js": "Vue",
+        "ts": "TypeScript",
+        "js": "JavaScript",
+        "py": "Python",
+        "tf": "Terraform",
+        "google cloud": "GCP",
+        "ci/cd": "CI/CD",
+        "cicd": "CI/CD",
+    }
+
+    _PRIMARY_LANGUAGES = [
+        "Python", "Go", "Rust", "TypeScript", "JavaScript",
+        "Java", "C++", "C#", "Ruby", "PHP", "Swift", "Kotlin", "Scala",
+    ]
+
+    _STACKOVERFLOW_TAG_MAP: Dict[str, str] = {
+        "Go": "go",
+        "Kubernetes": "kubernetes",
+        "Python": "python",
+        "FastAPI": "fastapi",
+        "React": "reactjs",
+        "Next.js": "next.js",
+        "TypeScript": "typescript",
+        "Rust": "rust",
+        "PostgreSQL": "postgresql",
+        "PyTorch": "pytorch",
+        "TensorFlow": "tensorflow",
+        "Docker": "docker",
+        "Terraform": "terraform",
+        "AWS": "amazon-web-services",
+        "Kafka": "apache-kafka",
+    }
+
     @classmethod
     def _extract_skills(cls, text: str, sections: Dict[str, str]) -> List[str]:
-        """Extract multi-domain technical and functional skills from resume text."""
+        """Extract multi-domain technical and functional skills from resume text using deterministic taxonomy."""
         skill_catalog = [
             # Languages
             "Python", "JavaScript", "TypeScript", "Go", "Golang", "Rust", "Java", "C++", "C#",
@@ -434,29 +487,81 @@ class ResumeParserService:
             # Architecture & AI
             "Microservices", "Distributed Systems", "REST API", "gRPC", "System Design",
             "LLMs", "RAG", "Agentic AI", "Vector Databases", "ChromaDB", "Pinecone", "Milvus",
-            "Prompt Engineering", "Agile", "Scrum", "TDD"
+            "Prompt Engineering", "Agile", "Scrum", "TDD", "WebAssembly", "LLVM"
         ]
 
         found_skills = set()
-        text_lower = text.lower()
-
-        # Check in skills section first with high weight
+        text_lower = (text or "").lower()
         skills_sec = sections.get("skills", "").lower()
 
         for skill in skill_catalog:
-            pattern = rf"\b{re.escape(skill.lower())}\b"
+            pattern = rf"(?<![a-zA-Z0-9]){re.escape(skill.lower())}(?![a-zA-Z0-9])"
             if re.search(pattern, skills_sec) or re.search(pattern, text_lower):
-                found_skills.add(skill)
+                found_skills.add(cls._SKILL_SYNONYMS.get(skill.lower(), skill))
 
-        # Standardize synonyms
-        if "Golang" in found_skills:
-            found_skills.remove("Golang")
-            found_skills.add("Go")
-        if "Postgres" in found_skills:
-            found_skills.remove("Postgres")
-            found_skills.add("PostgreSQL")
+        for alias, canonical in cls._SKILL_SYNONYMS.items():
+            pattern = rf"(?<![a-zA-Z0-9]){re.escape(alias)}(?![a-zA-Z0-9])"
+            if re.search(pattern, skills_sec) or re.search(pattern, text_lower):
+                found_skills.add(canonical)
 
         return sorted(list(found_skills))
+
+    @classmethod
+    def extract_deterministic_facets(cls, text: str) -> Dict[str, Any]:
+        """
+        Freehire-inspired deterministic facet extraction (<1ms, zero LLM latency).
+        Normalizes skills, seniority, work_mode, primary GitHub language, and StackOverflow tags.
+        """
+        raw = (text or "").strip()
+        lower = raw.lower()
+        skills = cls._extract_skills(raw, {})
+
+        # Seniority detection
+        if re.search(r"\b(principal|staff|distinguished|architect|vp|director|head)\b", lower):
+            seniority = "Principal/Staff"
+            min_years = 8
+        elif re.search(r"\b(senior|sr\.?|lead|team lead)\b", lower):
+            seniority = "Senior"
+            min_years = 5
+        elif re.search(r"\b(junior|jr\.?|entry|intern|associate|graduate)\b", lower):
+            seniority = "Junior"
+            min_years = 1
+        else:
+            seniority = "Mid-Level"
+            min_years = 3
+
+        # Work mode detection
+        if re.search(r"\b(remote|distributed|wfh|work from home|anywhere)\b", lower):
+            work_mode = "Remote"
+        elif re.search(r"\b(hybrid)\b", lower):
+            work_mode = "Hybrid"
+        elif re.search(r"\b(onsite|on-site|in-office|office)\b", lower):
+            work_mode = "Onsite"
+        else:
+            work_mode = "Remote"
+
+        primary_language = None
+        for lang in cls._PRIMARY_LANGUAGES:
+            if lang in skills:
+                primary_language = lang.lower()
+                break
+
+        so_tags = [
+            cls._STACKOVERFLOW_TAG_MAP[s]
+            for s in skills
+            if s in cls._STACKOVERFLOW_TAG_MAP
+        ]
+        if not so_tags and primary_language:
+            so_tags = [primary_language]
+
+        return {
+            "skills": skills,
+            "seniority": seniority,
+            "min_years": min_years,
+            "work_mode": work_mode,
+            "primary_language": primary_language,
+            "stackoverflow_tags": so_tags[:3],
+        }
 
     @classmethod
     def _extract_experience(cls, experience_text: str) -> List[Dict[str, Any]]:

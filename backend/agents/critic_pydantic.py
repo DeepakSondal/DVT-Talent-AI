@@ -1,11 +1,24 @@
 """
 DVT Talent AI — Critic Agent (Pydantic AI Version)
 """
+import sys
+
+if __name__.startswith("backend.agents."):
+    sys.modules[__name__.replace("backend.agents.", "agents.")] = sys.modules[__name__]
+elif __name__.startswith("agents."):
+    sys.modules["backend." + __name__] = sys.modules[__name__]
+
 from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_ai import Agent, RunContext
-from agents.pydantic_config import get_pydantic_model, AgentDeps
-from agents.swarm_memory import query_memory_tree
+try:
+    from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
+except ImportError:
+    from agents.pydantic_config import get_pydantic_model, AgentDeps  # pyrefly: ignore[missing-import]  # type: ignore
+try:
+    from backend.agents.swarm_memory import query_memory_tree
+except ImportError:
+    from agents.swarm_memory import query_memory_tree  # pyrefly: ignore[missing-import]  # type: ignore
 
 class AuditResult(BaseModel):
     model_config = ConfigDict(extra="allow")

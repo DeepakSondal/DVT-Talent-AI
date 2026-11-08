@@ -62,10 +62,17 @@ def safe_dispatch_task(task, *args, **kwargs):
         log.warning("celery_dispatch_failed", task=getattr(task, "name", str(task)), error=str(e))
         return None
 
+_signal_redis_pool = None
+def _get_signal_redis():
+    global _signal_redis_pool
+    if _signal_redis_pool is None:
+        _signal_redis_pool = redis.ConnectionPool.from_url(settings.redis_url, socket_connect_timeout=0.2, socket_timeout=0.2)
+    return redis.Redis(connection_pool=_signal_redis_pool)
+
 def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: str = "default", payload: Any = None):
     """Publish a signal to Redis for the WebSocket relay to pick up"""
     try:
-        r = redis.from_url(settings.redis_url)
+        r = _get_signal_redis()
         # Publish to tenant-specific channel so WebSocket relay can route it
         channel = f"dvt_signals:{tenant_id}"
         r.publish(channel, json.dumps({
@@ -163,7 +170,7 @@ def analyze_resume_task(
         with engine.connect() as conn:
             cand_check = conn.execute(
                 text("""
-                    SELECT c.pii_erased
+                    SELECT c.pii_erased, c.tenant_id
                     FROM resumes r
                     JOIN candidates c ON r.candidate_id = c.id
                     WHERE r.id = :rid OR r.id = :hrid
@@ -174,6 +181,7 @@ def analyze_resume_task(
             if cand_check and cand_check[0]:
                 log.info("analyze_resume_skipped_candidate_pii_erased", resume_id=resume_id)
                 return {"status": "candidate_erased", "resume_id": resume_id}
+            resolved_tenant_id = str(cand_check[1]) if (cand_check and len(cand_check) > 1 and cand_check[1]) else 'default'
 
         raw_text = ResumeParserService.extract_text(file_bytes, filename)
         if not raw_text.strip():
@@ -182,7 +190,7 @@ def analyze_resume_task(
         async def _run():
             import httpx
             async with httpx.AsyncClient() as client:
-                deps = AgentDeps(http_client=client, tenant_id="default")
+                deps = AgentDeps(http_client=client, tenant_id=resolved_tenant_id)
                 prompt = f"Analyze this resume against the JD: {job_description or 'Software Engineer'}. Resume text: {raw_text}"
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
@@ -206,7 +214,7 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
         hyphen_cid = str(uuid.UUID(clean_cid)) if len(clean_cid) == 32 else str(candidate_id)
         with engine.connect() as conn:
             cand_check = conn.execute(
-                text("SELECT pii_erased FROM candidates WHERE id = :cid OR id = :hcid LIMIT 1"),
+                text("SELECT pii_erased, tenant_id FROM candidates WHERE id = :cid OR id = :hcid LIMIT 1"),
                 {"cid": clean_cid, "hcid": hyphen_cid}
             ).fetchone()
             if not cand_check:
@@ -214,6 +222,7 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
             if cand_check[0]:
                 log.info("score_candidate_skipped_candidate_pii_erased", candidate_id=candidate_id)
                 return {"candidate_id": candidate_id, "status": "candidate_erased"}
+            resolved_tenant_id = str(cand_check[1]) if (len(cand_check) > 1 and cand_check[1]) else 'default'
 
             row = conn.execute(
                 text("SELECT raw_text FROM resumes WHERE (candidate_id = :cid OR candidate_id = :hcid) AND is_current = TRUE LIMIT 1"),
@@ -234,7 +243,7 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
         async def _run():
             import httpx
             async with httpx.AsyncClient() as client:
-                deps = AgentDeps(http_client=client, tenant_id="default")
+                deps = AgentDeps(http_client=client, tenant_id=resolved_tenant_id)
                 prompt = f"Score this candidate against JD: {jd_text}. Candidate info: {row[0]}"
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
@@ -430,7 +439,7 @@ def _update_resume_in_db(resume_id: str, analysis: dict, raw_text: str = ""):
         with engine.connect() as conn:
             cand_check = conn.execute(
                 text("""
-                    SELECT c.pii_erased
+                    SELECT c.pii_erased, c.tenant_id
                     FROM resumes r
                     JOIN candidates c ON r.candidate_id = c.id
                     WHERE r.id = :rid OR r.id = :hrid

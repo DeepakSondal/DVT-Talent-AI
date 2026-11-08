@@ -14,8 +14,7 @@ The default production configuration specified in `docker-compose.prod.yml` runs
 * **Shared Persistent Volumes:**
   * `dvt_storage:/app/storage` (holds `erasure_tombstones.jsonl`, `.lock` file, and Celery beat persistent schedule).
   * `dvt_uploads:/app/uploads` (holds raw resume files).
-  * `postgres_data:/var/lib/postgresql/data`.
-  * `chroma_data:/chroma/chroma`.
+  * `postgres_data:/var/lib/postgresql/data` (holds PostgreSQL 16 database and native pgvector embeddings).
   * `caddy_data` and `caddy_config`.
 * **Inter-Process Concurrency:** Single-host concurrency across `api`, `worker`, and `scheduler` containers is guaranteed by POSIX advisory file locks (`filelock.FileLock`) and kernel page sync (`os.fsync`) operating on the shared Docker named volume.
 
@@ -117,7 +116,7 @@ If the host server or all Docker persistent named volumes (`dvt_storage`, `dvt_u
    ```
 2. **Initialize Infrastructure Containers:**
    ```bash
-   docker compose -f docker-compose.prod.yml up -d db redis chromadb api
+   docker compose -f docker-compose.prod.yml up -d db redis api
    ```
 3. **Execute Full Restore with Both Archives:**
    ```bash

@@ -147,16 +147,47 @@ Content-Type: application/json
 | `GET` | `/api/v1/compliance/ledgers` | Fetch immutable AI decision ledger entries. |
 | `POST` | `/api/v1/compliance/ledgers/{id}/override` | Record human reviewer override with mandatory rationale note. |
 
-### 4.7 Billing & Credits (Stripe) (`/api/v1/billing/*`)
+### 4.7 Billing & Credits (Dodo Payments) (`/api/v1/billing/*`)
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/v1/billing/plans` | Fetch available subscription tiers and credit packs. |
 | `GET` | `/api/v1/billing/credits` | Get current credit balance, active subscription, and ledger. |
-| `POST` | `/api/v1/billing/create-checkout` | Create Stripe Checkout session for upgrading or buying credits. |
-| `POST` | `/api/v1/billing/portal` | Create Stripe Customer Portal link for invoices and cards. |
-| `POST` | `/api/v1/webhooks/stripe` | Inbound Stripe webhook listener for checkout and invoice events. |
+| `POST` | `/api/v1/billing/create-checkout` | Create Dodo Payments Checkout session URL. |
+| `POST` | `/api/v1/billing/portal` | Create Dodo Payments Customer Portal link for invoices. |
+| `POST` | `/api/v1/billing/webhook-sync` | Internal Next.js synchronizer with `X-Internal-Secret`. |
+| `POST` | `/api/v1/billing/webhook` | Direct Dodo Payments standard webhook receiver. |
 
-### 4.8 ATS Integrations (`/api/v1/integrations/*`)
+### 4.8 Email Sender & OAuth 2.0 (`/api/v1/email-sender/*`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/email-sender` | Get current workspace connected OAuth sender mailbox status. |
+| `POST` | `/api/v1/email-sender/oauth/{provider}/connect` | Connect Google Workspace / Microsoft 365 mailbox via OAuth 2.0. |
+| `GET` | `/api/v1/email-sender/oauth/{provider}/callback` | Handle OAuth 2.0 authorization code exchange. |
+| `POST` | `/api/v1/email-sender/test` | Send a test verification email using connected OAuth mailbox. |
+| `DELETE` | `/api/v1/email-sender` | Disconnect OAuth mailbox and revert to Zero-Setup Relay fallback. |
+
+### 4.9 Candidate Portal & Career-Ops (`/api/v1/candidate-portal/*`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/candidate-portal/profile` | Retrieve candidate profile and Privacy Shield blacklist. |
+| `PATCH` | `/api/v1/candidate-portal/profile` | Update profile, salary requirements, and employer blacklist. |
+| `POST` | `/api/v1/candidate-portal/resume` | Upload, parse structured CV text, and extract skills. |
+| `GET` | `/api/v1/candidate-portal/jobs` | Browse jobs with Career-Ops 5-Dimension match scoring. |
+| `POST` | `/api/v1/candidate-portal/jobs/{id}/apply` | 1-Click job application with match score snapshot. |
+| `GET` | `/api/v1/candidate-portal/applications` | Kanban application tracking and timeline. |
+| `POST` | `/api/v1/candidate-portal/interview-prep/{id}` | Generate tailored STAR interview rehearsal flashcards. |
+
+### 4.10 Team Management (`/api/v1/team/*`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/v1/team/invite` | Send single-use, role-governed team invitation link. |
+| `GET` | `/api/v1/team/members` | List recruiters and team members under manager. |
+| `GET` | `/api/v1/team/analytics` | View team-level sourcing and credit consumption analytics. |
+| `GET` | `/api/v1/team/candidates` | List candidates sourced across the manager's team. |
+| `GET` | `/api/v1/team/keys` | Retrieve masked team BYOK API keys. |
+| `POST` | `/api/v1/team/keys` | Save encrypted team BYOK API keys (OpenAI, Serper, Anthropic). |
+
+### 4.11 ATS Integrations (`/api/v1/integrations/*`)
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/v1/integrations/connections` | List active ATS connections (Greenhouse, CEIPAL). |

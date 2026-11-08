@@ -63,26 +63,37 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
     if not applicant or not job_id_external:
         raise HTTPException(status_code=400, detail="Malformed Monster payload")
 
-    # 1. Map external Job ID back to our DB
+    # 1. Map external Job ID back to our DB to resolve tenant_id
+    from sqlalchemy import select
     job_uuid = None
+    target_tenant_id = None
     try:
         job_uuid = uuid.UUID(str(job_id_external))
     except (ValueError, TypeError):
         log.info("non_uuid_job_id", job_id=job_id_external)
+
+    if job_uuid:
+        job_row = (await db.execute(select(Job).where(Job.id == job_uuid))).scalar_one_or_none()
+        if job_row:
+            target_tenant_id = job_row.tenant_id
 
     # 2. Extract Applicant Info
     email = applicant.get("email")
     first_name = applicant.get("firstName", "Monster")
     last_name = applicant.get("lastName", "Applicant")
     
-    # 3. Create or Update Candidate
-    from sqlalchemy import select
-    result = await db.execute(select(Candidate).where(Candidate.email == email))
+    # 3. Create or Update Candidate scoped strictly to resolved tenant_id
+    cand_stmt = select(Candidate).where(
+        Candidate.email == email,
+        Candidate.tenant_id == target_tenant_id,
+    )
+    result = await db.execute(cand_stmt)
     candidate = result.scalars().first()
     
     if not candidate:
         candidate = Candidate(
             id=uuid.uuid4(),
+            tenant_id=target_tenant_id,
             email=email,
             first_name=first_name,
             last_name=last_name,
@@ -92,7 +103,7 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
         )
         db.add(candidate)
         await db.flush()
-        log.info("candidate_created_from_monster", email=email)
+        log.info("candidate_created_from_monster", email=email, tenant_id=str(target_tenant_id) if target_tenant_id else None)
 
     # 4. Linkage & Commit
     await db.commit()

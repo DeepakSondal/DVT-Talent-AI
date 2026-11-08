@@ -11,16 +11,19 @@ function AuthContent() {
 
   useEffect(() => {
     const token = searchParams.get("token");
-    
+    const tenantId = searchParams.get("tenant_id");
+    const role = searchParams.get("role");
+
     if (token) {
-      // Store token
-      localStorage.setItem("dvt_access_token", token);
-      
-      // Also set the cookie for middleware/SSR
-      document.cookie = `dvt_access_token=${token}; path=/; max-age=86400; SameSite=Lax`;
-      
+      localStorage.setItem("dvt_token", token);
+      if (tenantId) {
+        localStorage.setItem("tenant_id", tenantId);
+      }
+      const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `dvt_token=${token}; path=/; max-age=86400; SameSite=Lax${isSecure}`;
+
       toast.success("Successfully signed in!");
-      router.push("/dashboard");
+      router.push(role === "candidate" ? "/portal" : "/dashboard");
     } else {
       toast.error("Authentication failed. Please try again.");
       router.push("/auth/login");
@@ -37,11 +40,13 @@ function AuthContent() {
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center font-sans">
-        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center font-sans">
+          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
+        </div>
+      }
+    >
       <AuthContent />
     </Suspense>
   );

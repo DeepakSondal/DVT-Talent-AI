@@ -7,7 +7,7 @@ export interface LoginCredentials {
   password: string;
 }
 
-export type UserRole = "admin" | "manager" | "recruiter" | "viewer";
+export type UserRole = "admin" | "manager" | "recruiter" | "viewer" | "candidate";
 
 export interface UserOut {
   id: string;
@@ -23,8 +23,9 @@ export interface UserOut {
 
 export interface AuthResponse {
   access_token: string;
-  token_type: string;
+  token_type?: string;
   user_id: string;
+  tenant_id?: string | null;
   email: string;
   full_name: string;
   role: string;

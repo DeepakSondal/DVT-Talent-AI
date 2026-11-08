@@ -1,5 +1,5 @@
 # DVT Talent AI — Environment Setup & Local Development Guide
-**Version:** 1.0.0  
+**Version:** 2.1.0  
 **Updated:** October 2026  
 
 This guide provides step-by-step instructions for running **DVT Talent AI** on local workstations (Windows PowerShell, Linux/macOS) and with Docker Compose.
@@ -11,7 +11,7 @@ This guide provides step-by-step instructions for running **DVT Talent AI** on l
 | Component | Minimum Version | Recommended Version | Notes |
 |---|---|---|---|
 | **Python** | 3.11+ | 3.11.x or 3.12.x | Tested with Python 3.11 / 3.14 |
-| **Node.js** | 18.17+ | 20.x LTS | Recommended for Next.js 14 |
+| **Node.js** | 18.17+ | 20.x LTS | Recommended for Next.js 15 |
 | **npm** | 9.x+ | 10.x | Package manager |
 | **Git** | 2.30+ | Latest | Version control |
 | **Docker (Optional)** | 24.0+ | Latest | For containerized development |
@@ -46,14 +46,22 @@ cd dvt-talent-ai
 4. Verify critical environment settings in `backend\.env`:
    ```dotenv
    APP_ENV=development
-   DATABASE_URL=sqlite+aiosqlite:///./dvt_talent.db
+   DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dvt_staging
    SECRET_KEY=change-this-in-production-to-a-secure-secret-key-min-32-chars
-   GROQ_API_KEY=gsk_...
+
+   # LLM Providers
    ANTHROPIC_API_KEY=sk-ant-...
+   GROQ_API_KEY=gsk_...
+   OPENAI_API_KEY=sk-...
+
+   # Monetization (Dodo Payments)
+   DODO_PAYMENTS_API_KEY=test_...
+   DODO_PAYMENTS_WEBHOOK_KEY=whsec_...
+   DODO_PAYMENTS_ENVIRONMENT=test_mode
    ```
-5. Seed or initialize the local database:
+5. Run Alembic database migrations:
    ```powershell
-   python -c "import asyncio; from db.models import Base, engine; asyncio.run(engine.begin().then(lambda c: c.run_sync(Base.metadata.create_all)))"
+   python -m alembic upgrade head
    ```
    Or initialize admin user:
    ```powershell
@@ -69,7 +77,7 @@ cd dvt-talent-ai
 1. Open a new PowerShell terminal, navigate to `frontend`, and install npm dependencies:
    ```powershell
    cd frontend
-   npm install
+   npm install --legacy-peer-deps
    ```
 2. Create frontend environment configuration:
    ```powershell
@@ -87,7 +95,7 @@ cd dvt-talent-ai
 
 ## 3. Docker Compose Development
 
-To run the complete stack (FastAPI, Next.js, PostgreSQL, Redis, Celery Worker, Celery Beat, ChromaDB):
+To run the complete containerized stack (FastAPI, Next.js, PostgreSQL with pgvector, Redis, Celery Worker, Celery Beat):
 
 1. Copy the root environment file:
    ```bash
@@ -98,16 +106,22 @@ To run the complete stack (FastAPI, Next.js, PostgreSQL, Redis, Celery Worker, C
    GROQ_API_KEY=gsk_...
    ANTHROPIC_API_KEY=sk-ant-...
    OPENAI_API_KEY=sk-...
+   DODO_PAYMENTS_API_KEY=test_...
+   DODO_PAYMENTS_WEBHOOK_KEY=whsec_...
    ```
 3. Launch the container cluster:
    ```bash
    docker compose up --build -d
    ```
-4. Check running services:
+4. Run migrations inside the API container:
+   ```bash
+   docker compose exec api alembic upgrade head
+   ```
+5. Check running services:
    ```bash
    docker compose ps
    ```
-5. Tail service logs:
+6. Tail service logs:
    ```bash
    docker compose logs -f api
    ```
@@ -115,10 +129,9 @@ To run the complete stack (FastAPI, Next.js, PostgreSQL, Redis, Celery Worker, C
 ### Default Port Mappings in Docker
 - **Frontend App:** `http://localhost:3000`
 - **FastAPI API:** `http://localhost:8000`
-- **FastAPI Docs:** `http://localhost:8000/docs`
-- **PostgreSQL Database:** `localhost:5432`
+- **FastAPI Interactive Docs:** `http://localhost:8000/api/docs`
+- **PostgreSQL (with pgvector):** `localhost:5432`
 - **Redis Cache & Broker:** `localhost:6379`
-- **ChromaDB Vector Store:** `localhost:8001`
 
 ---
 
@@ -128,8 +141,9 @@ To run the complete stack (FastAPI, Next.js, PostgreSQL, Redis, Celery Worker, C
 ```powershell
 cd backend
 .\venv\Scripts\Activate.ps1
-python -m pytest -v
+python -m pytest -q
 ```
+*Executes all 213 unit and integration tests across database isolation, Pydantic AI agents, Dodo Payments, and recruiter mailbox flows.*
 
 ### Frontend Type Safety Check
 ```powershell
@@ -148,6 +162,7 @@ npm run lint
 cd frontend
 npm run build
 ```
+*Compiles all 30 application routes into optimized static and server-rendered bundles.*
 
 ---
 
@@ -161,8 +176,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ### Issue 2: `DATABASE_URL is missing`
 Ensure `backend/.env` exists and contains a valid connection string:
-- SQLite: `DATABASE_URL=sqlite+aiosqlite:///./dvt_talent.db`
-- PostgreSQL: `DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/dvt_talent`
+- PostgreSQL: `DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dvt_staging`
 
 ### Issue 3: Rate Limiting on Free AI Keys
 Configure multiple AI providers in `backend/.env`. The orchestrator prioritizes:
