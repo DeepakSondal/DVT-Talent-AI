@@ -4,14 +4,16 @@ Run: alembic upgrade head
 """
 import asyncio
 from logging.config import fileConfig
+
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
 from alembic import context
+from config import settings
 
 # Import all models so Alembic can detect changes
 from db.models import Base  # noqa: F401 — registers all table metadata
-from config import settings
 
 config = context.config
 

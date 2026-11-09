@@ -4,12 +4,14 @@ DVT Talent AI — Jobs API  (FIXED [H-01]: was 7-line stub)
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select, func, desc, and_
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.models import Job, Company, UserRole, get_db
-from api.routes.auth import get_current_user, User
+
+from api.routes.auth import User, get_current_user
+from db.models import Company, Job, UserRole, get_db
 
 router = APIRouter()
 
@@ -64,8 +66,8 @@ async def list_jobs(
     current_user: User = Depends(get_current_user),
 ):
     _require_jobs_access(current_user, write=False)
-    query = select(Job).where(and_(Job.tenant_id == current_user.tenant_id, Job.is_active == True))
-    count_q = select(func.count(Job.id)).where(and_(Job.tenant_id == current_user.tenant_id, Job.is_active == True))
+    query = select(Job).where(and_(Job.tenant_id == current_user.tenant_id, Job.is_active.is_(True)))
+    count_q = select(func.count(Job.id)).where(and_(Job.tenant_id == current_user.tenant_id, Job.is_active.is_(True)))
     if company_id:
         query = query.where(Job.company_id == company_id)
         count_q = count_q.where(Job.company_id == company_id)
@@ -126,7 +128,7 @@ async def deactivate_job(job_id: UUID, db: AsyncSession = Depends(get_db), curre
 
 async def _source_candidates_bg(job_id: str, skills: list, location: Optional[str]):
     try:
-        from workers.tasks import source_candidates_for_job, safe_dispatch_task
+        from workers.tasks import safe_dispatch_task, source_candidates_for_job
         safe_dispatch_task(source_candidates_for_job, job_id, skills, location)
     except Exception as e:
         import logging

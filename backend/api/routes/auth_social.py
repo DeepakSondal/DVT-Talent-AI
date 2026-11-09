@@ -3,16 +3,17 @@ DVT Talent AI — Social Authentication (OAuth2)
 Handlers for Google, GitHub, and LinkedIn
 """
 import uuid
+
 import structlog
+from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from authlib.integrations.starlette_client import OAuth
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import settings
-from db.models import User, Tenant, get_db
 from api.routes.auth import create_access_token
+from config import settings
+from db.models import Tenant, User, get_db
 
 log = structlog.get_logger()
 router = APIRouter()
@@ -32,7 +33,7 @@ oauth.register(
     name="github",
     client_id=settings.github_client_id,
     client_secret=settings.github_client_secret,
-    access_token_url="https://github.com/login/oauth/access_token",
+    access_token_url="https://github.com/login/oauth/access_token",  # noqa: S106
     authorize_url="https://github.com/login/oauth/authorize",
     api_base_url="https://api.github.com/",
     client_kwargs={"scope": "user:email"},
@@ -42,7 +43,7 @@ oauth.register(
     name="linkedin",
     client_id=settings.linkedin_client_id,
     client_secret=settings.linkedin_client_secret,
-    access_token_url="https://www.linkedin.com/oauth/v2/accessToken",
+    access_token_url="https://www.linkedin.com/oauth/v2/accessToken",  # noqa: S106
     authorize_url="https://www.linkedin.com/oauth/v2/authorization",
     api_base_url="https://api.linkedin.com/v2/",
     client_kwargs={"scope": "openid email profile"},
@@ -71,7 +72,7 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
         token = await client.authorize_access_token(request)
     except Exception as e:
         log.error("oauth_token_error", provider=provider, error=str(e))
-        raise HTTPException(status_code=401, detail="Authentication failed")
+        raise HTTPException(status_code=401, detail="Authentication failed") from e
 
     # Get user details from provider
     user_info = None
@@ -126,16 +127,15 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
             provider_id=provider_id,
             is_active=True,
             tenant_id=tenant.id,
-            hashed_password="oauth_managed_no_password",
+            hashed_password="oauth_managed_no_password",  # noqa: S106
         )
         db.add(user)
         log.info("social_user_created", email=email, provider=provider)
-    else:
+    elif not user.provider:
         # Link existing user to provider if not already linked
-        if not user.provider:
-            user.provider = provider
-            user.provider_id = provider_id
-            log.info("social_user_linked", email=email, provider=provider)
+        user.provider = provider
+        user.provider_id = provider_id
+        log.info("social_user_linked", email=email, provider=provider)
 
     await db.commit()
     await db.refresh(user)
@@ -144,8 +144,9 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
     if provider == "google" and user.tenant_id:
         tenant_obj = await db.get(Tenant, user.tenant_id)
         if tenant_obj and not tenant_obj.sender_email:
-            from services.security_service import encrypt_pii
             from datetime import datetime, timezone
+
+            from services.security_service import encrypt_pii
 
             raw_access = token.get("access_token") if isinstance(token, dict) else None
             raw_refresh = token.get("refresh_token") if isinstance(token, dict) else None

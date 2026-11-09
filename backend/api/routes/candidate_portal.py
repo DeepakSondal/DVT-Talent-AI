@@ -8,24 +8,29 @@ Provides free B2C candidate capabilities:
 5. STAR Interview Rehearsal (Situation, Task, Action, Result).
 6. Zero-Fabrication ATS CV Tailoring Advice.
 """
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any
-import uuid
 import re
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, desc
 
-from config import settings
-from db.models import (
-    User, UserRole, Candidate, CandidateStatus, Job, JobCandidate,
-    Company, Resume, get_db
-)
-from api.routes.auth import get_current_user
 from api.middleware.rate_limit import enforce_endpoint_rate_limit
+from api.routes.auth import get_current_user
+from db.models import (
+    Candidate,
+    CandidateStatus,
+    Company,
+    Job,
+    JobCandidate,
+    Resume,
+    User,
+    get_db,
+)
 from services.privacy_service import is_domain_or_company_blocked
 from services.resume_parser import ResumeParserService
 
@@ -481,7 +486,7 @@ async def upload_candidate_resume(
 
     # 5. Mark older resumes as not current
     old_resumes = (await db.execute(
-        select(Resume).where(Resume.candidate_id == cand.id, Resume.is_current == True)
+        select(Resume).where(Resume.candidate_id == cand.id, Resume.is_current.is_(True))
     )).scalars().all()
     for r in old_resumes:
         r.is_current = False
@@ -521,7 +526,7 @@ async def download_candidate_resume(
     
     res = (await db.execute(
         select(Resume)
-        .where(Resume.candidate_id == cand.id, Resume.is_current == True)
+        .where(Resume.candidate_id == cand.id, Resume.is_current.is_(True))
         .order_by(desc(Resume.created_at))
     )).scalars().first()
 
@@ -558,7 +563,7 @@ async def get_candidate_resume_details(
     
     res = (await db.execute(
         select(Resume)
-        .where(Resume.candidate_id == cand.id, Resume.is_current == True)
+        .where(Resume.candidate_id == cand.id, Resume.is_current.is_(True))
         .order_by(desc(Resume.created_at))
     )).scalars().first()
 
@@ -586,14 +591,13 @@ async def list_matched_jobs(
     Respects candidate's privacy shield (hides blocked companies).
     """
     cand = await get_or_create_candidate_for_user(current_user, db)
-    hidden_companies = [c.lower().strip() for c in (cand.hide_from_companies or [])]
 
     # Fetch active, published jobs
     stmt = (
         select(Job, Company.name, Company.domain)
         .outerjoin(Company, Job.company_id == Company.id)
-        .where(Job.is_active == True)
-        .where(Job.is_published == True)
+        .where(Job.is_active.is_(True))
+        .where(Job.is_published.is_(True))
         .order_by(desc(Job.posted_at))
         .limit(50)
     )
@@ -775,7 +779,7 @@ async def generate_interview_prep(
             category="Technical Delivery & Resilience",
             situation=f"At {cand.current_company or 'prior engagement'}, our team encountered tight deadline constraints while delivering mission-critical functionality requiring {skills_text}.",
             task=f"As the {cand_title}, I was accountable for stabilizing core components, mitigating architectural bottlenecks, and ensuring zero production regressions.",
-            action=f"I isolated the critical path, established automated verification tests, and refactored high-friction services using verified patterns.",
+            action="I isolated the critical path, established automated verification tests, and refactored high-friction services using verified patterns.",
             result="Delivered on schedule with 99.9% uptime and zero critical rollback incidents, exceeding stakeholder turnaround expectations.",
             interviewer_focus="Looking for real ownership, systematic troubleshooting under ambiguity, and verifiable technical depth.",
             pitfalls_to_avoid="Avoid speaking only about 'we'; clearly articulate your personal technical contributions without inflating scope.",

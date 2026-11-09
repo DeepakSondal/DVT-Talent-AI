@@ -6,9 +6,10 @@ Adds: ats columns to jobs table (external_id, source already in meta_data - no c
 Revision ID: 004_ats_integrations
 Revises: 003_billing_stripe
 """
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = '004_ats_integrations'
 down_revision = '003_billing_stripe'

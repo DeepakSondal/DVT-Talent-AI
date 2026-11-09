@@ -12,18 +12,19 @@ import asyncio
 import time
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
-from db.vector_store import VectorStore
-from services.resume_parser import ResumeParserService
+from agents.orchestrator import AgentOrchestrator
 from agents.pydantic_config import AgentDeps
 from agents.sourcing_pydantic import (
-    prefetch_all_sourcing_signals,
-    fast_hybrid_candidate_search,
-    deduplicate_and_score_candidates,
     _LOCAL_SOURCING_CACHE,
+    deduplicate_and_score_candidates,
+    fast_hybrid_candidate_search,
+    prefetch_all_sourcing_signals,
 )
-from agents.orchestrator import AgentOrchestrator
+from db.vector_store import VectorStore
+from services.resume_parser import ResumeParserService
 
 
 def test_vector_store_query_cache_and_batch_hybrid_search():
@@ -243,14 +244,12 @@ async def test_orchestrator_parallel_post_sourcing_execution():
         m_sourc.return_value = DummyResult(DummyModelObj({"candidates": cand_list}))
         m_crit.return_value = DummyResult(DummyModelObj({"passed": True}))
 
-        t0 = time.perf_counter()
         res = await orchestrator.run_full_pipeline(
             industry="Cloud",
             location="Remote",
             enable_screening=True,
             mock_mode=True,
         )
-        elapsed = time.perf_counter() - t0
 
         assert "error" not in res
         assert "outreach" in res["stages"]

@@ -15,27 +15,33 @@ Validates:
 12. Existing candidate privacy, tenant-isolation, and resume tests still pass.
 """
 
-import os
 import sys
 import uuid
-from pathlib import Path
 from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock, AsyncMock
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from main import app
-from db.models import (
-    AsyncSessionLocal, Tenant, User, Candidate, CandidateStatus,
-    Resume, UserRole, JobCandidate, Job, Company, AgentTask, AgentTaskStatus
-)
 from api.routes.auth import get_current_user
-from services.resume_parser import ResumeParserService
+from db.models import (
+    AgentTask,
+    AgentTaskStatus,
+    AsyncSessionLocal,
+    Candidate,
+    CandidateStatus,
+    Resume,
+    Tenant,
+    User,
+    UserRole,
+)
+from main import app
 from services.privacy_service import erase_candidate_personal_data
-from workers.tasks import score_candidate_task, _update_resume_in_db
+from workers.tasks import _update_resume_in_db, score_candidate_task
 
 
 @pytest.fixture
@@ -367,7 +373,7 @@ class TestCandidatePersonalDataErasure:
                     assert res1.json()["status"] == "pending_cleanup"
 
             # 2. Second run (vector store recovered) -> completes cleanup
-            with patch("db.vector_store.VectorStore.delete_resumes", return_value=True) as mock_recover:
+            with patch("db.vector_store.VectorStore.delete_resumes", return_value=True):
                 async with AsyncClient(transport=transport, base_url="http://test") as client:
                     res2 = await client.delete(f"/api/v1/candidates/{data['candidate_a'].id}/pii")
                     assert res2.status_code == 200
@@ -518,7 +524,7 @@ class TestCandidatePersonalDataErasure:
                 target_task_id = task.id
 
             # 2. Worker sweeps pending cleanups once vector store recovers (no user intervention)
-            with patch("db.vector_store.VectorStore.delete_resumes", return_value=True) as mock_vector_del:
+            with patch("db.vector_store.VectorStore.delete_resumes", return_value=True):
                 async with AsyncSessionLocal() as session:
                     sweep_result = await sweep_and_process_gdpr_cleanups(session)
                     assert sweep_result["processed"] >= 1
@@ -540,6 +546,7 @@ class TestCandidatePersonalDataErasure:
     async def test_sweep_concurrency_atomic_claim(self, temp_erasure_storage):
         """Test 12: Concurrent sweep executions use atomic claims; duplicate workers do not collide."""
         import asyncio
+
         from services.privacy_service import sweep_and_process_gdpr_cleanups
         data = await self.setup_test_entities(temp_erasure_storage)
 
@@ -586,6 +593,7 @@ class TestCandidatePersonalDataErasure:
     async def test_expired_worker_claim_cannot_overwrite_newer_result(self, temp_erasure_storage):
         """Test 13: An expired worker claim cannot overwrite or revert a newer worker's result."""
         from datetime import timedelta
+
         from services.privacy_service import sweep_and_process_gdpr_cleanups
         data = await self.setup_test_entities(temp_erasure_storage)
 
@@ -664,8 +672,11 @@ class TestCandidatePersonalDataErasure:
     @pytest.mark.asyncio
     async def test_pinecone_eventual_consistency_verification_defers_completion(self, temp_erasure_storage):
         """Test 14: Pinecone eventual consistency verification defers completion until vectors truly disappear."""
-        from services.privacy_service import delete_candidate_from_pinecone, erase_candidate_personal_data, sweep_and_process_gdpr_cleanups
         from config import settings
+        from services.privacy_service import (
+            delete_candidate_from_pinecone,
+            sweep_and_process_gdpr_cleanups,
+        )
         data = await self.setup_test_entities(temp_erasure_storage)
 
         # Configure mock Pinecone settings

@@ -1,6 +1,9 @@
 import asyncio
+
 from sqlalchemy import text
-from db.models import engine, Base
+
+from db.models import Base, engine
+
 
 async def patch_database():
     print("Connecting to database...")

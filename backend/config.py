@@ -4,12 +4,11 @@ Centralized configuration using pydantic-settings
 """
 import hashlib
 import os
-import secrets
 from functools import lru_cache
-from typing import List
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
 from pathlib import Path
+from typing import List
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -24,9 +23,9 @@ class Settings(BaseSettings):
     # App
     app_name: str = "DVT Talent AI"
     app_env: str = "development"
-    app_host: str = "0.0.0.0"
+    app_host: str = "0.0.0.0"  # noqa: S104
     app_port: int = 8000
-    secret_key: str = "change-me-in-production"
+    secret_key: str = "change-me-in-production"  # noqa: S105
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
 
@@ -186,7 +185,7 @@ class Settings(BaseSettings):
         Auto-derives a deterministic high-entropy secret_key in development/test if default or unset,
         preventing JWT invalidation across process reloads/workers while retaining strict production gatekeeping.
         """
-        if not self.secret_key or self.secret_key == "change-me-in-production":
+        if not self.secret_key or self.secret_key == "change-me-in-production":  # noqa: S105
             if not self.is_production:
                 seed = f"dvt-dev-secret:{BASE_DIR}:{self.database_url}:{self.smtp_user}"
                 self.secret_key = hashlib.sha256(seed.encode("utf-8")).hexdigest()
@@ -201,7 +200,7 @@ class Settings(BaseSettings):
             raise ValueError("No LLM key set — agents will fail. Set GROQ_API_KEY, KIMI_API_KEY, DEEPSEEK_API_KEY, or OPENAI_API_KEY")
         if self.is_production:
             raw_secret = os.getenv("SECRET_KEY", "")
-            if not raw_secret or raw_secret == "change-me-in-production" or len(raw_secret) < 32:
+            if not raw_secret or raw_secret == "change-me-in-production" or len(raw_secret) < 32:  # noqa: S105
                 raise ValueError("SECRET_KEY is insecure or default — CRITICAL security risk in production. Must be at least 32 characters.")
         if not self.database_url:
             raise ValueError("DATABASE_URL is missing — cannot connect to database")

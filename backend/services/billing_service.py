@@ -2,8 +2,9 @@
 DVT Talent AI — Credit Deduction Helper
 Used by BaseAgent to deduct credits per agent task.
 """
-import structlog
 from typing import Optional
+
+import structlog
 
 log = structlog.get_logger(__name__)
 
@@ -35,9 +36,11 @@ async def deduct_credits(
         InsufficientCreditsError: if the tenant does not have enough credits.
     """
     try:
-        from db.models import Tenant, CreditTransaction, CreditTransactionType, AsyncSessionLocal
-        from sqlalchemy import select
         import uuid
+
+        from sqlalchemy import select
+
+        from db.models import AsyncSessionLocal, CreditTransaction, CreditTransactionType, Tenant
 
         async with AsyncSessionLocal() as session:
             t_uuid = uuid.UUID(str(tenant_id))

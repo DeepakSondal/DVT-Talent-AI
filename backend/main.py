@@ -1,29 +1,31 @@
-import sys
 import os
+import sys
 
 # 🛡️ SDET: Ensure the project root is in sys.path so 'backend' can be imported as a package
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
-import structlog
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Depends
+
+import structlog
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from prometheus_client import make_asgi_app
 
 # ── Sentry Observability ──────────────────────────────────────────────────────
 _sentry_dsn = os.getenv("SENTRY_DSN", "")
 if _sentry_dsn:
     try:
-        import sentry_sdk
-        from sentry_sdk.integrations.fastapi import FastApiIntegration
-        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-        from sentry_sdk.integrations.redis import RedisIntegration
-        from sentry_sdk.integrations.celery import CeleryIntegration
-        from sentry_sdk.integrations.logging import LoggingIntegration
         import logging
+
+        import sentry_sdk
+        from sentry_sdk.integrations.celery import CeleryIntegration
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+        from sentry_sdk.integrations.redis import RedisIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
         sentry_sdk.init(
             dsn=_sentry_dsn,
@@ -42,10 +44,30 @@ if _sentry_dsn:
     except ImportError:
         pass
 
-from config import settings
-from db.models import Base, engine, get_db
-from api.routes import auth, auth_social, webhooks, monitoring, users, candidates, jobs, campaigns, analytics, agents, websocket, tenants, copilot, billing, integrations, email_sender, team, compliance, candidate_portal
+from api.routes import (
+    agents,
+    analytics,
+    auth,
+    auth_social,
+    billing,
+    campaigns,
+    candidate_portal,
+    candidates,
+    compliance,
+    copilot,
+    email_sender,
+    integrations,
+    jobs,
+    monitoring,
+    team,
+    tenants,
+    users,
+    webhooks,
+    websocket,
+)
 from api.routes import health as health_routes
+from config import settings
+from db.models import engine, get_db
 
 log = structlog.get_logger()
 
@@ -73,7 +95,11 @@ async def lifespan(app: FastAPI):
 
 
 from api.middleware.audit_log import AuditLogMiddleware
-from api.middleware.rate_limit import RateLimitMiddleware, enforce_endpoint_rate_limit, get_real_client_ip
+from api.middleware.rate_limit import (
+    RateLimitMiddleware,
+    enforce_endpoint_rate_limit,
+    get_real_client_ip,
+)
 from services.redis_service import record_rate_limit
 
 # ── App ───────────────────────────────────────────────────────────────────
@@ -101,7 +127,7 @@ app.add_middleware(
 )
 # ── Security Headers Middleware ───────────────────────────────────────────
 from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import Request
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -151,8 +177,10 @@ app.include_router(candidate_portal.router, prefix=f"{PREFIX}/candidate-portal",
 app.include_router(health_routes.router, tags=["Health"])
 
 # ── Email Open Tracking (no auth — called by email clients) ──────────────
-from fastapi.responses import Response as FastAPIResponse
 import uuid as _uuid
+
+from fastapi.responses import Response as FastAPIResponse
+
 
 @app.get("/api/v1/track/{tracking_id}/open", include_in_schema=False)
 async def track_email_open(tracking_id: _uuid.UUID, request: Request, db=Depends(get_db)):
@@ -161,8 +189,10 @@ async def track_email_open(tracking_id: _uuid.UUID, request: Request, db=Depends
     Called when recipient opens an email with embedded tracking pixel.
     Returns a 1x1 transparent GIF. Debounces DB writes per tracking_id and IP.
     """
-    from sqlalchemy import update
     from datetime import datetime as _dt
+
+    from sqlalchemy import update
+
     from db.models import EmailSent, EmailStatus
 
     client_ip = get_real_client_ip(request)
@@ -179,8 +209,8 @@ async def track_email_open(tracking_id: _uuid.UUID, request: Request, db=Depends
                 .values(opened_at=_dt.utcnow(), status=EmailStatus.OPENED)
             )
             await db.commit()
-        except Exception:
-            pass  # Never fail on tracking — silent
+        except Exception as exc:
+            log.debug("email_open_track_skipped", error=str(exc), tracking_id=str(tracking_id))  # Never fail on tracking — silent
 
     # 1×1 transparent GIF
     gif = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
@@ -199,9 +229,11 @@ async def track_link_click(tracking_id: _uuid.UUID, url: str, request: Request, 
     Increments click count and redirects ONLY to validated safe origins or the recorded microsite URL.
     """
     from urllib.parse import urlparse
-    from sqlalchemy import update, select
-    from db.models import EmailSent
+
     from fastapi import HTTPException
+    from sqlalchemy import select, update
+
+    from db.models import EmailSent
 
     client_ip = get_real_client_ip(request)
     await enforce_endpoint_rate_limit(request, "track_click_ip", client_ip, limit=30, window_seconds=60)
@@ -242,8 +274,8 @@ async def track_link_click(tracking_id: _uuid.UUID, url: str, request: Request, 
             h = urlparse(base).hostname
             if h:
                 allowed_hosts.add(h.lower())
-        except Exception:
-            pass
+        except ValueError as exc:
+            log.debug("invalid_allowed_origin_host", base=base, error=str(exc))
     allowed_hosts.update({"dvttalent.com", "www.dvttalent.com", "dvt.com", "talent-ai.dvt.com"})
 
     target_host = (parsed.hostname or "").lower()
@@ -274,4 +306,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)  # noqa: S104

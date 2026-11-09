@@ -1,13 +1,50 @@
 # DVT Talent AI — Ruff Configuration
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [lint]
 select = ["E", "F", "I", "N", "ASYNC", "S", "B", "PL"]
-ignore = ["E501"] # Line length handled by formatter
+ignore = [
+    "E501",    # Line length handled by formatter
+    "E402",    # Intentional sys.path / sys.modules aliasing before package imports
+    "B008",    # FastAPI Depends(...) / Query(...) / File(...) in endpoint signatures
+    "PLC0415", # Intentional lazy / local imports to reduce cold-start overhead and avoid cycles
+    "PLW0603", # Intentional module-level lazy singletons (_redis_pool, _storage_driver, etc.)
+    "PLR0911", # Endpoint / service return count pragmatism
+    "PLR0912", # Endpoint / service branch count pragmatism
+    "PLR0913", # FastAPI route / agent parameter counts
+    "PLR0915", # Endpoint / pipeline statement length pragmatism
+    "PLR0917", # Positional parameter counts
+    "PLR2004", # Magic numbers (HTTP status codes, limits, scoring thresholds)
+]
+
+[lint.per-file-ignores]
+"tests/**" = [
+    "S101",     # pytest assert statements
+    "S105",     # Test fixture credentials / tokens
+    "S106",     # Test fixture credentials / tokens
+    "S108",     # /tmp paths in test fixtures
+    "S110",     # Best-effort test cleanup blocks
+    "S603",     # Subprocess calls in test harnesses
+    "S607",     # Partial executable paths in tests
+    "ASYNC230", # Sync file fixture reads in async tests
+    "ASYNC240", # Sync pathlib checks in async tests
+    "ASYNC251", # Intentional asyncio/time test harnesses
+    "N802",     # Test mock helper naming
+    "N806",     # Test constant naming
+]
+"scripts/**" = [
+    "S101",     # CLI smoke verification assertions
+    "S105",     # CLI script passwords
+    "S106",     # CLI script passwords
+    "S603",     # Operational CLI subprocess commands
+    "ASYNC230", # CLI ledger reads under filelock
+    "ASYNC240", # CLI Path validation
+]
+"run_full_e2e_audit.py" = ["S105", "ASYNC230"]
 
 [lint.isort]
-known-first-party = ["agents", "api", "communication", "db", "workers"]
+known-first-party = ["agents", "api", "communication", "db", "integrations", "services", "workers"]
 
 [lint.pylint]
 max-args = 8

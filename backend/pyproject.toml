@@ -17,9 +17,8 @@ dependencies = [
     "celery>=5.4.0",
     "httpx>=0.28.1",
     "openai>=1.60.0",
-    "pydantic-ai==1.107.7",
+    "pydantic-ai-slim[openai,anthropic,groq,logfire]==1.107.7",
     "logfire[fastapi]>=5.4.0",
-    "mcp>=2.3.0",
     "python-jose[cryptography]>=3.5.0",
     "passlib[bcrypt]==1.7.4",
     "bcrypt==3.2.2",
@@ -48,8 +47,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.2.0",
+    "pytest>=9.0.0",
     "pytest-asyncio>=1.4.1",
+    "pytest-httpx>=0.36.0",
+    "pyyaml>=6.0.2",
+    "psutil>=5.9.0",
     "aiosqlite>=0.20.0",
     "filelock>=4.2.4",
     "pip-audit>=2.8.0",
@@ -62,7 +64,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "B"]
-ignore = ["E501"]
+ignore = ["E501", "E402", "B008"]
 
 [tool.pyright]
 include = ["."]

@@ -11,16 +11,16 @@ if __name__.startswith("backend.services."):
 elif __name__.startswith("services."):
     sys.modules["backend." + __name__] = sys.modules[__name__]
 
+
 import structlog
-from typing import Optional, List
 from jinja2 import Template
 
 try:
+    from backend.db.models import AsyncSessionLocal, Tenant, User
     from backend.services.email_service import email_service
-    from backend.db.models import AsyncSessionLocal, User, Tenant, Candidate
 except ImportError:
+    from db.models import AsyncSessionLocal, Tenant, User  # pyrefly: ignore[missing-import]  # type: ignore
     from services.email_service import email_service  # pyrefly: ignore[missing-import]  # type: ignore
-    from db.models import AsyncSessionLocal, User, Tenant, Candidate  # pyrefly: ignore[missing-import]  # type: ignore
 from sqlalchemy import select
 
 log = structlog.get_logger(__name__)
@@ -82,7 +82,7 @@ class NotificationService:
                     job_title=job_title,
                     action_description=action_type,
                     details=details,
-                    dashboard_url=f"https://app.dvt-talent-ai.com/dashboard"
+                    dashboard_url="https://app.dvt-talent-ai.com/dashboard"
                 )
 
                 # 3. Dispatch via Email Service

@@ -8,15 +8,22 @@ Validates:
 """
 import os
 import sys
-import pytest
 import time
+
+import pytest
 
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-from services.redis_service import is_redis_available, is_token_revoked, revoke_token, record_rate_limit
 from db.models import CandidateStatus, UserRole
+from services.redis_service import (
+    is_redis_available,
+    is_token_revoked,
+    record_rate_limit,
+    revoke_token,
+)
+
 
 def test_redis_circuit_breaker_offline():
     """Verify is_redis_available returns fast without blocking event loops."""

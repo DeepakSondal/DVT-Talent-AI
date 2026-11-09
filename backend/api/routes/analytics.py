@@ -3,16 +3,21 @@ DVT Talent AI — Analytics API
 Dashboard KPIs, funnel metrics, campaign performance
 """
 from datetime import datetime, timedelta, timezone
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.routes.auth import User, get_current_user
 from db.models import (
-    Job, Candidate, EmailSent, Interview,
-    CandidateStatus, EmailStatus, UserRole, get_db
+    Candidate,
+    CandidateStatus,
+    EmailSent,
+    EmailStatus,
+    Interview,
+    Job,
+    get_db,
 )
-from api.routes.auth import get_current_user, User
 
 router = APIRouter()
 
@@ -38,7 +43,7 @@ async def get_dashboard_kpis(
     jobs_total, jobs_active = (await db.execute(
         select(
             func.count(Job.id),
-            func.count(Job.id).filter(Job.is_active == True),
+            func.count(Job.id).filter(Job.is_active.is_(True)),
         ).where(Job.tenant_id == tenant_id)
     )).one()
 

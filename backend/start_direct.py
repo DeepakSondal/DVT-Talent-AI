@@ -15,7 +15,7 @@ try:
     print("STEP 4: Initializing uvicorn...", flush=True)
     import uvicorn
     uvicorn.run(main.app, host="127.0.0.1", port=8000, log_level="info")
-except Exception as e:
+except Exception:
     print("ERROR DURING STARTUP:", flush=True)
     traceback.print_exc()
     sys.exit(1)

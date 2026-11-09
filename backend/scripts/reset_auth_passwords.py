@@ -5,17 +5,20 @@ Ensures valid bcrypt hashes for all default accounts:
 - recruiter@dvttalent.com   -> recruiter123
 - candidate@dvttalent.com   -> candidate123
 """
-import sys
-import os
 import asyncio
-import bcrypt
+import os
+import sys
 import uuid
+
+import bcrypt
 
 # Ensure backend root is on sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from db.models import AsyncSessionLocal, User, Tenant, UserRole
 from sqlalchemy import select
+
+from db.models import AsyncSessionLocal, Tenant, User, UserRole
+
 
 def hash_pw(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")

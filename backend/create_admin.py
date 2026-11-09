@@ -1,10 +1,10 @@
-import sys
 import asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import select
 
-from db.models import User, UserRole, Tenant, AsyncSessionLocal, engine, Base
 from api.routes.auth import hash_password
+from db.models import AsyncSessionLocal, Base, Tenant, User, UserRole, engine
+
 
 async def create_admin():
     print("Ensuring database tables exist...")

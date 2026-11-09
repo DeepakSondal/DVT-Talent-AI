@@ -4,7 +4,6 @@ Sends recruiter outreach, verification, and team invitations exclusively over HT
 using per-tenant OAuth 2.0 tokens (Google Workspace / Gmail API & Microsoft Graph)
 or transactional Resend REST API fallback. Zero SMTP dependency.
 """
-import asyncio
 import base64
 import os
 import uuid
@@ -19,7 +18,7 @@ from sqlalchemy import select
 
 from config import settings
 from db.models import AsyncSessionLocal, EmailSent, EmailStatus, Tenant, User
-from services.security_service import decrypt_pii, encrypt_pii
+from services.security_service import decrypt_pii
 
 log = structlog.get_logger()
 
@@ -56,7 +55,7 @@ async def _get_tenant_reply_to_identity(tenant_id: uuid.UUID) -> tuple[Optional[
         tenant = (await session.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one_or_none()
         user = (
             await session.execute(
-                select(User).where(User.tenant_id == tenant_id, User.is_active == True).limit(1)
+                select(User).where(User.tenant_id == tenant_id, User.is_active.is_(True)).limit(1)
             )
         ).scalars().first()
 
@@ -138,7 +137,7 @@ def _get_system_oauth_sender() -> Optional[OAuthSenderConfig]:
         provider="resend",
         sender_name=sender_name,
         sender_email=sender_email,
-        access_token="simulated_resend_dev",
+        access_token="simulated_resend_dev",  # noqa: S106
     )
 
 

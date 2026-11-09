@@ -3,11 +3,12 @@ DVT Talent AI — Ceipal ATS Client
 Full two-way sync: list open jobs + push candidates with AI scores.
 Auth: X-API-Key header per Ceipal REST API spec.
 """
-import structlog
 from typing import Any, Dict, List, Optional
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
 import httpx
 import sentry_sdk
+import structlog
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 log = structlog.get_logger(__name__)
 

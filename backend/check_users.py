@@ -1,6 +1,6 @@
-import sqlite3
 import glob
 import os
+import sqlite3
 
 print("=== CHECKING SQLITE DATABASES ===")
 for db in glob.glob("*.db") + glob.glob("backend/*.db"):
@@ -23,6 +23,7 @@ for db in glob.glob("*.db") + glob.glob("backend/*.db"):
 print("\n=== CHECKING POSTGRESQL ===")
 try:
     import psycopg2
+
     from config import settings
     # Try parsing postgres url
     url = settings.database_sync_url

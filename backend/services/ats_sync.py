@@ -4,11 +4,11 @@ Pulls historical candidates from an agency's Greenhouse/Lever instances,
 converts their resumes to vector embeddings, and stores them in Pinecone
 to build a proprietary Data Lake.
 """
+from typing import Any, Dict, List
+
 import httpx
-import hashlib
-from typing import List, Dict, Any
-from openai import AsyncOpenAI
 import structlog
+from openai import AsyncOpenAI
 
 from config import settings
 

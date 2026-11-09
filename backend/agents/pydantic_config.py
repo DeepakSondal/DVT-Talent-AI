@@ -16,8 +16,9 @@ try:
 except (ImportError, TypeError):
     logfire = None
 
-from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.groq import GroqModel
+from pydantic_ai.models.openai import OpenAIModel
+
 try:
     from pydantic_ai.providers.openai import OpenAIProvider
 except ImportError:
@@ -30,7 +31,7 @@ try:
     from backend.config import settings
 except ImportError:
     from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 _MODEL_CACHE: Dict[str, Any] = {}
 
@@ -127,7 +128,9 @@ def get_pydantic_model(dynamic_api_key: str = None, deps: Optional['AgentDeps'] 
 
 # 3. Shared Dependencies
 from dataclasses import dataclass
+
 import httpx
+
 
 @dataclass
 class AgentDeps:

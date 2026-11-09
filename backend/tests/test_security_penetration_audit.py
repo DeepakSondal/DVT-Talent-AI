@@ -11,46 +11,39 @@ Validates all 9 security boundary categories and proves remediation of discovere
 8. Monitoring, Health & Secret Exposure (tenant/team response redaction of password hashes & SMTP secrets, admin-gated monitoring & LLM health endpoints).
 """
 
-import io
+import sys
 import uuid
-import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy import select
+from httpx import ASGITransport, AsyncClient
 
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from main import app
-from config import settings
-from db.models import (
-    AsyncSessionLocal,
-    Tenant,
-    User,
-    UserRole,
-    Candidate,
-    CandidateStatus,
-    Resume,
-    Company,
-    Job,
-    EmailCampaign,
-    EmailSent,
-    EmailStatus,
-    AgentTask,
-    AgentTaskStatus,
-    AuditLog,
-)
 from api.routes.auth import (
     create_access_token,
     create_refresh_token,
     hash_password,
     verify_password,
-    get_current_user,
 )
+from db.models import (
+    AgentTask,
+    AgentTaskStatus,
+    AsyncSessionLocal,
+    AuditLog,
+    Candidate,
+    CandidateStatus,
+    Company,
+    EmailCampaign,
+    EmailSent,
+    EmailStatus,
+    Job,
+    Tenant,
+    User,
+    UserRole,
+)
+from main import app
 from services.resume_parser import ResumeParserService
 
 
@@ -510,7 +503,7 @@ class TestAdversarialSecurityPenetrationSuite:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             cand1_headers = self._auth_headers(env["candidate_user_1"])
             viewer_headers = self._auth_headers(env["viewer_a"])
-            recruiter_headers = self._auth_headers(env["recruiter_a"])
+            self._auth_headers(env["recruiter_a"])
 
             # 1. Candidate 1 cannot tamper with Candidate 2's status or upload a resume to Candidate 2
             status_tamper = await client.patch(

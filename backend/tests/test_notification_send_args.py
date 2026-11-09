@@ -1,8 +1,8 @@
 """Guards the recruiter notification -> EmailService.send_email call contract."""
 import inspect
 
-from services.email_service import EmailService
 from services import notification_service as ns
+from services.email_service import EmailService
 
 
 def test_send_email_signature_requires_email_id_and_to_address():

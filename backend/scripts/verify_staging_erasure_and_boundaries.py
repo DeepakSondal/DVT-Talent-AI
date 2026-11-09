@@ -4,28 +4,37 @@ Executes directly against isolated PostgreSQL (dvt_staging), Redis (dvt-redis),
 and verifies end-to-end erasure lifecycle, simulated provider outages,
 atomic sweep recovery, and resurrection immunity.
 """
-import os
+import asyncio
 import sys
 import uuid
-import asyncio
 from pathlib import Path
 
 # Ensure paths
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import redis
+from sqlalchemy import select, text
+
 from config import settings
 from db.models import (
-    AsyncSessionLocal, Tenant, User, Candidate, CandidateStatus,
-    Resume, UserRole, AgentTask, AgentTaskStatus, AuditLog
+    AgentTask,
+    AgentTaskStatus,
+    AsyncSessionLocal,
+    AuditLog,
+    Candidate,
+    CandidateStatus,
+    Resume,
+    Tenant,
+    User,
+    UserRole,
 )
 from services.privacy_service import (
     erase_candidate_personal_data,
     sweep_and_process_gdpr_cleanups,
 )
 from services.resume_parser import ResumeParserService
-from workers.tasks import _update_resume_in_db, score_candidate_task
-import redis
-from sqlalchemy import select, text
+from workers.tasks import _update_resume_in_db
+
 
 async def run_verification():
     print("=== DVT TALENT AI: STAGING BOUNDARY & ERASURE VERIFICATION ===")

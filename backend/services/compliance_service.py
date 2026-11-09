@@ -3,9 +3,8 @@ DVT Talent AI — Compliance & Fairness Engine Service
 Provides immutable AI Decision Ledger logging, adverse impact calculations (EEOC 4/5ths Rule),
 and policy pack verification (NYC LL144, Colorado SB26-189, GDPR Article 22).
 """
-import uuid
-from typing import Dict, List, Any, Optional
-from datetime import datetime, timezone
+from typing import Any, Dict, List
+
 import structlog
 
 log = structlog.get_logger(__name__)
@@ -38,8 +37,7 @@ class ComplianceService:
             selected = item.get("selected", 0)
             rate = (selected / total) if total > 0 else 0.0
             
-            if rate > max_selection_rate:
-                max_selection_rate = rate
+            max_selection_rate = max(max_selection_rate, rate)
 
             processed_groups.append({
                 "group": item.get("group", "Unknown"),

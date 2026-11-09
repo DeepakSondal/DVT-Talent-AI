@@ -13,30 +13,32 @@ Validates:
 10. Existing team membership, authentication, and tenant isolation tests remain green.
 """
 
-import os
+import hashlib
 import sys
 import uuid
-import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from main import app
+from sqlalchemy import select
+
+from api.middleware.audit_log import drain_audit_log_tasks
+from api.routes.auth import get_current_user, verify_password
 from db.models import (
     AsyncSessionLocal,
+    InvitationStatus,
+    Team,
+    TeamInvitation,
     Tenant,
     User,
     UserRole,
-    Team,
-    TeamInvitation,
-    InvitationStatus,
 )
-from api.routes.auth import get_current_user, verify_password
-from sqlalchemy import select, update, or_, and_
+from main import app
 
 
 @pytest.mark.asyncio
@@ -366,7 +368,7 @@ class TestSecureTeamInvitations:
                 create_res = await client.post("/api/v1/team/invite", json={"email": target_email})
                 assert create_res.status_code == 200
                 raw_token = mock_send.await_args.kwargs["invite_token"]
-                inv_id = uuid.UUID(create_res.json()["invitation"]["id"])
+                uuid.UUID(create_res.json()["invitation"]["id"])
 
             app.dependency_overrides.pop(get_current_user, None)
 
@@ -675,6 +677,7 @@ class TestSecureTeamInvitations:
                 assert val_res.headers.get("x-frame-options") == "DENY"
 
             # 2. Verify AuditLog entries contain strictly redacted query parameters
+            await drain_audit_log_tasks()
             async with AsyncSessionLocal() as session:
                 audit_logs = (await session.execute(
                     select(AuditLog)
@@ -682,7 +685,7 @@ class TestSecureTeamInvitations:
                     .order_by(AuditLog.created_at.desc())
                 )).scalars().all()
 
-                matching_logs = [l for l in audit_logs if "code" in l.meta_data.get("query_params", {})]
+                matching_logs = [entry for entry in audit_logs if "code" in entry.meta_data.get("query_params", {})]
                 assert len(matching_logs) > 0
                 latest_log = matching_logs[0]
                 qp = latest_log.meta_data.get("query_params", {})

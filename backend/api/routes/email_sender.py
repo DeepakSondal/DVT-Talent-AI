@@ -17,19 +17,18 @@ import urllib.parse
 import uuid
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from email.utils import formataddr
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import httpx
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from jose import jwt
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.middleware.rate_limit import enforce_endpoint_rate_limit, get_real_client_ip
+from api.middleware.rate_limit import enforce_endpoint_rate_limit
 from api.routes.auth import User, get_current_user
 from config import settings
 from db.models import Tenant, get_db
@@ -301,8 +300,8 @@ async def oauth_sender_callback(
         if claims.get("type") != "oauth_state" or claims.get("provider") != provider_clean:
             raise ValueError("Invalid OAuth state claims")
         tenant_uuid = uuid.UUID(claims["tenant_id"])
-    except Exception:
-        raise HTTPException(400, detail="Invalid or expired OAuth state token")
+    except Exception as exc:
+        raise HTTPException(400, detail="Invalid or expired OAuth state token") from exc
 
     tenant = await _get_tenant(tenant_uuid, db)
     redirect_uri = f"{settings.app_base_url}/api/v1/email-sender/oauth/{provider_clean}/callback"

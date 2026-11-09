@@ -5,22 +5,21 @@ Validates:
 2. Draining empty or already-completed tasks is a safe non-blocking no-op.
 3. Analytics dashboard schema returns jobs and candidate telemetry without orphaned mock fields.
 """
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
-from httpx import AsyncClient, ASGITransport
+import uuid
 
-from main import app
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 from api.middleware.audit_log import _active_audit_tasks, drain_audit_log_tasks
 from api.routes.auth import create_access_token
-from db.models import Tenant, User, UserRole, Job, Candidate, get_db
-import uuid
+from db.models import Candidate, Job, Tenant, User, UserRole, get_db
+from main import app
 
 
 @pytest.mark.asyncio
 async def test_audit_middleware_registers_and_drains_tasks():
     """Verify in-flight audit background tasks are registered and drained cleanly."""
-    initial_pending = len(_active_audit_tasks)
 
     # Create dummy async task that sleeps briefly
     async def dummy_audit():

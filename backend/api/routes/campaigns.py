@@ -1,20 +1,18 @@
 """
 DVT Talent AI — Email Campaigns API  (FIXED [H-01]: was 7-line stub)
 """
-from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from datetime import datetime
+from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import select, func, desc, or_
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.models import (
-    EmailCampaign, EmailSent, EmailStatus, UserRole,
-    Candidate, CandidateStatus, Job, JobCandidate, Tenant, get_db
-)
-from api.routes.auth import get_current_user, User
-from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
-from services.redis_service import record_rate_limit
+
+from api.middleware.rate_limit import enforce_endpoint_rate_limit
+from api.routes.auth import User, get_current_user
+from db.models import EmailCampaign, EmailSent, EmailStatus, UserRole, get_db
 
 router = APIRouter()
 
@@ -199,7 +197,7 @@ async def get_campaign_emails(
 
 async def _send_campaign_bg(campaign_id: str):
     try:
-        from workers.tasks import send_campaign_emails, safe_dispatch_task
+        from workers.tasks import safe_dispatch_task, send_campaign_emails
         safe_dispatch_task(send_campaign_emails, campaign_id)
     except Exception as e:
         import logging

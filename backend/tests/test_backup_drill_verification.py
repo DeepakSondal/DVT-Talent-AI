@@ -9,10 +9,11 @@ import gzip
 import io
 import tarfile
 from pathlib import Path
-import pytest
 
 from scripts.run_backup_drill import (
     test_gzip_integrity as verify_gzip_integrity,
+)
+from scripts.run_backup_drill import (
     test_tar_safety as verify_tar_safety,
 )
 

@@ -3,19 +3,38 @@ DVT Talent AI — Dodo Payments Billing API
 Handles subscription plans, Dodo Payments Checkout, Customer Portal, and Webhook Sync.
 Replaces Stripe with Dodo Payments.
 """
-import uuid
-import os
-import json
-import secrets
-import hmac
 import hashlib
+import hmac
+import json
+import os
+import secrets
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+from urllib.parse import urlparse
+
 import httpx
 import structlog
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from urllib.parse import urlparse
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.middleware.rate_limit import enforce_endpoint_rate_limit
+from api.routes.auth import get_current_user
+from config import settings
+from db.models import (
+    CreditTransaction,
+    CreditTransactionType,
+    SubscriptionPlan,
+    Tenant,
+    User,
+    get_db,
+)
+
+log = structlog.get_logger(__name__)
+router = APIRouter()
+
 
 def _resolve_safe_return_url(raw_url: Optional[str], default_path: str) -> str:
     """Ensure checkout/portal return URLs stay within the configured frontend origin to prevent open redirects."""
@@ -30,17 +49,6 @@ def _resolve_safe_return_url(raw_url: Optional[str], default_path: str) -> str:
     if parsed.scheme in ("http", "https") and parsed.netloc and parsed.netloc == frontend_parsed.netloc:
         return cleaned
     raise HTTPException(status_code=400, detail="Invalid return URL: must match application frontend origin")
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-
-from config import settings
-from db.models import get_db, Tenant, SubscriptionPlan, CreditTransaction, CreditTransactionType, User
-from api.routes.auth import get_current_user
-from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
-
-log = structlog.get_logger(__name__)
-router = APIRouter()
 
 DODO_PAYMENTS_API_KEY = os.getenv("DODO_PAYMENTS_API_KEY", "")
 DODO_ENVIRONMENT = os.getenv("DODO_PAYMENTS_ENVIRONMENT", "test")
@@ -74,7 +82,7 @@ class WebhookSyncRequest(BaseModel):
 @router.get("/plans", summary="List all available subscription plans")
 async def list_plans(db: AsyncSession = Depends(get_db)):
     """Returns all active subscription plans with their credit allocations."""
-    result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.is_active == True))
+    result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.is_active.is_(True)))
     plans = result.scalars().all()
     return [
         {
@@ -113,7 +121,7 @@ async def create_checkout(
 
     # Get plan
     plan_result = await db.execute(
-        select(SubscriptionPlan).where(SubscriptionPlan.id == req.plan_id, SubscriptionPlan.is_active == True)
+        select(SubscriptionPlan).where(SubscriptionPlan.id == req.plan_id, SubscriptionPlan.is_active.is_(True))
     )
     plan: Optional[SubscriptionPlan] = plan_result.scalar_one_or_none()
     if not plan:
@@ -195,8 +203,8 @@ async def _process_webhook_sync(req: WebhookSyncRequest, db: AsyncSession) -> Di
     if tenant_id_str:
         try:
             tenant = await db.get(Tenant, uuid.UUID(str(tenant_id_str)))
-        except Exception:
-            pass
+        except (ValueError, TypeError) as exc:
+            log.warning("dodo_sync_invalid_tenant_id", tenant_id=str(tenant_id_str), error=str(exc))
 
     # Fallback to customer email lookup
     if not tenant and req.customer_email:
@@ -224,8 +232,8 @@ async def _process_webhook_sync(req: WebhookSyncRequest, db: AsyncSession) -> Di
         try:
             p_res = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == uuid.UUID(str(plan_id_str))))
             plan = p_res.scalar_one_or_none()
-        except Exception:
-            pass
+        except (ValueError, TypeError) as exc:
+            log.warning("dodo_sync_invalid_plan_id", plan_id=str(plan_id_str), error=str(exc))
 
     # Default to 500 credits if no specific plan was attached to metadata
     credits_to_grant = plan.credits_per_month if plan else 500
@@ -288,8 +296,8 @@ async def dodo_webhook(
 
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
     event_type = payload.get("type", "")
     data = payload.get("data", {})

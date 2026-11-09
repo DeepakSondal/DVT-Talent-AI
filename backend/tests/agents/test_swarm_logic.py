@@ -2,11 +2,13 @@
 DVT Talent AI — Swarm Agent Unit Tests
 Tests the Pydantic AI agent swarm architecture and orchestrator.
 """
+
 import pytest
-from unittest.mock import AsyncMock, patch
+
+from agents.discovery_pydantic import discovery_agent
 from agents.screening_pydantic import screening_agent
 from agents.sourcing_pydantic import sourcing_agent
-from agents.discovery_pydantic import discovery_agent
+
 
 @pytest.mark.asyncio
 async def test_screening_agent_parallel_logic():

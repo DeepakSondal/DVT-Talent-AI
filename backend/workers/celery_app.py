@@ -4,6 +4,7 @@ Background task queue for consolidated 5-agent operations.
 """
 from celery import Celery
 from celery.schedules import crontab
+
 from config import settings
 
 celery_app = Celery(
@@ -67,6 +68,7 @@ celery_app.conf.beat_schedule = {
 }
 
 from celery.signals import worker_process_init
+
 
 @worker_process_init.connect
 def init_worker(**kwargs):

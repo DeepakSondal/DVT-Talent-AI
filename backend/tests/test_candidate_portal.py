@@ -7,12 +7,11 @@ Validates:
 4. STAR Interview Flashcard Generation.
 5. Zero-Fabrication ATS Tailoring Audit.
 """
-import pytest
-from datetime import datetime, timezone, timedelta
 import uuid
+from datetime import datetime, timedelta, timezone
 
-from db.models import Candidate, Job, Company, CandidateStatus
 from api.routes.candidate_portal import compute_career_ops_score
+from db.models import Candidate, Job
 
 
 def test_career_ops_scoring_high_match():

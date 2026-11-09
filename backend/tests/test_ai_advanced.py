@@ -2,9 +2,11 @@
 DVT Talent AI — Advanced Pydantic AI Agents Test Suite
 """
 import pytest
+
+from agents.critic_pydantic import critic_agent
 from agents.discovery_pydantic import discovery_agent
 from agents.screening_pydantic import screening_agent
-from agents.critic_pydantic import critic_agent
+
 
 @pytest.mark.asyncio
 async def test_job_description_agent_optimization():

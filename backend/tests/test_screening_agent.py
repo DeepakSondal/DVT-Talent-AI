@@ -6,9 +6,10 @@ Validates:
 3. Screening API endpoint input validation and authorization.
 4. Dodo Payments webhook-sync credit grant ledger integration.
 """
-import pytest
 import uuid
-from pydantic import ValidationError
+
+import pytest
+
 from agents.screening_pydantic import ScreeningPlan, ScreeningQuestion
 from api.routes.billing import WebhookSyncRequest
 
@@ -70,8 +71,8 @@ def test_screening_plan_aggregation():
 async def test_screening_endpoint_validation_empty_jd():
     """Test 3: Ensures API rejects empty JD requests with HTTP 400."""
     from fastapi.testclient import TestClient
+
     from main import app
-    from db.models import User, UserRole
 
     # Test client without token should receive 401 or 403 on protected agent routes
     client = TestClient(app)

@@ -2,9 +2,11 @@
 DVT Talent AI — Pydantic AI Agents Unit Tests
 """
 import pytest
+
+from agents.outreach_pydantic import outreach_agent
 from agents.screening_pydantic import screening_agent
 from agents.sourcing_pydantic import sourcing_agent
-from agents.outreach_pydantic import outreach_agent
+
 
 @pytest.mark.asyncio
 async def test_screening_agent_structure():

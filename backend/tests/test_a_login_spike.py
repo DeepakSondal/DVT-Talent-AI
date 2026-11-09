@@ -10,11 +10,12 @@ Measures:
 - Authentication and database connection errors
 """
 import asyncio
+import json
+import statistics
 import time
+
 import httpx
 import psutil
-import statistics
-import json
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 USERS = [f"perf_user_{i:02d}@loadtest.dvt.com" for i in range(1, 51)]

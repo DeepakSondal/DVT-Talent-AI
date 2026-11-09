@@ -4,13 +4,12 @@ Rotates the staging PostgreSQL user password, percent-encodes it in DATABASE_URL
 updates backend/.env, and alters the role in the running dvt-postgres container.
 Does NOT print credentials or secrets.
 """
-import os
-import sys
 import secrets
 import string
 import subprocess
-from urllib.parse import quote_plus
+import sys
 from pathlib import Path
+from urllib.parse import quote_plus
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_PATH = BASE_DIR / ".env"
@@ -28,7 +27,7 @@ def rotate_staging_db_password():
     # 1. Update PostgreSQL in container via docker exec
     sql = f"ALTER ROLE dvt_user WITH PASSWORD '{new_password}';"
     cmd = ["docker", "exec", "-i", "dvt-postgres", "psql", "-U", "dvt_user", "-d", "dvt_staging", "-c", sql]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if res.returncode != 0:
         print(f"Error altering PostgreSQL password: {res.stderr.strip()}", file=sys.stderr)
         sys.exit(1)

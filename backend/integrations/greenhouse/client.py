@@ -4,11 +4,12 @@ Full two-way sync: list jobs + push candidates with AI scores.
 Auth: HTTP Basic (api_key + empty password) per Greenhouse Harvest API spec.
 """
 import base64
-import structlog
 from typing import Any, Dict, List, Optional
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
 import httpx
 import sentry_sdk
+import structlog
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 log = structlog.get_logger(__name__)
 

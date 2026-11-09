@@ -5,8 +5,9 @@ Adds pii_erased + pii_erased_at to candidates table.
 Revision ID: 005_gdpr_pii_erasure
 Revises: 004_ats_integrations
 """
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = '005_gdpr_pii_erasure'
 down_revision = '004_ats_integrations'

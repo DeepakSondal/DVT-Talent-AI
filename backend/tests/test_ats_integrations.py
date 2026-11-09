@@ -2,13 +2,10 @@
 DVT Talent AI — ATS Integration Test Suite
 Unit tests for Greenhouse and Ceipal clients with mock HTTP responses.
 """
-import pytest
-import json
 import base64
-from unittest.mock import AsyncMock, patch, MagicMock
-import httpx
-from pytest_httpx import HTTPXMock
 
+import pytest
+from pytest_httpx import HTTPXMock
 
 # ── Greenhouse Tests ──────────────────────────────────────────────────────────
 
@@ -218,6 +215,7 @@ class TestCeipalClient:
 async def test_greenhouse_live_or_sandbox_jobs(httpx_mock: HTTPXMock):
     """Calls the Greenhouse integration and verifies normalized job shape (live API or automated sandbox)."""
     import os
+
     from integrations.greenhouse.client import GreenhouseClient
     key = os.getenv("GREENHOUSE_API_KEY")
     if not key:
@@ -248,6 +246,7 @@ async def test_greenhouse_live_or_sandbox_jobs(httpx_mock: HTTPXMock):
 async def test_ceipal_live_or_sandbox_jobs(httpx_mock: HTTPXMock):
     """Calls the Ceipal integration and verifies normalized job shape (live API or automated sandbox)."""
     import os
+
     from integrations.ceipal.client import CeipalClient
     key = os.getenv("CEIPAL_API_KEY")
     base_url = os.getenv("CEIPAL_API_BASE_URL", "https://api.ceipal.com/v1").rstrip("/")

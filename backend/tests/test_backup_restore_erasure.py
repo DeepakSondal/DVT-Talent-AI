@@ -1,24 +1,32 @@
-import pytest
-import uuid
-import os
-import json
 import asyncio
+import json
+import uuid
 from pathlib import Path
-from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
+
+import pytest
+import redis
 from sqlalchemy import select
-from unittest.mock import patch, MagicMock
 
 from config import settings
-from db.models import Candidate, CandidateStatus, Tenant, User, UserRole, Resume, AgentTask, AgentTaskStatus
+from db.models import (
+    AgentTask,
+    AgentTaskStatus,
+    Candidate,
+    CandidateStatus,
+    Resume,
+    Tenant,
+    User,
+    UserRole,
+)
 from services.privacy_service import (
+    ERASURE_TOMBSTONE_LEDGER_PATH,
     erase_candidate_personal_data,
     reconcile_post_restore_erasures,
     record_erasure_tombstone,
     sweep_and_process_gdpr_cleanups,
-    ERASURE_TOMBSTONE_LEDGER_PATH,
 )
 from services.resume_parser import ResumeParserService
-import redis
 
 
 @pytest.mark.asyncio
@@ -152,7 +160,7 @@ async def test_full_multi_system_resurrection_prevention(db_session):
         r = MagicMock()
         _mem_cache = {}
         r.ping.return_value = True
-        r.set.side_effect = lambda k, v: _mem_cache.__setitem__(k, v)
+        r.set.side_effect = _mem_cache.__setitem__
         r.exists.side_effect = lambda k: 1 if k in _mem_cache else 0
         r.delete.side_effect = lambda *ks: [ _mem_cache.pop(k, None) for k in ks ]
 
@@ -279,7 +287,7 @@ async def test_reconciliation_idempotency_and_concurrency(db_session):
     and concurrent calls to record_erasure_tombstone maintain valid uncorrupted JSONL formatting.
     """
     # 1. Idempotency check
-    res1 = await reconcile_post_restore_erasures(db_session)
+    await reconcile_post_restore_erasures(db_session)
     res2 = await reconcile_post_restore_erasures(db_session)
     assert res2["resurrected_found"] == 0
 
@@ -292,8 +300,8 @@ async def test_reconciliation_idempotency_and_concurrency(db_session):
 
     # Validate file integrity: each line must be valid JSON
     with open(ERASURE_TOMBSTONE_LEDGER_PATH, "r", encoding="utf-8") as f:
-        for idx, line in enumerate(f, start=1):
-            line = line.strip()
+        for raw_line in f:
+            line = raw_line.strip()
             if line:
                 entry = json.loads(line)
                 assert "candidate_id" in entry

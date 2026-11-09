@@ -7,10 +7,11 @@ Submits 50 concurrent independent background tasks across 5 isolated corporate t
 - Measures task dispatch and polling latency
 """
 import asyncio
-import time
-import httpx
 import json
 import statistics
+import time
+
+import httpx
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 PASSWORD = "PerfPass123!"
@@ -92,7 +93,7 @@ async def run_background_worker_test():
         print(f"Authenticated {len(authenticated)}/50 users.")
 
         # Phase 2: Dispatch 50 concurrent background tasks
-        print(f"\nDispatching 50 concurrent background jobs...")
+        print("\nDispatching 50 concurrent background jobs...")
         t_start = time.perf_counter()
         dispatch_tasks = [dispatch_worker_task(client, u, i) for i, u in enumerate(authenticated)]
         results = await asyncio.gather(*dispatch_tasks)
@@ -107,7 +108,7 @@ async def run_background_worker_test():
         if alpha_task_id:
             beta_headers = {"Authorization": f"Bearer {beta_user['token']}", "X-Load-Test-Bypass": "true"}
             hack_resp = await client.get(f"{BASE_URL}/agents/status/{alpha_task_id}", headers=beta_headers)
-            print(f"\nCross-Tenant Task Isolation Check:")
+            print("\nCross-Tenant Task Isolation Check:")
             print(f"  Beta User GET Alpha Task ({alpha_task_id}) -> HTTP {hack_resp.status_code}")
             if hack_resp.status_code == 200:
                 print("  [CRITICAL] Tenant B successfully read Tenant A background task!")

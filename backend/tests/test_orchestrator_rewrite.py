@@ -5,19 +5,18 @@ Verifies:
 2. 3-phase Command Center dispatch (run_swarm_phase: discovery, sourcing, outreach).
 3. Concurrent outreach + screening and daily volume capping.
 """
-import pytest
 import asyncio
 import uuid
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from agents.orchestrator import (
+    _MAX_DAILY_OUTREACH_CAP,
     AgentOrchestrator,
     _serialize,
     _trim_candidates_for_critic,
-    _get_agent_data,
-    _MAX_DAILY_OUTREACH_CAP,
 )
-from agents.pydantic_config import AgentDeps
 
 
 class SimpleModelObj:
@@ -42,7 +41,7 @@ class SimpleRunResult:
 @pytest.mark.asyncio
 async def test_orchestrator_serialization_and_pii_trimming():
     """Test 1: Verifies defensive serialization and anti-bias PII trimming for Critic audit."""
-    orchestrator = AgentOrchestrator(tenant_id=str(uuid.uuid4()))
+    AgentOrchestrator(tenant_id=str(uuid.uuid4()))
 
     # Verify _serialize
     sample_model = SimpleModelObj({"foo": "bar", "num": 42})

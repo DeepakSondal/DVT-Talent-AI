@@ -7,11 +7,11 @@ Simulates 50 concurrent authenticated users across 5 corporate tenants performin
 - Verification of ZERO database deadlocks or SQLite locked errors
 """
 import asyncio
-import time
-import httpx
-import uuid
 import json
-import statistics
+import time
+import uuid
+
+import httpx
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 USERS = [f"perf_user_{i:02d}@loadtest.dvt.com" for i in range(1, 51)]
@@ -51,7 +51,6 @@ async def user_db_workflow(client: httpx.AsyncClient, user_info: dict, run_idx: 
     }
 
     # 1. Fetch Candidate List
-    t0 = time.perf_counter()
     try:
         resp = await client.get(f"{BASE_URL}/candidates?page=1&limit=20", headers=headers, timeout=10.0)
         if resp.status_code == 200:
@@ -144,7 +143,7 @@ async def run_concurrent_db_test():
         # Attempt to read each other's candidate by ID directly
         user_alpha = authenticated_users[0]
         user_beta = authenticated_users[15]
-        print(f"\nVerifying Cross-Tenant Security:")
+        print("\nVerifying Cross-Tenant Security:")
         print(f"  User Alpha Tenant: {user_alpha['tenant_id']}")
         print(f"  User Beta Tenant:  {user_beta['tenant_id']}")
 

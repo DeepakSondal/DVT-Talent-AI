@@ -9,13 +9,15 @@ if __name__.startswith("backend.agents."):
 elif __name__.startswith("agents."):
     sys.modules["backend." + __name__] = sys.modules[__name__]
 
-from typing import Dict, List
-from pydantic import BaseModel, Field, ConfigDict
+from typing import List
+
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import Agent
+
 try:
-    from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
+    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
 except ImportError:
-    from agents.pydantic_config import get_pydantic_model, AgentDeps  # pyrefly: ignore[missing-import]  # type: ignore
+    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
 
 class PerformanceMetrics(BaseModel):
     model_config = ConfigDict(extra="allow")

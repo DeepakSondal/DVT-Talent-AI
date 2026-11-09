@@ -12,9 +12,9 @@ elif __name__.startswith("services."):
 import io
 import os
 import re
-import uuid
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -44,7 +44,7 @@ class ResumeParserService:
         if not gitignore.exists():
             try:
                 gitignore.write_text("*\n!.gitignore\n", encoding="utf-8")
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
         return upload_dir
 
@@ -129,8 +129,9 @@ class ResumeParserService:
         Returns extracted markdown or None if Docling is unavailable or fails.
         """
         try:
-            from docling.document_converter import DocumentConverter
             import tempfile
+
+            from docling.document_converter import DocumentConverter
             ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ".pdf"
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
                 tmp.write(content_bytes)
@@ -145,7 +146,7 @@ class ResumeParserService:
             finally:
                 if tmp_path.exists():
                     tmp_path.unlink()
-        except Exception:
+        except Exception:  # noqa: S110
             # Docling not installed or conversion skipped; fallback smoothly
             pass
         return None
@@ -189,8 +190,8 @@ class ResumeParserService:
             from services.sanitizer_service import sanitizer_service
             sanitized_result = sanitizer_service.sanitize(clean_text)
             clean_text = sanitized_result[0] if isinstance(sanitized_result, tuple) else sanitized_result
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("sanitizer_fallback_skipped", error=str(exc))
         return clean_text[:cls.MAX_EXTRACTED_CHARS]
 
     @classmethod
@@ -234,6 +235,7 @@ class ResumeParserService:
         """Extract text from Word .docx file using python-docx with zip-bomb inspection."""
         try:
             import zipfile
+
             import docx
             if content_bytes.startswith(b"PK\x03\x04"):
                 with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
@@ -267,7 +269,7 @@ class ResumeParserService:
                 decoded = content_bytes.decode(encoding)
                 if decoded.strip():
                     return decoded
-            except Exception:
+            except Exception:  # noqa: S112
                 continue
         return content_bytes.decode("utf-8", errors="ignore")
 
@@ -588,7 +590,7 @@ class ResumeParserService:
             title_match = re.search(title_regex, p, re.IGNORECASE)
             
             if date_match or title_match:
-                lines = [l.strip() for l in p.split("\n") if l.strip()]
+                lines = [line.strip() for line in p.split("\n") if line.strip()]
                 header_line = lines[0] if lines else ""
                 
                 # Derive company and title
@@ -601,7 +603,7 @@ class ResumeParserService:
                     company = company.replace(remove_str, "")
                 company = company.strip(" ,-|•") or "Technology Enterprise"
                 
-                bullets = [l.lstrip("•-* ").strip() for l in lines[1:] if len(l.strip()) > 10]
+                bullets = [line.lstrip("•-* ").strip() for line in lines[1:] if len(line.strip()) > 10]
                 desc = "\n".join(bullets) if bullets else (lines[1] if len(lines) > 1 else header_line)
 
                 experiences.append({
@@ -631,7 +633,7 @@ class ResumeParserService:
             blocks = [blocks[0]]
 
         for block in blocks:
-            lines = [l.strip() for l in block.split("\n") if l.strip()]
+            lines = [line.strip() for line in block.split("\n") if line.strip()]
             full_block_text = " ".join(lines)
             
             degree_match = re.search(degree_regex, full_block_text, re.IGNORECASE)
@@ -661,7 +663,7 @@ class ResumeParserService:
     @classmethod
     def _extract_initial_summary(cls, text: str) -> str:
         """Extract opening summary paragraph if explicitly defined."""
-        lines = [l.strip() for l in text[:1500].split("\n") if l.strip()]
+        lines = [line.strip() for line in text[:1500].split("\n") if line.strip()]
         # Skip header lines with names or contact info
         for line in lines[2:]:
             if len(line) > 80 and not re.search(r"@|linkedin|github|\+?\d{3}", line, re.IGNORECASE):
@@ -676,7 +678,7 @@ class ResumeParserService:
         if match:
             try:
                 return min(35, max(1, int(match.group(1))))
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
         # Calculate based on identified positions

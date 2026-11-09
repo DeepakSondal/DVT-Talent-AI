@@ -8,10 +8,11 @@ Measures:
 - Identifies the saturation inflection point
 """
 import asyncio
-import time
-import httpx
-import statistics
 import json
+import statistics
+import time
+
+import httpx
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 PASSWORD = "PerfPass123!"
@@ -58,7 +59,7 @@ async def user_request_loop(client: httpx.AsyncClient, token: str, duration_sec:
             lat = time.perf_counter() - t0
             latencies.append(lat)
             status_codes.append(resp.status_code)
-        except Exception as e:
+        except Exception:
             lat = time.perf_counter() - t0
             latencies.append(lat)
             status_codes.append(0)

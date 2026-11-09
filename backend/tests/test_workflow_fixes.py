@@ -5,8 +5,9 @@ Unit tests for functional workflow fixes:
 3. Sourcing and Outreach persistence helpers safely skip when tenant_id is 'default' or None.
 """
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from agents.orchestrator import AgentOrchestrator
 
@@ -192,9 +193,10 @@ def test_pydantic_model_supports_deepseek_and_kimi():
 @pytest.mark.asyncio
 async def test_dodo_webhook_rejects_test_prefix_bypass():
     """Verify /api/v1/billing/webhook rejects forged 'test_' signatures when webhook key is configured."""
-    from httpx import AsyncClient, ASGITransport
-    from main import app
+    from httpx import ASGITransport, AsyncClient
+
     from config import settings
+    from main import app
 
     with patch.object(settings, "dodo_payments_webhook_key", "whsec_real_secret"):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -209,6 +211,7 @@ async def test_dodo_webhook_rejects_test_prefix_bypass():
 def test_billing_return_url_rejects_open_redirect():
     """Verify _resolve_safe_return_url blocks external origins while allowing relative and frontend URLs."""
     from fastapi import HTTPException
+
     from api.routes.billing import _resolve_safe_return_url
     from config import settings
 
@@ -222,6 +225,7 @@ def test_billing_return_url_rejects_open_redirect():
 def test_compliance_override_rejects_viewer_and_candidate():
     """Verify _require_compliance_access blocks VIEWER on write and CANDIDATE on read/write."""
     from fastapi import HTTPException
+
     from api.routes.compliance import _require_compliance_access
     from db.models import User, UserRole
 
@@ -243,6 +247,7 @@ async def test_oauth_sender_callback_rejects_non_oauth_state_jwt():
     """Verify oauth_sender_callback rejects tokens without type='oauth_state' or matching provider."""
     from fastapi import HTTPException
     from jose import jwt
+
     from api.routes.email_sender import oauth_sender_callback
     from config import settings
 
@@ -259,8 +264,8 @@ async def test_oauth_sender_callback_rejects_non_oauth_state_jwt():
 @pytest.mark.asyncio
 async def test_team_members_and_candidates_strictly_tenant_scoped():
     """Verify team candidates endpoint enforces tenant scoping and filters out pii_erased records."""
-    from db.models import User, UserRole, Candidate, CandidateStatus
     from api.routes.team import get_team_candidates
+    from db.models import Candidate, User, UserRole
 
     tenant_a = uuid.uuid4()
     mgr = User(id=uuid.uuid4(), tenant_id=tenant_a, role=UserRole.MANAGER, email="mgr@a.com")
@@ -280,8 +285,9 @@ async def test_team_members_and_candidates_strictly_tenant_scoped():
 async def test_team_quota_rejects_cross_tenant_user_id():
     """Verify set_user_quota rejects users not found in the manager's tenant with 404."""
     from fastapi import HTTPException
-    from db.models import User, UserRole
+
     from api.routes.team import set_user_quota
+    from db.models import User, UserRole
 
     mgr = User(id=uuid.uuid4(), tenant_id=uuid.uuid4(), role=UserRole.MANAGER, email="mgr@org.com")
     mock_db = AsyncMock()

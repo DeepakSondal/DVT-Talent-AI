@@ -4,7 +4,8 @@ Strips prompt injection vectors, hidden text, control phrases, and zero-width ch
 from incoming candidate resumes, web text, and user inputs before LLM ingestion.
 """
 import re
-from typing import Dict, Any, Tuple
+from typing import Any, Dict, Tuple
+
 import structlog
 
 log = structlog.get_logger(__name__)

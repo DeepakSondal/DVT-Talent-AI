@@ -6,10 +6,12 @@ Tests:
 3. Native pgvector async queries on Resume models with tenant isolation.
 4. ChromaDB Decommissioning: Full functionality and erasure with zero external Chroma dependency.
 """
-import pytest
 import uuid
-from db.vector_store import VectorStore, vector_store
-from db.models import Resume, Candidate, Tenant
+
+import pytest
+
+from db.models import Candidate, Resume, Tenant
+from db.vector_store import VectorStore
 
 
 def test_embed_batch_dimensions_and_isolation():

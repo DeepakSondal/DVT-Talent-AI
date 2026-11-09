@@ -1,28 +1,40 @@
-import pytest
-from db.vector_store import CHROMA_AVAILABLE
-import pytest_asyncio
-import asyncio
 from typing import AsyncGenerator
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
 
-from main import app
-from db.models import Base, get_db
+import pytest
+import pytest_asyncio
+import structlog
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
 import db.models
+from db.models import Base, get_db
+from main import app
+
+log = structlog.get_logger(__name__)
 
 # Test database URL (using SQLite in-memory for speed)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
+
 @pytest.fixture(autouse=True)
 async def ensure_db_tables():
-    from db.models import engine, Base
     from api.middleware.audit_log import drain_audit_log_tasks
+    from db.models import engine
+    from services.redis_service import (
+        _in_memory_blacklist,
+        _in_memory_otps,
+        _in_memory_ratelimit,
+    )
+
+    _in_memory_ratelimit.clear()
+    _in_memory_blacklist.clear()
+    _in_memory_otps.clear()
+
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("ensure_db_tables_failed", error=str(exc))
     yield
     await drain_audit_log_tasks()
 

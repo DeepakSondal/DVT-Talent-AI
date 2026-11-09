@@ -2,8 +2,8 @@
 DVT Talent AI — Swarm Agents Package
 Exports all core recruiter agents and orchestrator with cross-environment path and module resolution.
 """
-import sys
 import os
+import sys
 
 # Automatically ensure backend and repository root are on sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))

@@ -13,7 +13,18 @@ if backend_dir not in sys.path:
 
 import bcrypt
 from sqlalchemy import select
-from db.models import AsyncSessionLocal, User, Tenant, UserRole, Company, Job, Candidate, CandidateStatus
+
+from db.models import (
+    AsyncSessionLocal,
+    Candidate,
+    CandidateStatus,
+    Company,
+    Job,
+    Tenant,
+    User,
+    UserRole,
+)
+
 
 async def seed():
     salt = bcrypt.gensalt()

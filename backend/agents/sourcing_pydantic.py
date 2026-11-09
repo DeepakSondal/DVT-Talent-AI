@@ -15,13 +15,17 @@ import asyncio
 import hashlib
 import json
 import re
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Dict, List, Optional
+
+import structlog
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import Agent, RunContext
+
+log = structlog.get_logger(__name__)
 try:
-    from backend.agents.pydantic_config import get_pydantic_model, AgentDeps
+    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
 except ImportError:
-    from agents.pydantic_config import get_pydantic_model, AgentDeps  # pyrefly: ignore[missing-import]  # type: ignore
+    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
 try:
     from backend.agents.swarm_memory import _get_cache, _set_cache
 except ImportError:
@@ -36,7 +40,7 @@ _LOCAL_SOURCING_CACHE: Dict[str, str] = {}
 
 def _get_sourcing_cache(raw_key: str, tenant_id: str = "default") -> Optional[str]:
     safe_tenant = str(tenant_id or "default")
-    q_hash = hashlib.md5(raw_key.encode()).hexdigest()
+    q_hash = hashlib.md5(raw_key.encode(), usedforsecurity=False).hexdigest()
     local_k = f"{safe_tenant}:{q_hash}"
     if local_k in _LOCAL_SOURCING_CACHE:
         return _LOCAL_SOURCING_CACHE[local_k]
@@ -50,7 +54,7 @@ def _get_sourcing_cache(raw_key: str, tenant_id: str = "default") -> Optional[st
 
 def _set_sourcing_cache(raw_key: str, value: str, tenant_id: str = "default", ttl_seconds: int = 3600) -> None:
     safe_tenant = str(tenant_id or "default")
-    q_hash = hashlib.md5(raw_key.encode()).hexdigest()
+    q_hash = hashlib.md5(raw_key.encode(), usedforsecurity=False).hexdigest()
     local_k = f"{safe_tenant}:{q_hash}"
     if len(_LOCAL_SOURCING_CACHE) >= 256:
         _LOCAL_SOURCING_CACHE.pop(next(iter(_LOCAL_SOURCING_CACHE)), None)
@@ -246,8 +250,9 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
     except ImportError:
         from db.models import AsyncSessionLocal, Candidate  # pyrefly: ignore[missing-import]  # type: ignore
         from db.vector_store import vector_store  # pyrefly: ignore[missing-import]  # type: ignore
-    from sqlalchemy import select, or_
     import uuid
+
+    from sqlalchemy import or_, select
 
     tenant_uuid = None
     if tenant_id and str(tenant_id) != "default":
@@ -287,15 +292,15 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
                 "status": "SOURCED",
                 "source": "Vector Hybrid Match",
             })
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("fast_hybrid_vector_search_failed", error=str(exc), tenant_id=str(tenant_id))
 
     # 2. Multi-keyword + canonical skill SQL search scoped to tenant
     try:
         async with AsyncSessionLocal() as session:
             base_filters = [
-                Candidate.is_searchable != False,
-                Candidate.pii_erased != True,
+                Candidate.is_searchable.isnot(False),
+                Candidate.pii_erased.isnot(True),
             ]
             if tenant_uuid:
                 base_filters.append(Candidate.tenant_id == tenant_uuid)
@@ -343,8 +348,8 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
                     "status": getattr(c.status, "value", str(c.status)),
                     "source": c.source or "Internal Talent Pool",
                 })
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("fast_hybrid_sql_search_failed", error=str(exc), tenant_id=str(tenant_id))
 
     deduped = deduplicate_and_score_candidates(raw_candidates, query_facets=facets)
     return deduped[:limit]

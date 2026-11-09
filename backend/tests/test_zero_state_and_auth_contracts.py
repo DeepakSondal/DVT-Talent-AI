@@ -1,7 +1,10 @@
-import pytest
-from httpx import AsyncClient, ASGITransport
 import uuid
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 from backend.main import app
+
 
 @pytest.mark.asyncio
 async def test_registration_returns_access_token_and_role():
@@ -113,11 +116,9 @@ def test_sqlite_nullpool_and_vector_hybrid_contract():
 @pytest.mark.asyncio
 async def test_https_only_email_service_contract():
     """Verify that email service operates 100% over HTTPS APIs with zero smtplib/SMTP dependency."""
-    import sys
-    from backend.services.email_service import email_service, _get_system_oauth_sender
-
     # Verify smtplib is not imported or used by email_service module
     import backend.services.email_service as es_mod
+    from backend.services.email_service import _get_system_oauth_sender, email_service
     assert not hasattr(es_mod, "smtplib")
     assert not hasattr(es_mod, "_deliver_system_relay_sync")
 

@@ -2,29 +2,30 @@
 DVT Talent AI — Celery Tasks (Simplified & Persistent)
 Unified task execution for the 5-agent model with DB synchronization.
 """
+import asyncio
 import base64
 import json
-import uuid
-import structlog
-import asyncio
-from typing import Any, Dict, Optional
-from datetime import datetime, timezone
-
-import redis
 import socket
 import time
 import urllib.parse
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+
+import redis
+import structlog
 from sqlalchemy import create_engine, text
-from workers.celery_app import celery_app
-from config import settings
-from agents.orchestrator import AgentOrchestrator
-from agents.pydantic_config import AgentDeps
-from agents.discovery_pydantic import discovery_agent
-from agents.sourcing_pydantic import sourcing_agent
-from agents.outreach_pydantic import outreach_agent
+
 from agents.analytics_pydantic import analytics_agent
+from agents.discovery_pydantic import discovery_agent
+from agents.orchestrator import AgentOrchestrator
+from agents.outreach_pydantic import outreach_agent
+from agents.pydantic_config import AgentDeps
 from agents.screening_pydantic import screening_agent
+from agents.sourcing_pydantic import sourcing_agent
+from config import settings
 from services.resume_parser import ResumeParserService
+from workers.celery_app import celery_app
 
 log = structlog.get_logger(__name__)
 
@@ -123,7 +124,7 @@ def run_agent_task(self, agent_name: str, params: Dict[str, Any] = None, tenant_
         return result
     except Exception as exc:
         log.error("celery_task_failed", task="run_agent_task", agent=agent_name, error=str(exc))
-        raise self.retry(exc=exc, countdown=60)
+        raise self.retry(exc=exc, countdown=60) from exc
 
 @celery_app.task(bind=True, name="workers.tasks.run_full_autonomous_pipeline", max_retries=1)
 def run_full_autonomous_pipeline(
@@ -148,7 +149,7 @@ def run_full_autonomous_pipeline(
         return result
     except Exception as exc:
         log.error("celery_task_failed", task="full_pipeline", error=str(exc))
-        raise self.retry(exc=exc, countdown=300)
+        raise self.retry(exc=exc, countdown=300) from exc
 
 # ── Specialized Tasks (Legacy Support & Granular Control) ───────────────────
 
@@ -164,7 +165,8 @@ def analyze_resume_task(
     log.info("celery_task_started", task="analyze_resume", resume_id=resume_id)
     try:
         file_bytes = base64.b64decode(file_content_b64)
-        engine = create_engine(settings.database_sync_url)
+        from db.models import sync_engine_db_url
+        engine = create_engine(sync_engine_db_url)
         clean_rid = str(resume_id).replace("-", "")
         hyphen_rid = str(uuid.UUID(clean_rid)) if len(clean_rid) == 32 else str(resume_id)
         with engine.connect() as conn:
@@ -202,14 +204,15 @@ def analyze_resume_task(
         return result
     except Exception as exc:
         log.error("celery_task_failed", task="analyze_resume", error=str(exc))
-        raise self.retry(exc=exc, countdown=30)
+        raise self.retry(exc=exc, countdown=30) from exc
 
 @celery_app.task(bind=True, name="workers.tasks.score_candidate_task", max_retries=3)
 def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) -> Dict[str, Any]:
     """Score a candidate using SourcingAgent"""
     log.info("celery_task_started", task="score_candidate", candidate_id=candidate_id)
     try:
-        engine = create_engine(settings.database_sync_url)
+        from db.models import sync_engine_db_url
+        engine = create_engine(sync_engine_db_url)
         clean_cid = str(candidate_id).replace("-", "")
         hyphen_cid = str(uuid.UUID(clean_cid)) if len(clean_cid) == 32 else str(candidate_id)
         with engine.connect() as conn:
@@ -238,7 +241,8 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
                     text("SELECT description FROM jobs WHERE id = :jid"),
                     {"jid": job_id}
                 ).fetchone()
-                if jd_row: jd_text = jd_row[0]
+                if jd_row:
+                    jd_text = jd_row[0]
 
         async def _run():
             import httpx
@@ -272,7 +276,7 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
         return {"candidate_id": candidate_id, "status": "scored"}
     except Exception as exc:
         log.error("ats_sync_failed", error=str(exc))
-        raise self.retry(exc=exc, countdown=300)
+        raise self.retry(exc=exc, countdown=300) from exc
 
 @celery_app.task(bind=True, name="workers.tasks.source_candidates_for_job", max_retries=3)
 def source_candidates_for_job(self, job_id: str, skills: list, location: Optional[str] = None, tenant_id: str = "default") -> Dict[str, Any]:
@@ -293,7 +297,7 @@ def source_candidates_for_job(self, job_id: str, skills: list, location: Optiona
     except Exception as exc:
         log.error("sourcing_candidates_failed", error=str(exc))
         try:
-            raise self.retry(exc=exc, countdown=60)
+            raise self.retry(exc=exc, countdown=60) from exc
         except Exception:
             return {"job_id": job_id, "status": "failed", "error": str(exc)}
 
@@ -311,7 +315,7 @@ def send_campaign_emails(self, campaign_id: str, tenant_id: str = "default") -> 
     except Exception as exc:
         log.error("send_campaign_emails_failed", error=str(exc))
         try:
-            raise self.retry(exc=exc, countdown=60)
+            raise self.retry(exc=exc, countdown=60) from exc
         except Exception:
             return {"campaign_id": campaign_id, "status": "failed", "error": str(exc)}
 
@@ -346,7 +350,7 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
         asyncio.run(_run())
     except Exception as exc:
         # Rate Limit Backoff: 4, 8, 16, 32, 64 seconds
-        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2))
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
 
 @celery_app.task(bind=True, name="workers.tasks.copilot_sourcing_task", max_retries=5)
 def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, tenant_id: str):
@@ -376,7 +380,7 @@ def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, t
     try:
         asyncio.run(_run())
     except Exception as exc:
-        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2))
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
 
 @celery_app.task(bind=True, name="workers.tasks.copilot_outreach_task", max_retries=5)
 def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_context: dict, tenant_id: str, enable_screening: bool = False):
@@ -406,7 +410,7 @@ def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_con
     try:
         asyncio.run(_run())
     except Exception as exc:
-        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2))
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
 
 @celery_app.task(bind=True, name="workers.tasks.process_pending_gdpr_cleanups_task", max_retries=5)
 def process_pending_gdpr_cleanups_task(self) -> Dict[str, Any]:
@@ -427,13 +431,14 @@ def process_pending_gdpr_cleanups_task(self) -> Dict[str, Any]:
         return res
     except Exception as exc:
         log.error("gdpr_cleanup_sweep_failed", error=str(exc))
-        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2))
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
 
 # ── DB Helpers (Synchronous) ───────────────────────────────────────────────
 
 def _update_resume_in_db(resume_id: str, analysis: dict, raw_text: str = ""):
     try:
-        engine = create_engine(settings.database_sync_url)
+        from db.models import sync_engine_db_url
+        engine = create_engine(sync_engine_db_url)
         clean_rid = str(resume_id).replace("-", "")
         hyphen_rid = str(uuid.UUID(clean_rid)) if len(clean_rid) == 32 else str(resume_id)
         with engine.connect() as conn:

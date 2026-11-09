@@ -2,11 +2,10 @@
 DVT Talent AI — Vector Store Mock Tests
 Tests the VectorStore logic by mocking the ChromaDB PersistentClient.
 """
-import pytest
-from db.vector_store import CHROMA_AVAILABLE
 from unittest.mock import MagicMock, patch
 
 from db.vector_store import VectorStore
+
 
 class MockCollection:
     def upsert(self, **kwargs):

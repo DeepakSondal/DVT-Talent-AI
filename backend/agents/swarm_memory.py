@@ -11,8 +11,11 @@ from typing import Dict, List, Optional
 
 import httpx
 import redis
+import structlog
 from openai import AsyncOpenAI
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
+
+log = structlog.get_logger(__name__)
 
 try:
     from backend.config import settings
@@ -48,11 +51,11 @@ def _get_cache(query_hash: str, tenant_id: str = "default") -> Optional[str]:
 
 def _set_cache(query: str, result: str, tenant_id: str = "default", ttl_seconds: int = 86400):
     try:
-        query_hash = hashlib.md5(query.encode()).hexdigest()
+        query_hash = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
         r = _get_redis()
         r.setex(f"swarm_cache:{tenant_id}:{query_hash}", ttl_seconds, result)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("swarm_cache_set_skipped", error=str(exc), tenant_id=tenant_id)
 
 
 def _has_external_pinecone() -> bool:
@@ -80,8 +83,8 @@ async def add_negative_vector(category: str, reason: str, tenant_id: str = "defa
     try:
         r = _get_redis()
         r.sadd(f"swarm_rules:{safe_tenant}", f"[{category}] {clean_reason}")
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("swarm_rules_redis_add_skipped", error=str(exc), tenant_id=safe_tenant)
 
     if not _has_external_pinecone():
         return
@@ -93,7 +96,7 @@ async def add_negative_vector(category: str, reason: str, tenant_id: str = "defa
             model="text-embedding-3-small",
         )
         vector = emb_response.data[0].embedding
-        vec_id = hashlib.md5(f"{safe_tenant}:{clean_reason}".encode()).hexdigest()
+        vec_id = hashlib.md5(f"{safe_tenant}:{clean_reason}".encode(), usedforsecurity=False).hexdigest()
 
         async with httpx.AsyncClient() as http:
             await http.post(
@@ -128,8 +131,8 @@ async def _get_local_calibration_reasons(tenant_id: str) -> List[str]:
             decoded = m.decode("utf-8") if isinstance(m, bytes) else str(m)
             if decoded and decoded not in reasons:
                 reasons.append(decoded)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("swarm_rules_redis_read_skipped", error=str(exc), tenant_id=tenant_id)
 
     try:
         import uuid as _uuid
@@ -152,8 +155,8 @@ async def _get_local_calibration_reasons(tenant_id: str) -> List[str]:
             for r_text in rows:
                 if r_text and r_text not in reasons:
                     reasons.append(r_text)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("swarm_rules_db_read_skipped", error=str(exc), tenant_id=tenant_id)
 
     return reasons[:5]
 
@@ -164,7 +167,7 @@ async def query_memory_tree(query: str, tenant_id: str = "default") -> str:
     Uses Redis cache -> local PostgreSQL AIDecisionLedger / Redis store -> Pinecone fallback.
     """
     safe_tenant = str(tenant_id or "default")
-    query_hash = hashlib.md5(query.encode()).hexdigest()
+    query_hash = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
     cached_result = _get_cache(query_hash, tenant_id=safe_tenant)
     if cached_result:
         return cached_result

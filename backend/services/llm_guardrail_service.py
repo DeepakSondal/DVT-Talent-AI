@@ -4,11 +4,11 @@ Provides Token-Bucket rate limiting and Circuit Breaker fallback across LLM prov
 Prevents HTTP 429 Too Many Requests and runaway billing across agent swarms.
 """
 import time
-import asyncio
-from typing import Optional, Tuple, Dict, Any
 from enum import Enum
-import structlog
+from typing import Optional, Tuple
+
 import redis.asyncio as aioredis
+import structlog
 
 from config import settings
 
@@ -113,8 +113,8 @@ class LLMGuardrailService:
             r = await self._get_redis()
             await r.delete(f"circuit:{provider}:errors")
             await r.delete(f"circuit:{provider}:state")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("circuit_reset_skipped", error=str(exc), provider=provider)
 
     async def resolve_active_provider(self, primary_provider: str = "groq") -> str:
         """

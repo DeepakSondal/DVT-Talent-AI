@@ -2,29 +2,36 @@
 DVT Talent AI — Candidates API
 Full candidate lifecycle management with AI scoring
 """
-from typing import List, Optional
-from uuid import UUID
-from datetime import datetime, timezone
+import base64
 import csv
 import io
-import base64
 import uuid as _uuid
+from datetime import datetime
+from typing import List, Optional
+from uuid import UUID
+
 import structlog
-
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks, Request
-from fastapi.responses import StreamingResponse, FileResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr
-from datetime import datetime, timezone
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import Candidate, Resume, CandidateStatus, Tenant, UserRole, get_db
-from api.routes.auth import get_current_user, User
 from api.middleware.rate_limit import enforce_endpoint_rate_limit
-from services.security_service import log_audit_event
-from services.privacy_service import is_candidate_visible_to_recruiter, normalize_domain
+from api.routes.auth import User, get_current_user
+from db.models import Candidate, CandidateStatus, Resume, Tenant, UserRole, get_db
+from services.privacy_service import is_candidate_visible_to_recruiter
 from services.resume_parser import ResumeParserService
-from fastapi import status
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -111,8 +118,8 @@ async def list_candidates(
     # Base filter conditions
     base_filters = [
         Candidate.tenant_id == current_user.tenant_id,
-        Candidate.is_searchable != False,
-        Candidate.pii_erased != True,
+        Candidate.is_searchable.isnot(False),
+        Candidate.pii_erased.isnot(True),
     ]
 
     if search:
@@ -238,8 +245,8 @@ async def export_candidates(
     result = await db.execute(
         select(Candidate).where(
             Candidate.tenant_id == current_user.tenant_id,
-            Candidate.is_searchable != False,
-            Candidate.pii_erased != True,
+            Candidate.is_searchable.isnot(False),
+            Candidate.pii_erased.isnot(True),
         ).order_by(desc(Candidate.score))
     )
     candidates = result.scalars().all()
@@ -431,7 +438,7 @@ async def upload_resume(
 
     # 5. Mark older resumes as not current
     old_resumes = (await db.execute(
-        select(Resume).where(Resume.candidate_id == candidate_id, Resume.is_current == True)
+        select(Resume).where(Resume.candidate_id == candidate_id, Resume.is_current.is_(True))
     )).scalars().all()
     for r in old_resumes:
         r.is_current = False
@@ -520,7 +527,7 @@ async def download_candidate_resume(
 
     res = (await db.execute(
         select(Resume)
-        .where(Resume.candidate_id == candidate.id, Resume.is_current == True)
+        .where(Resume.candidate_id == candidate.id, Resume.is_current.is_(True))
         .order_by(desc(Resume.created_at))
     )).scalars().first()
 
@@ -578,7 +585,7 @@ async def get_candidate_resume_details(
 
     res = (await db.execute(
         select(Resume)
-        .where(Resume.candidate_id == candidate.id, Resume.is_current == True)
+        .where(Resume.candidate_id == candidate.id, Resume.is_current.is_(True))
         .order_by(desc(Resume.created_at))
     )).scalars().first()
 
@@ -719,7 +726,7 @@ async def intake_candidate_resume(
 
     # Deactivate existing resumes
     old_res = (await db.execute(
-        select(Resume).where(Resume.candidate_id == cand_id, Resume.is_current == True)
+        select(Resume).where(Resume.candidate_id == cand_id, Resume.is_current.is_(True))
     )).scalars().all()
     for r in old_res:
         r.is_current = False
@@ -827,7 +834,7 @@ async def analyze_resume_background(resume_id: str, content: bytes, filename: st
 
 async def score_candidate_background(candidate_id: str, job_id: Optional[str]):
     try:
-        from workers.tasks import score_candidate_task, safe_dispatch_task
+        from workers.tasks import safe_dispatch_task, score_candidate_task
         safe_dispatch_task(score_candidate_task, candidate_id, job_id)
     except Exception as e:
         import logging

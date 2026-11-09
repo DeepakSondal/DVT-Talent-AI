@@ -3,14 +3,16 @@ DVT Talent AI — Tenants API
 Manages enterprise client profiles, team members, and branding.
 """
 from datetime import datetime
-from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import List, Optional
-from db.models import get_db, Tenant, User
-from api.routes.auth import get_current_user, require_admin
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.routes.auth import get_current_user
+from db.models import Tenant, User, get_db
 
 router = APIRouter()
 

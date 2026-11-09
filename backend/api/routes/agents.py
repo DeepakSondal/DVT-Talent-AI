@@ -3,20 +3,20 @@ DVT Talent AI — Agents API
 Manual triggers for each autonomous agent
 """
 import uuid
-import json
-import redis.asyncio as redis
-from datetime import datetime
-from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
-from api.routes.auth import get_current_user, User
 from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_bypass_allowed
+from api.routes.auth import User, get_current_user
+from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
 from services.llm_guardrail_service import guardrail_service
 
 router = APIRouter()
+_BACKGROUND_SWARM_TASKS: set[Any] = set()
 
 
 async def _enforce_agent_rate_limit(request: Request, current_user: User) -> uuid.UUID:
@@ -143,7 +143,6 @@ async def run_swarm_pipeline(
     """Trigger the unified swarm pipeline via native background tasks (No Celery required)"""
     from agents.orchestrator import AgentOrchestrator
     from db.models import AsyncSessionLocal
-    from datetime import datetime, timezone
 
     agent_task = AgentTask(
         tenant_id=tenant_uuid,
@@ -178,7 +177,11 @@ async def run_swarm_pipeline(
                     t_row.status = AgentTaskStatus.COMPLETED
                 await session.commit()
 
-    from workers.tasks import is_celery_broker_available, run_full_autonomous_pipeline, safe_dispatch_task
+    from workers.tasks import (
+        is_celery_broker_available,
+        run_full_autonomous_pipeline,
+        safe_dispatch_task,
+    )
 
     if is_celery_broker_available():
         dispatched = safe_dispatch_task(
@@ -250,6 +253,8 @@ async def run_swarm_phase(
     
     import asyncio
     task = asyncio.create_task(orchestrator.run_swarm_phase(phase, mode=mode, **(params or {})))
+    _BACKGROUND_SWARM_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_SWARM_TASKS.discard)
 
     fast_candidates: List[Dict[str, Any]] = []
     if phase == "sourcing":
@@ -274,7 +279,7 @@ async def list_agent_tasks(
 ):
     """List recent agent task executions scoped strictly to the caller's tenant"""
     tenant_uuid = _require_agent_access(current_user)
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
     result = await db.execute(
         select(AgentTask)
         .where(AgentTask.tenant_id == tenant_uuid)
@@ -342,9 +347,10 @@ async def generate_screening_questions(
     if not req.job_description or not req.job_description.strip():
         raise HTTPException(status_code=400, detail="Job description cannot be empty.")
     
-    from agents.screening_pydantic import generate_screening_guide
     import httpx
+
     from agents.pydantic_config import AgentDeps
+    from agents.screening_pydantic import generate_screening_guide
     
     async with httpx.AsyncClient() as client:
         deps = AgentDeps(http_client=client, tenant_id=str(tenant_uuid))

@@ -3,8 +3,10 @@ DVT Talent AI — LiteLLM Universal Gateway & Resilient Fallback Router
 Provides multi-provider routing (Groq, OpenAI, Anthropic), automatic fallbacks,
 and token/cost observation to prevent provider quota exhaustion.
 """
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 import structlog
+
 from config import settings
 
 log = structlog.get_logger(__name__)

@@ -18,14 +18,14 @@ Collects:
 - CPU utilization
 - Database connection stability
 """
+import argparse
 import asyncio
+import json
+import statistics
 import time
+
 import httpx
 import psutil
-import statistics
-import json
-import sys
-import argparse
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 PASSWORD = "PerfPass123!"

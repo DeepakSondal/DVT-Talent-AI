@@ -6,10 +6,11 @@ Tests concurrent AI agent triggering and pipeline dispatch:
 - Measures dispatch response times, queue depth, error rates, and failure isolation
 """
 import asyncio
-import time
-import httpx
 import json
 import statistics
+import time
+
+import httpx
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 PASSWORD = "PerfPass123!"

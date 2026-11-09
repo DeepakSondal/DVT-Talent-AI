@@ -14,36 +14,37 @@ Tests all 13 remediated Rate-Limiting & Abuse-Prevention controls:
 11. WebSocket Max Concurrent Connections (5/user) and Frame Flooding Disconnect (1008)
 12. Telemetry Open/Click Write Debouncing (`/track/{id}/open`, `/track/{id}/click`)
 """
+import hashlib
+import hmac
 import os
 import sys
-import hmac
-import hashlib
 import uuid
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from starlette.requests import Request
+
+import pytest
 from fastapi import HTTPException, status
+from starlette.requests import Request
 
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-from config import settings
-from services.redis_service import (
-    record_rate_limit,
-    get_rate_limit_count,
-    reset_rate_limit,
-)
 from api.middleware.rate_limit import (
-    get_real_client_ip,
-    is_load_test_bypass_allowed,
+    RateLimitMiddleware,
     _extract_verified_user_id,
     enforce_endpoint_rate_limit,
-    RateLimitMiddleware,
+    get_real_client_ip,
+    is_load_test_bypass_allowed,
 )
 from api.routes.auth import create_access_token
 from api.routes.webhooks import _verify_webhook_hmac
-from api.routes.websocket import ConnectionManager, MAX_WS_CONNECTIONS_PER_USER
+from api.routes.websocket import ConnectionManager
+from config import settings
+from services.redis_service import (
+    get_rate_limit_count,
+    record_rate_limit,
+    reset_rate_limit,
+)
 
 
 def _make_dummy_request(
@@ -78,7 +79,7 @@ async def test_sliding_window_rate_limit_and_boundary_burst():
 
     # Simulate 5 hits at second 59 of window 100 (t = 6059.0)
     t_end_of_window = 6059.0
-    for i in range(limit):
+    for _i in range(limit):
         allowed, count = await record_rate_limit(key, limit=limit, window_seconds=window, now_override=t_end_of_window)
         assert allowed is True
 

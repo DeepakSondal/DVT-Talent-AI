@@ -2,12 +2,15 @@
 DVT Talent AI — Analytics API Unit Tests
 Tests dashboard KPIs, candidate funnel metrics, and email performance telemetry.
 """
-import pytest
 import uuid
-from httpx import AsyncClient, ASGITransport
-from main import app
-from db.models import Tenant, User, Candidate, CandidateStatus, Job, UserRole
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 from api.routes.auth import create_access_token
+from db.models import Candidate, CandidateStatus, Job, Tenant, User, UserRole
+from main import app
+
 
 @pytest.mark.asyncio
 async def test_analytics_dashboard_tenant_isolation(db_session):

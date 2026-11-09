@@ -3,17 +3,27 @@ DVT Talent AI — Master Pilot Seed
 Rebuilds the environment with an Admin, Tenant, and 5,000 demo credits.
 """
 import asyncio
-import uuid
-import sys
 import os
-import bcrypt
+import sys
+import uuid
 from datetime import datetime, timezone
+
+import bcrypt
 
 # Add backend root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from db.models import User, Tenant, UserRole, AsyncSessionLocal, CreditTransaction, CreditTransactionType
 from sqlalchemy import select
+
+from db.models import (
+    AsyncSessionLocal,
+    CreditTransaction,
+    CreditTransactionType,
+    Tenant,
+    User,
+    UserRole,
+)
+
 
 async def seed():
     print("🚀 Initiating Master Pilot Seed...")
@@ -45,7 +55,7 @@ async def seed():
             session.add(tenant)
             print(f"  ✅ Tenant Created: {tenant.name}")
         else:
-            print(f"  ℹ️ Tenant 'dvttalent.com' already exists. Skipping.")
+            print("  ℹ️ Tenant 'dvttalent.com' already exists. Skipping.")
             tenant_id = tenant.id
 
         # 2. Check if Admin User exists
@@ -71,7 +81,7 @@ async def seed():
             session.add(user)
             print(f"  ✅ Admin Created: {user.email} (Password: admin_password_123)")
         else:
-            print(f"  ℹ️ Admin 'admin@dvttalent.com' already exists. Skipping.")
+            print("  ℹ️ Admin 'admin@dvttalent.com' already exists. Skipping.")
 
         # 3. Ensure Credit Injection
         # Only inject if balance is low or new tenant

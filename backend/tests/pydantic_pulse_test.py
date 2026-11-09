@@ -3,9 +3,8 @@ DVT Talent AI — Pydantic AI Unified Pulse Test
 Verifies the complete AgentOrchestrator pipeline logic with the new Pydantic AI agents.
 """
 import asyncio
-import json
-import sys
 import os
+import sys
 from unittest.mock import AsyncMock, patch
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -16,10 +15,13 @@ if hasattr(sys.stderr, "reconfigure"):
 # Add the project root and backend to sys.path
 root_dir = os.getcwd()
 backend_dir = os.path.join(root_dir, 'backend')
-if root_dir not in sys.path: sys.path.append(root_dir)
-if backend_dir not in sys.path: sys.path.append(backend_dir)
+if root_dir not in sys.path:
+    sys.path.append(root_dir)
+if backend_dir not in sys.path:
+    sys.path.append(backend_dir)
 
 from agents.orchestrator import AgentOrchestrator
+
 
 async def run_pydantic_pulse_test():
     print("🚀 Initializing Pydantic AI Unified Pulse Test...")

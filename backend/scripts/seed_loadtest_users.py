@@ -2,10 +2,10 @@
 Seed 50 independent synthetic test accounts across 5 isolated tenants for 50-user concurrent load testing.
 """
 import os
-import sys
-import uuid
-import bcrypt
 import sqlite3
+import uuid
+
+import bcrypt
 
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 db_path = os.path.join(os.path.dirname(backend_dir), "dvt_talent.db")

@@ -67,6 +67,7 @@ export async function handlePaymentSucceeded(payload: {
     const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.NEXTAUTH_SECRET || "";
     await fetch(`${backendApiUrl}/billing/webhook-sync`, {
       method: "POST",
+      signal: AbortSignal.timeout(3000),
       headers: {
         "Content-Type": "application/json",
         "X-Internal-Secret": internalSecret,
@@ -122,6 +123,7 @@ export async function handleSubscriptionActive(payload: {
     const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.NEXTAUTH_SECRET || "";
     await fetch(`${backendApiUrl}/billing/webhook-sync`, {
       method: "POST",
+      signal: AbortSignal.timeout(3000),
       headers: {
         "Content-Type": "application/json",
         "X-Internal-Secret": internalSecret,

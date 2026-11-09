@@ -5,7 +5,8 @@ before transmitting raw candidate resumes or text to external LLM providers.
 Supports Microsoft Presidio when available with high-performance regex fallback.
 """
 import re
-from typing import Dict, Any, Tuple, List
+from typing import Any, Dict, List, Tuple
+
 import structlog
 
 log = structlog.get_logger(__name__)

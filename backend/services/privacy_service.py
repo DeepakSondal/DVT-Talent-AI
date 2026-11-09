@@ -2,16 +2,17 @@
 DVT Talent AI — Candidate Privacy & Employer Blacklist Service
 Enforces strict candidate privacy shields across all search, sourcing, and job-matching paths.
 """
+import json
 import os
 import re
-import json
 import uuid
+
 try:
     from filelock import FileLock
 except ImportError:
     import contextlib
     @contextlib.contextmanager
-    def FileLock(path, timeout=10):
+    def FileLock(path, timeout=10):  # noqa: N802
         try:
             import fcntl
             f = open(path, "a+")
@@ -23,18 +24,24 @@ except ImportError:
                 f.close()
         except Exception:
             yield
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional, Any, Dict
+from typing import Any, Dict, List, Optional
+
 import structlog
 from fastapi import HTTPException, status
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, update, or_, and_
 
 from config import settings
 from db.models import (
-    Candidate, Resume, JobCandidate, CandidateStatus,
-    AgentTask, AgentTaskStatus, User, UserRole
+    AgentTask,
+    AgentTaskStatus,
+    Candidate,
+    CandidateStatus,
+    JobCandidate,
+    Resume,
+    User,
 )
 from services.resume_parser import ResumeParserService
 
@@ -579,7 +586,7 @@ async def erase_candidate_personal_data(
 
         # Dispatch background retry worker automatically
         try:
-            from workers.tasks import safe_dispatch_task, process_pending_gdpr_cleanups_task
+            from workers.tasks import process_pending_gdpr_cleanups_task, safe_dispatch_task
             safe_dispatch_task(process_pending_gdpr_cleanups_task)
         except Exception as de:
             log.warning("celery_dispatch_failed", error_type=type(de).__name__, task_id=str(target_cleanup_task.id))
@@ -676,9 +683,9 @@ async def reconcile_post_restore_erasures(db: AsyncSession) -> Dict[str, Any]:
     lock = FileLock(str(ERASURE_TOMBSTONE_LOCK_PATH), timeout=10)
     erased_ids = set()
     with lock:
-        with open(ERASURE_TOMBSTONE_LEDGER_PATH, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
+        with open(ERASURE_TOMBSTONE_LEDGER_PATH, "r", encoding="utf-8") as f:  # noqa: ASYNC230
+            for raw_line in f:
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
@@ -686,7 +693,8 @@ async def reconcile_post_restore_erasures(db: AsyncSession) -> Dict[str, Any]:
                     cid = data.get("candidate_id")
                     if cid:
                         erased_ids.add(cid)
-                except Exception:
+                except Exception as exc:
+                    log.warning("erasure_tombstone_line_invalid", error=str(exc))
                     continue
 
     if not erased_ids:
@@ -981,8 +989,8 @@ async def sweep_and_process_gdpr_cleanups(db: AsyncSession) -> Dict[str, Any]:
                 )
                 await db.execute(revert_stmt)
                 await db.commit()
-            except Exception:
-                pass
+            except Exception as revert_exc:
+                log.warning("gdpr_cleanup_task_revert_failed", task_id=str(task.id), error=str(revert_exc))
             failed += 1
 
     return {"processed": len(candidate_tasks), "succeeded": succeeded, "failed": failed}
@@ -990,5 +998,6 @@ async def sweep_and_process_gdpr_cleanups(db: AsyncSession) -> Dict[str, Any]:
 
 if __name__ == "__main__":
     import sys
+
     from scripts.reconcile_post_restore import main_cli
     sys.exit(main_cli())

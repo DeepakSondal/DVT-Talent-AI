@@ -3,17 +3,20 @@ DVT Talent AI — Compliance & AI Governance API Routes
 Exposes policy pack status, adverse impact reports (EEOC 4/5ths Rule),
 and immutable AI Decision Ledger entries for human-in-the-loop auditability.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func
-from typing import List, Dict, Any, Optional
 import uuid
+from typing import Optional
 
-from db.models import get_db, AIDecisionLedger, Candidate, CandidateStatus, User
+import structlog
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.routes.auth import get_current_user
+from db.models import AIDecisionLedger, Candidate, CandidateStatus, User, get_db
 from services.compliance_service import compliance_service
 
+log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/compliance", tags=["Compliance & AI Governance"])
 
 class OverridePayload(BaseModel):
@@ -64,7 +67,7 @@ async def get_adverse_impact_report(
             )
             .where(
                 Candidate.tenant_id == current_user.tenant_id,
-                Candidate.pii_erased != True,
+                Candidate.pii_erased.isnot(True),
             )
             .group_by(Candidate.source)
         )
@@ -145,8 +148,8 @@ async def record_human_override(
 
     try:
         ledger_uuid = uuid.UUID(ledger_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid decision ledger ID")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid decision ledger ID") from exc
 
     stmt = select(AIDecisionLedger).where(
         AIDecisionLedger.id == ledger_uuid,
@@ -173,7 +176,7 @@ async def record_human_override(
                 resolved_reason,
                 tenant_id=str(current_user.tenant_id),
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("swarm_memory_override_sync_failed", error=str(exc), ledger_id=ledger_id)
 
     return {"status": "SUCCESS", "message": f"Human decision recorded as {resolved_action}"}

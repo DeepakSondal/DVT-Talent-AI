@@ -4,7 +4,9 @@ Verifies that RLS and Middleware correctly scope all data access.
 """
 import pytest
 from sqlalchemy import select, text
-from db.models import Company, Candidate, Tenant
+
+from db.models import Company, Tenant
+
 
 @pytest.mark.asyncio
 async def test_tenant_scoping_middleware(db_session):

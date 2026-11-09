@@ -2,13 +2,12 @@
 DVT Talent AI — Billing Test Suite (Dodo Payments)
 Tests credit deduction logic and Dodo Payments webhook authentication.
 """
-import pytest
 import uuid
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
-from httpx import AsyncClient, ASGITransport
-from fastapi import status
 
+import pytest
+from fastapi import status
+from httpx import ASGITransport, AsyncClient
 
 # ── Unit: Credit Deduction ────────────────────────────────────────────────────
 
@@ -42,7 +41,7 @@ async def test_deduct_credits_success():
 @pytest.mark.asyncio
 async def test_deduct_credits_insufficient():
     """InsufficientCreditsError is raised when balance is too low."""
-    from services.billing_service import deduct_credits, InsufficientCreditsError
+    from services.billing_service import InsufficientCreditsError, deduct_credits
 
     mock_tenant = MockTenant(credits=3)
 
@@ -91,9 +90,9 @@ async def test_webhook_sync_unauthorized():
 @pytest.mark.asyncio
 async def test_webhook_sync_authorized(monkeypatch):
     """Webhook sync endpoint processes event with valid X-Internal-Secret."""
-    from main import app
     from config import settings
     from db.models import get_db
+    from main import app
 
     monkeypatch.setattr(settings, "secret_key", "test_internal_secret")
 
@@ -131,9 +130,9 @@ async def test_webhook_sync_authorized(monkeypatch):
 @pytest.mark.asyncio
 async def test_webhook_sync_idempotency_skip(monkeypatch):
     """Webhook sync skips already processed payment IDs."""
-    from main import app
     from config import settings
-    from db.models import get_db, CreditTransaction
+    from db.models import CreditTransaction, get_db
+    from main import app
 
     monkeypatch.setattr(settings, "secret_key", "test_internal_secret")
 

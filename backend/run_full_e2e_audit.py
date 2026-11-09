@@ -12,12 +12,11 @@ Executes comprehensive end-to-end tests across all 8 platform workflows:
 """
 
 import asyncio
-import io
 import json
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+
 import httpx
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -27,9 +26,8 @@ if hasattr(sys.stdout, "reconfigure"):
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from db.vector_store import VectorStore
 from main import app
-from db.vector_store import VectorStore, vector_store
-from services.email_service import EmailService
 
 results = []
 

@@ -4,14 +4,17 @@ Handles PII encryption and structured audit logging.
 """
 import base64
 import hashlib
+
 from cryptography.fernet import Fernet
+
 try:
     from config import settings
-    from db.models import AuditLog, AsyncSessionLocal
+    from db.models import AsyncSessionLocal, AuditLog
 except ImportError:
     from config import settings
-    from db.models import AuditLog, AsyncSessionLocal
+    from db.models import AsyncSessionLocal, AuditLog
 import uuid
+
 import structlog
 
 log = structlog.get_logger()
@@ -25,12 +28,14 @@ CIPHER = Fernet(get_fernet_key(settings.secret_key)) if settings.secret_key else
 
 def encrypt_pii(text: str) -> str:
     """Encrypt sensitive data like emails and phone numbers"""
-    if not text or not CIPHER: return text
+    if not text or not CIPHER:
+        return text
     return CIPHER.encrypt(text.encode()).decode()
 
 def decrypt_pii(token: str) -> str:
     """Decrypt sensitive data for authorized users"""
-    if not token or not CIPHER: return token
+    if not token or not CIPHER:
+        return token
     try:
         return CIPHER.decrypt(token.encode()).decode()
     except Exception:

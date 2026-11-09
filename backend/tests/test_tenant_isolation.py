@@ -3,16 +3,19 @@ DVT Talent AI — Automated Multi-Tenant Security & Isolation CI Test
 Verifies strict database-level and application-level isolation between tenants.
 Asserts that queries executed under Tenant A scope NEVER return Tenant B records.
 """
+import asyncio
 import os
 import sys
-import pytest
 import uuid
-import asyncio
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from sqlalchemy import select, text
-from db.models import AsyncSessionLocal, Tenant, User, Job, Candidate, AIDecisionLedger
+from sqlalchemy import select
+
+from db.models import AsyncSessionLocal, Candidate, Tenant
+
 
 @pytest.mark.asyncio
 async def test_tenant_isolation_gate():

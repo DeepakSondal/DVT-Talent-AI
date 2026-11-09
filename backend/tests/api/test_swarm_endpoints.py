@@ -2,13 +2,15 @@
 DVT Talent AI — Swarm API Tests
 Verifies Hub, Monitoring, Swarm Trigger, and Webhook endpoints with multi-tenant authentication.
 """
-import pytest
 import uuid
-from httpx import AsyncClient, ASGITransport
-from unittest.mock import patch, AsyncMock
-from main import app
-from db.models import User, UserRole, get_db
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 from api.routes.auth import get_current_user
+from db.models import User, UserRole
+from main import app
 
 
 @pytest.fixture
@@ -74,8 +76,8 @@ async def test_swarm_trigger_endpoint(mock_recruiter):
     """Verify that an authenticated recruiter can trigger the DAG orchestration task."""
     app.dependency_overrides[get_current_user] = lambda: mock_recruiter
     try:
-        with patch("agents.orchestrator.AgentOrchestrator.run_full_swarm", new_callable=AsyncMock) as mock_swarm, \
-             patch("agents.orchestrator.AgentOrchestrator.run_full_pipeline", new_callable=AsyncMock) as mock_pipe:
+        with patch("agents.orchestrator.AgentOrchestrator.run_full_swarm", new_callable=AsyncMock), \
+             patch("agents.orchestrator.AgentOrchestrator.run_full_pipeline", new_callable=AsyncMock):
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 response = await client.get("/api/v1/agents/trigger-dag?industry=AI&location=SF")
                 assert response.status_code == 200

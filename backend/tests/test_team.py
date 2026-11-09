@@ -1,11 +1,11 @@
-import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 import uuid
 
-from main import app
-from db.models import User, UserRole, Team, TeamApiKeys, Tenant
+import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models import Team, TeamApiKeys, Tenant, User, UserRole
+
 
 @pytest.mark.asyncio
 async def test_create_manager_and_team(db_session: AsyncSession):
@@ -106,7 +106,7 @@ async def test_invite_recruiter_and_inherit_keys(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_team_api_keys_encryption(db_session: AsyncSession):
-    from services.security_service import encrypt_pii, decrypt_pii
+    from services.security_service import decrypt_pii, encrypt_pii
     
     tenant = Tenant(name="Sec Tenant")
     db_session.add(tenant)

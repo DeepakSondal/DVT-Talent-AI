@@ -8,10 +8,11 @@ Usage:
     # Or add to cron: */5 * * * * python -m api.alerts
 """
 import asyncio
-import httpx
-import structlog
 import os
 from datetime import datetime, timezone
+
+import httpx
+import structlog
 
 log = structlog.get_logger(__name__)
 
@@ -32,7 +33,7 @@ async def send_slack_alert(service: str, error: str):
         return
 
     payload = {
-        "text": f":red_circle: *DVT Talent AI — Health Alert*",
+        "text": ":red_circle: *DVT Talent AI — Health Alert*",
         "attachments": [
             {
                 "color": "#FF0000",
@@ -63,7 +64,7 @@ async def send_slack_recovery(service: str):
         return
 
     payload = {
-        "text": f":large_green_circle: *DVT Talent AI — Service Recovered*",
+        "text": ":large_green_circle: *DVT Talent AI — Service Recovered*",
         "attachments": [
             {
                 "color": "#36a64f",

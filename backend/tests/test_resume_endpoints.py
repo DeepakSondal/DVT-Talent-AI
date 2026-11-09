@@ -1,18 +1,19 @@
 import asyncio
 import io
-import docx
-from pypdf import PdfWriter
-import pytest
-
-from httpx import AsyncClient, ASGITransport
 import sys
 from pathlib import Path
+
+import docx
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from main import app
-from db.models import get_db, AsyncSessionLocal, Tenant, UserRole
-from api.routes.auth import get_current_user, User
 import uuid
+
+from api.routes.auth import User, get_current_user
+from db.models import AsyncSessionLocal, Tenant, UserRole
+from main import app
 
 # Mock auth user
 mock_user = User(

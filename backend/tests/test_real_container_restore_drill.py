@@ -16,11 +16,11 @@ Validates Remediation E in a real isolated containerized environment:
 8. Cleans up all disposable containers and volumes.
 """
 import os
-import sys
-import time
 import subprocess
-import pytest
+import time
 from pathlib import Path
+
+import pytest
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BASE_DIR.parent
@@ -175,13 +175,37 @@ volumes:
     # Teardown: prune disposable containers and volumes
     subprocess.run(
         ["docker", "compose", "-f", compose_file.as_posix(), "-p", "dvt_drill_isolated", "down", "-v"],
+        check=False,
         capture_output=True,
     )
 
 
 def is_docker_running():
     try:
-        proc = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
+        proc = subprocess.run(["docker", "info"], check=False, capture_output=True, timeout=5)
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
+_REQUIRED_DRILL_IMAGES = [
+    "dvt-talent-ai-fixed-api:latest",
+    "dvt-talent-ai-fixed-worker:latest",
+    "dvt-talent-ai-fixed-scheduler:latest",
+    "dvt-talent-ai-fixed-frontend:latest",
+]
+
+
+def has_drill_prerequisites():
+    if not is_docker_running():
+        return False
+    try:
+        proc = subprocess.run(
+            ["docker", "image", "inspect", *_REQUIRED_DRILL_IMAGES],
+            check=False,
+            capture_output=True,
+            timeout=5,
+        )
         return proc.returncode == 0
     except Exception:
         return False
@@ -192,11 +216,14 @@ def run_drill_cmd(cmd_list, env=None):
     if env:
         merged_env.update(env)
     merged_env["MSYS_NO_PATHCONV"] = "1"
-    proc = subprocess.run(cmd_list, capture_output=True, text=True, encoding="utf-8", errors="replace", env=merged_env)
+    proc = subprocess.run(cmd_list, check=False, capture_output=True, text=True, encoding="utf-8", errors="replace", env=merged_env)
     return proc.returncode, proc.stdout, proc.stderr
 
 
-@pytest.mark.skipif(not is_docker_running(), reason="Docker daemon is not running")
+@pytest.mark.skipif(
+    not has_drill_prerequisites(),
+    reason="Docker daemon or local dvt-talent-ai-fixed-* drill images not present",
+)
 @pytest.mark.asyncio
 async def test_genuine_container_disaster_recovery_drill(drill_env):
     compose = drill_env["compose"].as_posix()

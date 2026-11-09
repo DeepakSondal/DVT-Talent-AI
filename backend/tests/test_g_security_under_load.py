@@ -8,9 +8,9 @@ Verifies that high concurrency never weakens system security:
 5. Rate Limiting DoS Protection (429 Too Many Requests enforced on abuse)
 """
 import asyncio
-import time
-import httpx
 import json
+
+import httpx
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 PASSWORD = "PerfPass123!"
@@ -91,7 +91,7 @@ async def run_security_under_load_suite():
         # Check 3: RBAC (Non-admin recruiter attempt to access admin-only endpoint)
         print("\n3. Testing Role-Based Access Control (Recruiter -> Admin endpoint)...")
         # Recruiter user tries to access /monitoring/mediations (Admin only)
-        rbac_resp = await client.get(
+        await client.get(
             f"{BASE_URL}/monitoring/mediations",
             headers={"Authorization": f"Bearer {token_alpha}", "X-Load-Test-Bypass": "true"}
         )
@@ -112,7 +112,7 @@ async def run_security_under_load_suite():
 
         # Check 4: Token Revocation under load
         print("\n4. Testing Token Revocation & Immediate Invalidation...")
-        logout_resp = await client.post(
+        await client.post(
             f"{BASE_URL}/auth/logout",
             headers={"Authorization": f"Bearer {recruiter_token}", "X-Load-Test-Bypass": "true"}
         )

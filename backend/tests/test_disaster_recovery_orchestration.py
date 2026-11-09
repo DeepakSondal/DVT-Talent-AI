@@ -17,17 +17,17 @@ Verifies:
 14. Confirmation that every failure path leaves ingress blocked.
 15. Full recovery staging workflow orchestration.
 """
-import sys
-import os
-import io
 import gzip
-import tarfile
-import uuid
+import io
 import json
+import os
 import shutil
 import subprocess
+import sys
+import tarfile
+import uuid
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -35,14 +35,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from config import settings
-from db.models import Candidate, CandidateStatus, Tenant, AgentTask, AgentTaskStatus
-from services.privacy_service import (
-    ERASURE_TOMBSTONE_LEDGER_PATH,
-    record_erasure_tombstone,
-)
-from services.resume_parser import ResumeParserService
+from db.models import Candidate, CandidateStatus, Tenant
 from scripts.reconcile_post_restore import run_reconciliation
+from services.resume_parser import ResumeParserService
 
 GIT_BASH_PATHS = [
     r"C:\Program Files\Git\bin\bash.exe",
@@ -319,7 +314,8 @@ exit 0
     mock_docker.write_text(docker_script, encoding="utf-8")
 
     env = os.environ.copy()
-    env["PATH"] = f"{bin_dir.as_posix()}:{env.get('PATH', '')}"
+    path_entry = str(bin_dir) if os.name == "nt" else bin_dir.as_posix()
+    env["PATH"] = f"{path_entry}{os.pathsep}{env.get('PATH', '')}"
     env["NON_INTERACTIVE"] = "1"
     env["CONFIRM"] = "RESTORE"
 
@@ -329,6 +325,7 @@ exit 0
 
     proc = subprocess.run(
         args,
+        check=False,
         env=env,
         capture_output=True,
         text=True,
@@ -513,13 +510,13 @@ def test_16_application_quiescence_and_safe_start_ordering(tmp_path):
     code, out, err, calls = run_restore_script_with_mocks(tmp_path, db_backup, storage_backup, fail_on=None)
     assert code == 0
 
-    lines = [l.strip() for l in calls.splitlines() if l.strip()]
-    stop_idx = next(i for i, l in enumerate(lines) if "stop caddy frontend api worker scheduler" in l)
-    extract_idx = next(i for i, l in enumerate(lines) if "tar -xzf" in l)
-    db_idx = next(i for i, l in enumerate(lines) if "psql" in l and "single-transaction" in l)
-    reconcile_idx = next(i for i, l in enumerate(lines) if "reconcile_post_restore.py" in l)
-    start_api_idx = next(i for i, l in enumerate(lines) if "start api frontend worker scheduler" in l)
-    start_caddy_idx = next(i for i, l in enumerate(lines) if "start caddy" in l)
+    lines = [line.strip() for line in calls.splitlines() if line.strip()]
+    stop_idx = next(i for i, line in enumerate(lines) if "stop caddy frontend api worker scheduler" in line)
+    extract_idx = next(i for i, line in enumerate(lines) if "tar -xzf" in line)
+    db_idx = next(i for i, line in enumerate(lines) if "psql" in line and "single-transaction" in line)
+    reconcile_idx = next(i for i, line in enumerate(lines) if "reconcile_post_restore.py" in line)
+    start_api_idx = next(i for i, line in enumerate(lines) if "start api frontend worker scheduler" in line)
+    start_caddy_idx = next(i for i, line in enumerate(lines) if "start caddy" in line)
 
     # Assert ordering invariants
     assert stop_idx < extract_idx < db_idx < reconcile_idx < start_api_idx < start_caddy_idx
@@ -586,12 +583,14 @@ exit 0
     mock_docker.write_text(docker_script, encoding="utf-8")
 
     env = os.environ.copy()
-    env["PATH"] = f"{bin_dir.as_posix()}:{env.get('PATH', '')}"
+    path_entry = str(bin_dir) if os.name == "nt" else bin_dir.as_posix()
+    env["PATH"] = f"{path_entry}{os.pathsep}{env.get('PATH', '')}"
     env["BACKUP_DIR"] = backup_dir.as_posix()
     env["STORAGE_BACKUP_DIR"] = storage_dir.as_posix()
 
     proc = subprocess.run(
         [BASH_EXE, script_path.as_posix()],
+        check=False,
         env=env,
         capture_output=True,
         text=True,

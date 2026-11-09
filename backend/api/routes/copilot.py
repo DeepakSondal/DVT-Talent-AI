@@ -3,18 +3,18 @@ DVT Talent AI — Copilot Router
 API Endpoints supporting the Stateful "Human-in-the-Loop" architecture.
 """
 import uuid
-import structlog
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
-from api.routes.auth import get_current_user, User
-from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_bypass_allowed
-from services.llm_guardrail_service import guardrail_service
+import structlog
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from agents.orchestrator import AgentOrchestrator
-from workers.tasks import copilot_discovery_task, copilot_sourcing_task, copilot_outreach_task
+
+from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_bypass_allowed
+from api.routes.auth import User, get_current_user
+from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
+from services.llm_guardrail_service import guardrail_service
+from workers.tasks import copilot_discovery_task, copilot_outreach_task, copilot_sourcing_task
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/copilot", tags=["copilot"])
@@ -112,8 +112,8 @@ async def start_copilot_sourcing(
 
     try:
         task_uuid = uuid.UUID(req.task_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid Task ID")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid Task ID") from exc
         
     task = await db.get(AgentTask, task_uuid)
     if not task or task.tenant_id != tenant_uuid:
@@ -145,8 +145,8 @@ async def start_copilot_outreach(
 
     try:
         task_uuid = uuid.UUID(req.task_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid Task ID")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid Task ID") from exc
         
     task = await db.get(AgentTask, task_uuid)
     if not task or task.tenant_id != tenant_uuid:

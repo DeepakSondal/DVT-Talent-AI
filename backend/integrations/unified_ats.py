@@ -6,20 +6,23 @@ Provider-agnostic orchestration layer:
  - get_client()      → factory for provider clients
 """
 import uuid
-import structlog
-from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import (
-    Job, IntegrationConnection, ATSExportLog, AsyncSessionLocal,
-)
-from services.security_service import decrypt_pii, log_audit_event
-from integrations.greenhouse.client import GreenhouseClient
-from integrations.ceipal.client import CeipalClient
 from config import settings
+from db.models import (
+    AsyncSessionLocal,
+    ATSExportLog,
+    IntegrationConnection,
+    Job,
+)
+from integrations.ceipal.client import CeipalClient
+from integrations.greenhouse.client import GreenhouseClient
+from services.security_service import decrypt_pii, log_audit_event
 
 log = structlog.get_logger(__name__)
 
@@ -177,7 +180,7 @@ async def _get_connection(
         select(IntegrationConnection).where(
             IntegrationConnection.tenant_id == uuid.UUID(tenant_id),
             IntegrationConnection.provider == provider,
-            IntegrationConnection.is_active == True,
+            IntegrationConnection.is_active.is_(True),
         )
     )
     return result.scalar_one_or_none()
@@ -189,7 +192,7 @@ async def get_all_enabled_connections(tenant_id: str) -> List["IntegrationConnec
         result = await session.execute(
             select(IntegrationConnection).where(
                 IntegrationConnection.tenant_id == uuid.UUID(tenant_id),
-                IntegrationConnection.is_active == True,
+                IntegrationConnection.is_active.is_(True),
             )
         )
         return result.scalars().all()

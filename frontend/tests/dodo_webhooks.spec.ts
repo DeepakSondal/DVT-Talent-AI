@@ -172,4 +172,29 @@ test.describe('Dodo Payments Webhook Event Handlers', () => {
       if (originalSecret !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_SECRET = originalSecret;
     }
   });
+
+  test('test case 8: webhook POST validates Dodo key at request time without crashing production module load', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalKey = process.env.DODO_PAYMENTS_WEBHOOK_KEY;
+    const originalSecret = process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+    try {
+      delete process.env.DODO_PAYMENTS_WEBHOOK_KEY;
+      delete process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+      (process.env as any).NODE_ENV = "production";
+
+      const req = new NextRequest('http://localhost:3000/api/webhook', {
+        method: 'POST',
+        body: JSON.stringify({ type: "payment.succeeded", data: { payment_id: "evt_prod_check" } }),
+        headers: { "content-type": "application/json" },
+      });
+
+      await expect(POST(req)).rejects.toThrow(/must be configured in production/);
+    } finally {
+      (process.env as any).NODE_ENV = originalNodeEnv;
+      if (originalKey !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_KEY = originalKey;
+      else delete process.env.DODO_PAYMENTS_WEBHOOK_KEY;
+      if (originalSecret !== undefined) process.env.DODO_PAYMENTS_WEBHOOK_SECRET = originalSecret;
+      else delete process.env.DODO_PAYMENTS_WEBHOOK_SECRET;
+    }
+  });
 });

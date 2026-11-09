@@ -1,5 +1,4 @@
 import sys
-import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -7,6 +6,7 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 import uvicorn
+
 from main import app
 
 if __name__ == "__main__":

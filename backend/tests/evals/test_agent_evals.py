@@ -4,10 +4,11 @@ Evaluates PII anonymization, prompt injection defenses, FastEmbed vectors,
 and resilient LiteLLM gateway routing.
 """
 import pytest
+
+from db.vector_store import VectorStore
+from services.llm_gateway import llm_gateway
 from services.pii_service import pii_service
 from services.sanitizer_service import sanitizer_service
-from services.llm_gateway import llm_gateway
-from db.vector_store import VectorStore
 
 
 def test_pii_redaction_accuracy():

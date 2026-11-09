@@ -3,19 +3,14 @@ DVT Talent AI — Real-Time Monitoring API
 Replaces all hardcoded mock data with live Redis SCAN and Celery inspect data.
 """
 import json
-import structlog
-import redis.asyncio as aioredis
 
-from fastapi import APIRouter, Depends
-from typing import List, Dict, Any
+import structlog
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import settings
-from db.models import get_db, User, UserRole
 from api.routes.auth import get_current_user, require_admin
-from fastapi import HTTPException
-
-from services.redis_service import get_redis_client, is_redis_available
+from db.models import User, UserRole, get_db
+from services.redis_service import get_redis_client
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -158,6 +153,7 @@ async def get_audit_logs(
 ):
     """Fetch structured audit logs from the database, strictly scoped to the caller's tenant. Admin only."""
     from sqlalchemy import select
+
     from db.models import AuditLog
 
     if not current_user.tenant_id:

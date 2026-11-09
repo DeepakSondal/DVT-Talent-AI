@@ -8,28 +8,28 @@ Verifies:
 5. Idempotent reconciliation and pending cleanup task draining.
 """
 import sys
-import os
 import uuid
-import json
-import yaml
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import pytest
+import yaml
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+from sqlalchemy import select
+
 from config import settings
-from db.models import Candidate, CandidateStatus, Tenant, User, UserRole, AgentTask, AgentTaskStatus
+from db.models import AgentTask, AgentTaskStatus, Candidate, CandidateStatus, Tenant, User, UserRole
+from scripts.reconcile_post_restore import run_reconciliation
 from services.privacy_service import (
     ERASURE_TOMBSTONE_LEDGER_PATH,
     ERASURE_TOMBSTONE_LOCK_PATH,
     record_erasure_tombstone,
 )
-from services.resume_parser import ResumeParserService, get_upload_dir
-from scripts.reconcile_post_restore import run_reconciliation
-from sqlalchemy import select
+from services.resume_parser import ResumeParserService
 
 
 def test_storage_and_upload_paths_and_config():
@@ -208,7 +208,10 @@ async def test_crash_window_between_db_commit_and_tombstone_persistence(db_sessi
     (before record_erasure_tombstone executes), the in-transaction committed cleanup task
     preserves the erasure intent, and the recovery sweep successfully records the tombstone.
     """
-    from services.privacy_service import erase_candidate_personal_data, sweep_and_process_gdpr_cleanups
+    from services.privacy_service import (
+        erase_candidate_personal_data,
+        sweep_and_process_gdpr_cleanups,
+    )
 
     run_id = uuid.uuid4().hex[:8]
     tenant_id = uuid.uuid4()

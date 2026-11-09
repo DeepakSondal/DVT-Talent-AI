@@ -4,8 +4,10 @@ Abstract base class for all Applicant Tracking System (ATS) connectors.
 Enables 2-way sync with Greenhouse, Lever, Workday, etc.
 """
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List
+
 import httpx
+
 
 class BaseATS(ABC):
     def __init__(self, api_key: str, base_url: str, tenant_id: str):

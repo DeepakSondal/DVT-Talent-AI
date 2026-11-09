@@ -1,13 +1,17 @@
+import asyncio
 import json
 import time
-import asyncio
+from typing import Dict, List, Set
+
 import redis.asyncio as redis
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
-from typing import List, Dict, Set
+import structlog
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 from jose import JWTError, jwt
+
 from config import settings
 from services.redis_service import is_token_revoked
 
+log = structlog.get_logger(__name__)
 router = APIRouter()
 
 MAX_WS_CONNECTIONS_PER_USER = 5
@@ -61,8 +65,8 @@ class ConnectionManager:
                             tenant_id = channel.split(":", 1)[1] if ":" in channel else None
                             data = json.loads(message["data"])
                             await self.broadcast_to_tenant(data, tenant_id)
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log.debug("websocket_pubsub_message_ignored", error=str(exc))
             except asyncio.CancelledError:
                 break
             except Exception:

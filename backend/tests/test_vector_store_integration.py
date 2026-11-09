@@ -4,8 +4,11 @@ Tests actual connectivity and indexing with a live ChromaDB server.
 Enabled only via RUN_INTEGRATION_TESTS=1.
 """
 import os
+
 import pytest
-from db.vector_store import VectorStore, CHROMA_AVAILABLE
+
+from db.vector_store import CHROMA_AVAILABLE, VectorStore
+
 
 # Only run if explicitly enabled to allow CI/CD to skip
 @pytest.mark.skipif(

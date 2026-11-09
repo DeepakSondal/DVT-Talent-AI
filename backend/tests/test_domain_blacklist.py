@@ -8,12 +8,12 @@ Validates:
 - Inactive / stealth flag (is_searchable == False)
 - Invalid, missing, or empty email and domain parameters
 """
-import pytest
 from types import SimpleNamespace
+
 from services.privacy_service import (
-    normalize_domain,
-    is_domain_or_company_blocked,
     is_candidate_visible_to_recruiter,
+    is_domain_or_company_blocked,
+    normalize_domain,
 )
 
 

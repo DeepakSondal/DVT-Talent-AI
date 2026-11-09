@@ -1,19 +1,19 @@
-import time
-import json
-import uuid
 import asyncio
+import time
 from typing import Set
+
+import structlog
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+
 from db.models import AsyncSessionLocal, AuditLog
-import structlog
 
 log = structlog.get_logger(__name__)
 
 # Active background audit tasks registry for lifecycle management & clean test teardown
 _active_audit_tasks: Set[asyncio.Task] = set()
 
-async def drain_audit_log_tasks(timeout: float = 3.0) -> None:
+async def drain_audit_log_tasks(timeout: float = 3.0) -> None:  # noqa: ASYNC109
     """Drain in-flight audit log tasks before shutting down or ending an async test."""
     if not _active_audit_tasks:
         return

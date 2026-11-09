@@ -10,12 +10,14 @@ if __name__.startswith("backend.db."):
 elif __name__.startswith("db."):
     sys.modules["backend." + __name__] = sys.modules[__name__]
 
-import uuid
-import os
+import importlib.util
 import json
+import os
 import re
+import uuid
 from collections import Counter
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
 import structlog
 
 log = structlog.get_logger(__name__)
@@ -29,19 +31,11 @@ except ImportError:
     CHROMA_AVAILABLE = False
     ChromaSettings = object
 
-# Modern Embedding Engine: FastEmbed (ONNX, CPU-optimized)
-try:
-    from fastembed import TextEmbedding
-    FASTEMBED_AVAILABLE = True
-except ImportError:
-    FASTEMBED_AVAILABLE = False
+# Modern Embedding Engine: FastEmbed (ONNX, CPU-optimized) — probe without eager heavy import
+FASTEMBED_AVAILABLE = importlib.util.find_spec("fastembed") is not None
 
 # Fallback Embedding Engine
-try:
-    from sentence_transformers import SentenceTransformer  # pyrefly: ignore[missing-import]  # type: ignore
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
+SENTENCE_TRANSFORMERS_AVAILABLE = importlib.util.find_spec("sentence_transformers") is not None
 
 try:
     from backend.config import settings
@@ -147,15 +141,22 @@ class VectorStore:
             return self._model
         if FASTEMBED_AVAILABLE:
             try:
+                from fastembed import TextEmbedding  # noqa: PLC0415
+
                 self._model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
                 self._is_fastembed = True
                 return self._model
             except Exception as e:
                 log.warning("fastembed_init_fallback", error=str(e))
         if SENTENCE_TRANSFORMERS_AVAILABLE:
-            self._model = SentenceTransformer("all-MiniLM-L6-v2")
-            self._is_fastembed = False
-            return self._model
+            try:
+                from sentence_transformers import SentenceTransformer  # pyrefly: ignore[missing-import]  # type: ignore  # noqa: PLC0415
+
+                self._model = SentenceTransformer("all-MiniLM-L6-v2")
+                self._is_fastembed = False
+                return self._model
+            except Exception as e:
+                log.warning("sentence_transformers_init_failed", error=str(e))
         return None
 
     # ── 1. Batch & Single Embedding (Option 3) ──────────────────────────────
@@ -205,7 +206,7 @@ class VectorStore:
         """Calculate cosine similarity between two vector embeddings"""
         if not v1 or not v2 or len(v1) != len(v2):
             return 0.0
-        dot = sum(a * b for a, b in zip(v1, v2))
+        dot = sum(a * b for a, b in zip(v1, v2, strict=True))
         norm1 = sum(a * a for a in v1) ** 0.5
         norm2 = sum(b * b for b in v2) ** 0.5
         if not norm1 or not norm2:
@@ -286,7 +287,7 @@ class VectorStore:
                 for idx in missing_indices
             ]
             batch_vecs = self.embed_batch(missing_texts)
-            for idx, vec in zip(missing_indices, batch_vecs):
+            for idx, vec in zip(missing_indices, batch_vecs, strict=True):
                 pool_items[idx]["embedding"] = vec
 
         for cand in pool_items:
@@ -377,7 +378,7 @@ class VectorStore:
                 log.warning("chroma_batch_upsert_failed", error=str(e))
 
         # 2. Sync to local index
-        for item, emb in zip(items, embeddings):
+        for item, emb in zip(items, embeddings, strict=True):
             rid = str(item["id"])
             m = {k: str(v) for k, v in item.get("metadata", {}).items()}
             m["tenant_id"] = str(tenant_id)
@@ -499,7 +500,7 @@ class VectorStore:
         if missing_res_indices:
             texts_to_embed = [resumes[idx].raw_text for idx in missing_res_indices]
             computed_vecs = self.embed_batch(texts_to_embed)
-            for idx, vec in zip(missing_res_indices, computed_vecs):
+            for idx, vec in zip(missing_res_indices, computed_vecs, strict=True):
                 batch_embs[idx] = vec
                 resumes[idx].embedding = vec
 

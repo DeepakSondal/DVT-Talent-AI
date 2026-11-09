@@ -1,10 +1,11 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from httpx import AsyncClient, ASGITransport
-from starlette.middleware.sessions import SessionMiddleware
+from fastapi.responses import RedirectResponse
+from httpx import ASGITransport, AsyncClient
+
 from main import app
 
-from unittest.mock import patch, AsyncMock
-from fastapi.responses import RedirectResponse
 
 @pytest.mark.asyncio
 async def test_social_login_redirect():

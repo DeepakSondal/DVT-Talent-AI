@@ -10,25 +10,24 @@ Exit Codes:
     2: Storage/Ledger Error — tombstone ledger file is missing, unreadable, or volume unmounted.
     3: Database/Infrastructure Error — failed to connect to database or primary storage.
 """
-import sys
-import os
 import argparse
-import json
-import uuid
 import asyncio
+import json
+import sys
+import uuid
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 # Reconfigure standard output streams for UTF-8 compatibility
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 if hasattr(sys.stderr, "reconfigure"):
     try:
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
 # Ensure backend root is on sys.path
@@ -37,7 +36,7 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from config import settings
-from db.models import AsyncSessionLocal, Candidate, AgentTask, AgentTaskStatus
+from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal, Candidate
 from services.privacy_service import (
     ERASURE_TOMBSTONE_LEDGER_PATH,
     ERASURE_TOMBSTONE_LOCK_PATH,
@@ -45,12 +44,13 @@ from services.privacy_service import (
     sweep_and_process_gdpr_cleanups,
 )
 from services.resume_parser import ResumeParserService
+
 try:
     from filelock import FileLock
 except ImportError:
     import contextlib
     @contextlib.contextmanager
-    def FileLock(path, timeout=10):
+    def FileLock(path, timeout=10):  # noqa: N802
         try:
             import fcntl
             f = open(path, "a+")
@@ -62,8 +62,8 @@ except ImportError:
                 f.close()
         except Exception:
             yield
-from sqlalchemy import select, text
 import structlog
+from sqlalchemy import select, text
 
 log = structlog.get_logger(__name__)
 
@@ -126,8 +126,8 @@ async def run_reconciliation(
                 lock = FileLock(str(ERASURE_TOMBSTONE_LOCK_PATH), timeout=10)
                 with lock:
                     with open(ERASURE_TOMBSTONE_LEDGER_PATH, "r", encoding="utf-8") as f:
-                        for line_num, line in enumerate(f, start=1):
-                            line = line.strip()
+                        for line_num, raw_line in enumerate(f, start=1):
+                            line = raw_line.strip()
                             if not line:
                                 continue
                             try:
@@ -292,19 +292,18 @@ async def run_reconciliation(
             print(f"    - Pending cleanup tasks: {pending_tasks_count} tasks unresolved")
         print("\n[ALERT] DO NOT OPEN PUBLIC INGRESS (CADDY/PROXY) UNTIL ALL VIOLATIONS ARE RESOLVED.")
         return 1
+    elif ledger_status == "NO_TOMBSTONES_TO_VERIFY":
+        print("\n[STATUS: NO_TOMBSTONES_TO_VERIFY]")
+        print("    Zero tombstones were present to evaluate.")
+        print("    Historical erasure compliance is NOT proven. Ingress cutover permitted solely by explicit --allow-empty-ledger override.")
+        print("    Database connectivity and task queue are clean.")
+        return 0
     else:
-        if ledger_status == "NO_TOMBSTONES_TO_VERIFY":
-            print("\n[STATUS: NO_TOMBSTONES_TO_VERIFY]")
-            print("    Zero tombstones were present to evaluate.")
-            print("    Historical erasure compliance is NOT proven. Ingress cutover permitted solely by explicit --allow-empty-ledger override.")
-            print("    Database connectivity and task queue are clean.")
-            return 0
-        else:
-            print("\n[PASS] ZERO RESURRECTED PERSONAL DATA FOUND ACROSS ALL STORES.")
-            print(f"    All {len(tombstoned_ids)} tombstoned candidate(s) verified sanitized.")
-            print("    Database, filesystem, caches, and cleanup tasks are compliant.")
-            print("    Safe to reopen public ingress traffic.")
-            return 0
+        print("\n[PASS] ZERO RESURRECTED PERSONAL DATA FOUND ACROSS ALL STORES.")
+        print(f"    All {len(tombstoned_ids)} tombstoned candidate(s) verified sanitized.")
+        print("    Database, filesystem, caches, and cleanup tasks are compliant.")
+        print("    Safe to reopen public ingress traffic.")
+        return 0
 
 
 def main_cli() -> int:

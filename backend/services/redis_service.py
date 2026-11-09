@@ -3,15 +3,16 @@ DVT Talent AI — Resilient Redis & Caching Service
 Provides high-performance Redis client with socket-level circuit breaker,
 zero-latency fallback when Redis is offline, and resilient in-memory fallbacks.
 """
-import time
-import socket
 import asyncio
-import urllib.parse
-import os
 import hashlib
-from typing import Optional, Dict, Tuple
-import structlog
+import socket
+import time
+import urllib.parse
+from typing import Dict, Optional, Tuple
+
 import redis.asyncio as aioredis
+import structlog
+
 from config import settings
 
 log = structlog.get_logger(__name__)

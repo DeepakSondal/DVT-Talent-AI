@@ -1,14 +1,16 @@
-import json
 import hmac
 import ipaddress
-from typing import Optional, List
-from fastapi import Request, Response, HTTPException
+import json
+from typing import List, Optional
+
+import structlog
+from fastapi import HTTPException, Request, Response
+from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
-from jose import jwt, JWTError
+
 from config import settings
 from services.redis_service import record_rate_limit
-import structlog
 
 log = structlog.get_logger(__name__)
 
@@ -27,12 +29,12 @@ _PUBLIC_IP_ENFORCED_PREFIXES = (
 def _get_trusted_networks() -> List[ipaddress._BaseNetwork]:
     cidrs_str = getattr(settings, "trusted_proxy_cidrs", "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16")
     nets: List[ipaddress._BaseNetwork] = []
-    for raw in (cidrs_str or "").split(","):
-        raw = raw.strip()
-        if not raw:
+    for raw_cidr in (cidrs_str or "").split(","):
+        cidr = raw_cidr.strip()
+        if not cidr:
             continue
         try:
-            nets.append(ipaddress.ip_network(raw, strict=False))
+            nets.append(ipaddress.ip_network(cidr, strict=False))
         except ValueError:
             continue
     return nets

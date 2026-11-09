@@ -4,14 +4,21 @@ DVT Talent AI — Users API  (FIXED [H-01]: was 7-line stub)
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.models import User, UserRole, get_db
-from api.routes.auth import get_current_user, require_admin, hash_password, verify_password
+
 from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_bypass_allowed
-from services.redis_service import record_rate_limit, get_rate_limit_count, reset_rate_limit, revoke_token
+from api.routes.auth import get_current_user, hash_password, require_admin, verify_password
+from db.models import User, UserRole, get_db
+from services.redis_service import (
+    get_rate_limit_count,
+    record_rate_limit,
+    reset_rate_limit,
+    revoke_token,
+)
 
 router = APIRouter()
 

@@ -1,35 +1,34 @@
-import secrets
 import hashlib
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Dict, Any
+import secrets
 import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
 import structlog
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func, desc
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import desc, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.middleware.rate_limit import enforce_endpoint_rate_limit, get_real_client_ip
+from api.routes.auth import create_access_token, get_current_user, hash_password
+from config import settings
 from db.models import (
-    get_db,
-    User,
-    UserRole,
-    Team,
     Candidate,
-    EmailSent,
-    TeamApiKeys,
-    TeamInvitation,
-    InvitationStatus,
-    Tenant,
     CreditTransaction,
     CreditTransactionType,
+    InvitationStatus,
+    Team,
+    TeamApiKeys,
+    TeamInvitation,
+    Tenant,
+    User,
+    UserRole,
+    get_db,
 )
-from api.routes.auth import get_current_user, hash_password, create_access_token
-from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
-from services.security_service import encrypt_pii, decrypt_pii
 from services.email_service import email_service
-from config import settings
+from services.security_service import decrypt_pii, encrypt_pii
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/team", tags=["team"])
@@ -108,8 +107,8 @@ async def invite_recruiter(
     elif team_id:
         try:
             target_team_uuid = uuid.UUID(team_id)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid team_id format.")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid team_id format.") from exc
 
     target_role = (payload.role if payload else role) or UserRole.RECRUITER
 
@@ -472,7 +471,7 @@ async def accept_team_invitation(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Could not create user account. A user with this email may have registered simultaneously."
-        )
+        ) from exc
 
     # Database-level atomic conditional update:
     # Guarantees that ONLY ONE concurrent request can transition the invitation from PENDING to ACCEPTED
@@ -520,7 +519,7 @@ async def accept_team_invitation(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Could not finalize invitation acceptance."
-        )
+        ) from exc
 
     await db.refresh(new_user)
 
@@ -579,7 +578,7 @@ async def get_team_analytics(db: AsyncSession = Depends(get_db), manager: User =
     subq = select(User.id).where(User.manager_id == manager.id, User.tenant_id == manager.tenant_id)
     stmt = select(func.count(Candidate.id)).where(
         Candidate.tenant_id == manager.tenant_id,
-        Candidate.pii_erased != True,
+        Candidate.pii_erased.isnot(True),
         Candidate.recruiter_id.in_(subq),
     )
     res = await db.execute(stmt)
@@ -596,8 +595,8 @@ async def set_user_quota(user_id: str, limit: int, db: AsyncSession = Depends(ge
     """Set monthly credit limit for a recruiter within the manager's tenant."""
     try:
         target_uuid = uuid.UUID(user_id)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid user_id format")
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid user_id format") from exc
 
     target_user = (
         await db.execute(
@@ -615,15 +614,15 @@ async def get_team_candidates(recruiter_id: Optional[str] = None, db: AsyncSessi
     subq = select(User.id).where(User.manager_id == manager.id, User.tenant_id == manager.tenant_id)
     stmt = select(Candidate).where(
         Candidate.tenant_id == manager.tenant_id,
-        Candidate.pii_erased != True,
+        Candidate.pii_erased.isnot(True),
         Candidate.recruiter_id.in_(subq),
     )
     if recruiter_id:
         try:
             r_uuid = uuid.UUID(recruiter_id)
             stmt = stmt.where(Candidate.recruiter_id == r_uuid)
-        except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="Invalid recruiter_id format")
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid recruiter_id format") from exc
     result = await db.execute(stmt)
     cands = result.scalars().all()
     return {"candidates": [{"id": c.id, "name": f"{c.first_name} {c.last_name}"} for c in cands]}

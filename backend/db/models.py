@@ -9,20 +9,31 @@ if __name__.startswith("backend.db."):
 elif __name__.startswith("db."):
     sys.modules["backend." + __name__] = sys.modules[__name__]
 
+import atexit
+import enum
 import os
+import tempfile
 import uuid
-from datetime import datetime
-from typing import Optional
+from pathlib import Path
+
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, DateTime, Text,
-    ForeignKey, JSON, Enum, Index
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
     # FIX [M-02]: Removed unused BigInteger import
+    Integer,
+    String,
+    Text,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
-import enum
 
 try:
     from backend.config import settings
@@ -47,6 +58,32 @@ is_testing = "pytest" in sys.modules or os.environ.get("TESTING") == "true"
 is_sqlite = "sqlite" in db_url
 connect_args = {"timeout": 30} if is_sqlite else {}
 
+# NullPool closes each SQLite connection cleanly, which destroys :memory: databases between
+# test setup and request handling; isolate :memory: test runs onto a per-process temp file.
+engine_db_url = db_url
+sync_engine_db_url = settings.database_sync_url
+if is_testing and is_sqlite and db_url.rstrip("/").endswith(":memory:"):
+    scheme = db_url.split("://", 1)[0]
+    _test_sqlite_db_path = Path(tempfile.gettempdir()) / f"dvt_talent_test_{os.getpid()}.db"
+    for _suffix in ("", "-wal", "-shm"):
+        _stale = Path(f"{_test_sqlite_db_path}{_suffix}")
+        if _stale.exists():
+            _stale.unlink()
+    engine_db_url = f"{scheme}:///{_test_sqlite_db_path.as_posix()}"
+    if not sync_engine_db_url or sync_engine_db_url.rstrip("/").endswith(":memory:"):
+        sync_engine_db_url = f"sqlite:///{_test_sqlite_db_path.as_posix()}"
+
+    def _cleanup_test_sqlite_db(db_path: Path = _test_sqlite_db_path) -> None:
+        for _suffix in ("", "-wal", "-shm"):
+            _target = Path(f"{db_path}{_suffix}")
+            try:
+                if _target.exists():
+                    _target.unlink()
+            except OSError:
+                pass
+
+    atexit.register(_cleanup_test_sqlite_db)
+
 # Optimization: Disable verbose engine echo to eliminate console I/O bottleneck under concurrency
 db_echo = os.getenv("DB_ECHO", "false").lower() == "true"
 pool_size = max(settings.db_pool_size, 50)
@@ -54,14 +91,14 @@ max_overflow = max(settings.db_max_overflow, 25)
 
 if is_testing or is_sqlite:
     engine = create_async_engine(
-        db_url,
+        engine_db_url,
         echo=db_echo,
         poolclass=NullPool,
         connect_args=connect_args,
     )
 else:
     engine = create_async_engine(
-        db_url,
+        engine_db_url,
         echo=db_echo,
         pool_size=pool_size,
         max_overflow=max_overflow,
@@ -95,6 +132,7 @@ async def get_db():
 
 # ── Base ─────────────────────────────────────────────────────────────────────
 from sqlalchemy.types import TypeDecorator
+
 try:
     from pgvector.sqlalchemy import Vector as PgVector
     PGVECTOR_AVAILABLE = True

@@ -6,19 +6,24 @@ Validates the complete remediation of:
 3. dvt-sec-2026-003: Candidate Directory Bounded Database-Level Pagination & Privacy
 4. dvt-sec-2026-004: Enterprise SAML SSO Purged (Purged per optimization roadmap)
 """
-import uuid
 import hashlib
-from datetime import datetime, timezone, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
-from main import app
-from db.models import (
-    AsyncSessionLocal, Tenant, User, UserRole, Candidate,
-    CandidateStatus, TeamInvitation, InvitationStatus
-)
 from api.routes.auth import get_current_user
-
+from db.models import (
+    AsyncSessionLocal,
+    Candidate,
+    InvitationStatus,
+    TeamInvitation,
+    Tenant,
+    User,
+    UserRole,
+)
+from main import app
 
 # ─── 1. dvt-sec-2026-001: Autonomous Voice AI Removed ────────────────────────
 # Voice AI tools were completely purged per optimization roadmap.

@@ -8,11 +8,11 @@ Executes after load generation ceases:
 5. Runs comprehensive health check endpoint verification
 """
 import asyncio
-import time
-import httpx
-import psutil
 import json
 import sqlite3
+
+import httpx
+import psutil
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 HEALTH_URL = "http://127.0.0.1:8000/health"

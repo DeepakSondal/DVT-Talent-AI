@@ -1,7 +1,6 @@
 """
 DVT Talent AI — Worker Test Suite
 """
-import pytest
 
 def test_signal_monitor_scan_deduplication():
     """Verify signal deduplication logic"""

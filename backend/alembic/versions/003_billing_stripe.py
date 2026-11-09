@@ -6,9 +6,10 @@ and adds stripe columns to the tenants table.
 Revision ID: 003_billing_stripe
 Revises: 002_initial (adjust to your previous revision id)
 """
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers
 revision = '003_billing_stripe'

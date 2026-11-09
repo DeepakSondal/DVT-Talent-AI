@@ -5,15 +5,15 @@ Verifies the complete async agent orchestration pipeline logic:
 2. Autonomous pulse with optional AI Screening Guide generation.
 3. Fallback self-healing when sourcing yields below candidate threshold.
 """
-import pytest
-import asyncio
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
-from agents.orchestrator import AgentOrchestrator
+import pytest
+
 from agents.discovery_pydantic import DiscoveryResult, ExtractedJD, MarketIQ, TargetCompany
-from agents.sourcing_pydantic import SourcingSynthesis, CandidateNode
+from agents.orchestrator import AgentOrchestrator
 from agents.screening_pydantic import ScreeningPlan, ScreeningQuestion
+from agents.sourcing_pydantic import CandidateNode, SourcingSynthesis
 
 
 class MockPydanticResult:
@@ -186,7 +186,7 @@ async def test_pulse_self_healing_sourcing_fallback():
     mock_out = MockPydanticResult({"drafts": []})
     mock_anal = MockPydanticResult({"report": "Fallback recovery succeeded"})
 
-    with patch("agents.orchestrator.broadcast_signal") as mock_signal, \
+    with patch("agents.orchestrator.broadcast_signal"), \
          patch("agents.orchestrator.guardrail_service.check_rate_limit", new_callable=AsyncMock, return_value=(True, None)), \
          patch("agents.discovery_pydantic.discovery_agent.run", new_callable=AsyncMock, side_effect=[mock_disc_1, mock_disc_2]) as disc_runner, \
          patch("agents.sourcing_pydantic.sourcing_agent.run", new_callable=AsyncMock, side_effect=[mock_sourc_1, mock_sourc_2]) as sourc_runner, \

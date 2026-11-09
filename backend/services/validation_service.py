@@ -4,7 +4,8 @@ Performs email syntax verification, disposable email provider detection,
 and phone E.164 normalization before handoff to outreach or voice screening agents.
 """
 import re
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import structlog
 
 log = structlog.get_logger(__name__)

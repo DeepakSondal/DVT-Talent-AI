@@ -6,16 +6,16 @@ Verifies:
 3. Storage service fallback & security (GAP-05)
 4. LLM Guardrail token-bucket & circuit breaker (GAP-06)
 """
-import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone
+
+import pytest
 from sqlalchemy import select
 
-from db.models import Candidate, Tenant, User, UserRole, CandidateStatus
-from services.storage_service import LocalStorageDriver, get_storage_driver
-from services.llm_guardrail_service import LLMGuardrailService, CircuitState
 import agents.swarm_memory as sm
+from db.models import Candidate, CandidateStatus, Tenant, User, UserRole
+from services.llm_guardrail_service import CircuitState, LLMGuardrailService
+from services.storage_service import LocalStorageDriver
 
 
 @pytest.mark.asyncio
@@ -59,13 +59,13 @@ def test_swarm_memory_redis_caching():
     
     cache_store = {}
     mock_redis = MagicMock()
-    mock_redis.get.side_effect = lambda k: cache_store.get(k)
+    mock_redis.get.side_effect = cache_store.get
     mock_redis.setex.side_effect = lambda k, ttl, v: cache_store.update({k: v.encode("utf-8") if isinstance(v, str) else v})
 
     with patch.object(sm, "_get_redis", return_value=mock_redis):
         sm._set_cache(query, expected_result, ttl_seconds=60)
         import hashlib
-        h = hashlib.md5(query.encode()).hexdigest()
+        h = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
         cached = sm._get_cache(h)
         assert cached == expected_result
 
@@ -146,8 +146,8 @@ async def test_llm_guardrail_rate_limiting_and_circuit():
 async def test_auth_logout_and_revocation(db_session):
     """Verify logging out deletes auth cookies and writes token to Redis blocklist."""
     from fastapi import Request
-    from api.routes.auth import logout, create_access_token
-    from config import settings
+
+    from api.routes.auth import create_access_token, logout
 
     test_user = User(
         email=f"logout.tester.{uuid.uuid4().hex[:6]}@example.com",

@@ -5,8 +5,9 @@ Adds SMTP configuration fields to tenants table.
 Revision ID: 006_tenant_email_sender
 Revises: 005_gdpr_pii_erasure
 """
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = '006_tenant_email_sender'
 down_revision = '005_gdpr_pii_erasure'

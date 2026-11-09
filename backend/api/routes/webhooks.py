@@ -2,16 +2,18 @@
 DVT Talent AI — External Webhooks
 Handles inbound data from Monster, LinkedIn, and other job boards.
 """
-import uuid
-import hmac
 import hashlib
+import hmac
+import uuid
+
 import structlog
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.middleware.rate_limit import enforce_endpoint_rate_limit, get_real_client_ip
 from config import settings
-from db.models import Candidate, Job, CandidateStatus, get_db
+from db.models import Candidate, CandidateStatus, Job, get_db
 from services.email_service import EmailService
-from api.middleware.rate_limit import get_real_client_ip, enforce_endpoint_rate_limit
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -52,8 +54,8 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
 
     try:
         payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
     log.info("monster_webhook_received", payload=payload)
     
@@ -135,8 +137,8 @@ async def email_inbound_webhook(request: Request):
 
     try:
         payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
     log.info("incoming_email_webhook_received")
     

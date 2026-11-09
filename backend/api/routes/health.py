@@ -3,9 +3,11 @@ DVT Talent AI — Production Health Check Endpoints
 Provides deep health checks for all critical infrastructure components.
 """
 import time
+
 import structlog
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
+
 from api.routes.auth import require_admin
 from db.models import User
 
@@ -23,8 +25,9 @@ async def health_check():
 async def health_db():
     """Checks that a real PostgreSQL query can be executed."""
     try:
-        from db.models import engine
         from sqlalchemy import text
+
+        from db.models import engine
         async with engine.connect() as conn:
             result = await conn.execute(text("SELECT 1"))
             row = result.fetchone()
@@ -41,7 +44,7 @@ async def health_db():
 @router.get("/health/redis", tags=["Health"], summary="Redis connectivity check")
 async def health_redis():
     """Pings Redis and measures round-trip latency with circuit-breaker protection."""
-    from services.redis_service import is_redis_available, get_redis_client
+    from services.redis_service import get_redis_client, is_redis_available
     if not is_redis_available():
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -69,8 +72,9 @@ async def health_redis():
 async def health_llm(current_user: User = Depends(require_admin)):
     """Calls the configured LLM with a minimal prompt to verify API key works. Restricted to admins to prevent cost exhaustion."""
     try:
-        from config import settings
         from openai import AsyncOpenAI
+
+        from config import settings
         if not settings.primary_llm_api_key:
             return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                                 content={"status": "unhealthy", "service": "llm", "error": "No API key configured"})

@@ -12,20 +12,21 @@ Validates:
 9. A symlink pointing outside the upload directory is rejected where supported by the platform.
 """
 
+import csv
+import io
 import os
 import sys
 import uuid
-import csv
-import io
 from pathlib import Path
+
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from main import app
-from db.models import AsyncSessionLocal, Tenant, User, Candidate, CandidateStatus, Resume, UserRole
 from api.routes.auth import get_current_user
+from db.models import AsyncSessionLocal, Candidate, Tenant, User, UserRole
+from main import app
 from services.resume_parser import ResumeParserService
 
 

@@ -2,45 +2,55 @@
 DVT Talent AI — Authentication API
 JWT-based auth with secure HttpOnly cookies
 """
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-import uuid
-import secrets
 import asyncio
 import os
-import structlog
+import secrets
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Cookie
+import bcrypt
+import structlog
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-import bcrypt
 from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.middleware.rate_limit import (
+    enforce_endpoint_rate_limit,
+    get_real_client_ip,
+    is_load_test_bypass_allowed,
+)
 from config import settings
-from db.models import User, UserRole, Tenant, Candidate, CandidateStatus, CreditTransaction, CreditTransactionType, get_db
-from services.redis_service import (
-    is_token_revoked,
-    revoke_token,
-    record_rate_limit,
-    get_rate_limit_count,
-    reset_rate_limit,
-    store_email_otp,
-    verify_email_otp,
+from db.models import (
+    Candidate,
+    CandidateStatus,
+    CreditTransaction,
+    CreditTransactionType,
+    Tenant,
+    User,
+    UserRole,
+    get_db,
 )
 from services.email_service import email_service
-from api.middleware.rate_limit import (
-    get_real_client_ip,
-    enforce_endpoint_rate_limit,
-    is_load_test_bypass_allowed,
+from services.redis_service import (
+    get_rate_limit_count,
+    is_token_revoked,
+    record_rate_limit,
+    reset_rate_limit,
+    revoke_token,
+    store_email_otp,
+    verify_email_otp,
 )
 
 # Pre-computed dummy bcrypt hash to prevent timing-based user enumeration on login
 _DUMMY_BCRYPT_HASH = bcrypt.hashpw(b"dvt-timing-defense-placeholder", bcrypt.gensalt()).decode("utf-8")
 
 router = APIRouter()
+log = structlog.get_logger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
@@ -65,7 +75,7 @@ class UserLogin(BaseModel):
 
 class Token(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105
     user_id: str
     email: str
     full_name: str
@@ -151,13 +161,13 @@ async def get_current_user(
         user_obj_id: str = payload.get("sub")
         if user_obj_id is None or payload.get("type") != "access":
             raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+    except JWTError as exc:
+        raise credentials_exception from exc
 
     try:
         user_uuid = uuid.UUID(user_obj_id)
-    except ValueError:
-        raise credentials_exception
+    except ValueError as exc:
+        raise credentials_exception from exc
 
     result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
@@ -511,13 +521,13 @@ async def refresh_token_route(
         user_id_val: str = payload.get("sub")
         if not user_id_val or payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid refresh token")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    except JWTError as exc:
+        raise HTTPException(status_code=401, detail="Invalid refresh token") from exc
 
     try:
         user_uuid = uuid.UUID(user_id_val)
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail="Invalid token payload") from exc
 
     result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
@@ -530,8 +540,8 @@ async def refresh_token_route(
         remaining = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 86400
         if remaining > 0:
             await revoke_token(dvt_refresh_token, remaining)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("refresh_token_revoke_failed", error=str(exc))
 
     token_data = {
         "sub": str(user.id),
@@ -602,8 +612,8 @@ async def logout(
                 remaining = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 3600
                 if remaining > 0:
                     await revoke_token(tok, remaining)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("logout_token_revoke_failed", error=str(exc))
 
     response = JSONResponse(content={"message": "Logged out successfully"})
     response.delete_cookie(key="dvt_token", path="/", samesite="lax")

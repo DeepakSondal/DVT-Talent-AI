@@ -26,25 +26,25 @@ except ImportError:
     from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
 
 try:
-    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
-    from backend.agents.discovery_pydantic import discovery_agent
-    from backend.agents.sourcing_pydantic import sourcing_agent, prefetch_all_sourcing_signals
-    from backend.agents.outreach_pydantic import outreach_agent
     from backend.agents.analytics_pydantic import analytics_agent
-    from backend.agents.screening_pydantic import screening_agent
     from backend.agents.critic_pydantic import critic_agent
-    from backend.services.notification_service import notification_service
+    from backend.agents.discovery_pydantic import discovery_agent
+    from backend.agents.outreach_pydantic import outreach_agent
+    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
+    from backend.agents.screening_pydantic import screening_agent
+    from backend.agents.sourcing_pydantic import prefetch_all_sourcing_signals, sourcing_agent
     from backend.services.llm_guardrail_service import guardrail_service
+    from backend.services.notification_service import notification_service
 except ImportError:
-    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.discovery_pydantic import discovery_agent  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.sourcing_pydantic import sourcing_agent, prefetch_all_sourcing_signals  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.outreach_pydantic import outreach_agent  # pyrefly: ignore[missing-import]  # type: ignore
     from agents.analytics_pydantic import analytics_agent  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.screening_pydantic import screening_agent  # pyrefly: ignore[missing-import]  # type: ignore
     from agents.critic_pydantic import critic_agent  # pyrefly: ignore[missing-import]  # type: ignore
-    from services.notification_service import notification_service  # pyrefly: ignore[missing-import]  # type: ignore
+    from agents.discovery_pydantic import discovery_agent  # pyrefly: ignore[missing-import]  # type: ignore
+    from agents.outreach_pydantic import outreach_agent  # pyrefly: ignore[missing-import]  # type: ignore
+    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
+    from agents.screening_pydantic import screening_agent  # pyrefly: ignore[missing-import]  # type: ignore
+    from agents.sourcing_pydantic import prefetch_all_sourcing_signals, sourcing_agent  # pyrefly: ignore[missing-import]  # type: ignore
     from services.llm_guardrail_service import guardrail_service  # pyrefly: ignore[missing-import]  # type: ignore
+    from services.notification_service import notification_service  # pyrefly: ignore[missing-import]  # type: ignore
 
 
 log = structlog.get_logger(__name__)
@@ -110,7 +110,8 @@ def _trim_candidates_for_critic(candidates: List[Any]) -> List[Dict[str, Any]]:
 
 def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: Optional[str] = "default", payload: Any = None):
     """Bridges telemetry to Celery & WebSocket bus (fast-skips if Redis broker is offline)."""
-    from workers.tasks import broadcast_signal as relay, is_celery_broker_available
+    from workers.tasks import broadcast_signal as relay
+    from workers.tasks import is_celery_broker_available
     if not is_celery_broker_available():
         return
     relay(message, signal_type, tenant_id or "default", payload=payload)
@@ -161,6 +162,7 @@ class AgentOrchestrator:
 
         try:
             from sqlalchemy import select
+
             from db.models import AsyncSessionLocal, Team, TeamApiKeys
             from services.security_service import decrypt_pii
 
@@ -502,12 +504,18 @@ class AgentOrchestrator:
         dynamic_model = get_pydantic_model(deps=deps)
 
         context_parts = []
-        if job_title: context_parts.append(f"for {job_title}")
-        if industry: context_parts.append(f"in {industry} sector")
-        if location: context_parts.append(f"in {location}")
-        if work_mode: context_parts.append(f"({work_mode} mode)")
-        if target_company: context_parts.append(f"targeting company: {target_company}")
-        if skills: context_parts.append(f"requiring {skills}")
+        if job_title:
+            context_parts.append(f"for {job_title}")
+        if industry:
+            context_parts.append(f"in {industry} sector")
+        if location:
+            context_parts.append(f"in {location}")
+        if work_mode:
+            context_parts.append(f"({work_mode} mode)")
+        if target_company:
+            context_parts.append(f"targeting company: {target_company}")
+        if skills:
+            context_parts.append(f"requiring {skills}")
 
         full_context = " ".join(context_parts)
         broadcast_signal(f"Discovery Agent scanning {full_context}...", "agent_start", self.tenant_id)
@@ -679,8 +687,10 @@ class AgentOrchestrator:
 
         try:
             import hashlib
+
             from sqlalchemy import select
-            from db.models import AsyncSessionLocal, Candidate, CandidateStatus, AIDecisionLedger
+
+            from db.models import AIDecisionLedger, AsyncSessionLocal, Candidate, CandidateStatus
 
             job_uuid = None
             if self.job_id:
@@ -705,7 +715,7 @@ class AgentOrchestrator:
                     last_name = (parts[1] if len(parts) > 1 else "Profile")[:100]
                     email = c_dict.get("email")
                     if not email or "@" not in str(email):
-                        slug = hashlib.md5(f"{tenant_uuid}:{full_name}".encode()).hexdigest()[:8]
+                        slug = hashlib.md5(f"{tenant_uuid}:{full_name}".encode(), usedforsecurity=False).hexdigest()[:8]
                         email = f"{first_name.lower()}.{slug}@sourced.dvt-talent.io"
 
                     existing_res = await session.execute(
@@ -799,7 +809,15 @@ class AgentOrchestrator:
 
         try:
             from sqlalchemy import select
-            from db.models import AsyncSessionLocal, EmailCampaign, EmailSent, EmailStatus, User, Candidate
+
+            from db.models import (
+                AsyncSessionLocal,
+                Candidate,
+                EmailCampaign,
+                EmailSent,
+                EmailStatus,
+                User,
+            )
             from services.email_service import EmailService
 
             job_title = job.get("title") or job.get("role") or "Target Role"
@@ -895,7 +913,7 @@ class AgentOrchestrator:
         """Pulls the best human-readable role summary from discovery output."""
         raw_role = getattr(disc_data, "job_description", None)
         if not raw_role and hasattr(disc_data, "extracted_jd"):
-            jd = getattr(disc_data, "extracted_jd")
+            jd = disc_data.extracted_jd
             raw_role = getattr(jd, "title", None) or getattr(jd, "job_description", None)
         if not raw_role and isinstance(disc_data, dict):
             raw_role = disc_data.get("job_description") or (disc_data.get("extracted_jd") or {}).get("title")

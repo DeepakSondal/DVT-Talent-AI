@@ -2,20 +2,20 @@
 DVT Talent AI — ATS Integration API Routes
 Endpoints for connecting, syncing, and exporting to Greenhouse and Ceipal.
 """
-import uuid
-import structlog
-from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from pydantic import BaseModel, field_validator
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-
 import ipaddress
+from typing import Literal
 from urllib.parse import urlparse
-from db.models import get_db, User, UserRole, IntegrationConnection, ATSExportLog
+
+import structlog
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from pydantic import BaseModel, field_validator
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.routes.auth import get_current_user
-from services.security_service import encrypt_pii, decrypt_pii
-from integrations.unified_ats import sync_jobs, export_candidate, get_ats_client, SUPPORTED_PROVIDERS
+from db.models import ATSExportLog, IntegrationConnection, User, UserRole, get_db
+from integrations.unified_ats import SUPPORTED_PROVIDERS, export_candidate, sync_jobs
+from services.security_service import encrypt_pii
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -87,9 +87,9 @@ async def connect_integration(
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
     # Test connection before saving
-    from integrations.greenhouse.client import GreenhouseClient
-    from integrations.ceipal.client import CeipalClient
     from config import settings
+    from integrations.ceipal.client import CeipalClient
+    from integrations.greenhouse.client import GreenhouseClient
 
     validated_base_url = None
     if provider == "greenhouse":

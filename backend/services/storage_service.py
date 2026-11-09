@@ -5,12 +5,11 @@ and S3-compatible Object Storage (AWS S3, MinIO, Cloudflare R2 in production).
 """
 import os
 import re
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
-from abc import ABC, abstractmethod
-import structlog
 
-from config import settings
+import structlog
 
 logger = structlog.get_logger(__name__)
 

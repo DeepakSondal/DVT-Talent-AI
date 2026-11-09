@@ -4,12 +4,12 @@ Validates the entire stack (DB, Redis, API Keys, External Handshakes)
 before deployment or pilot launch.
 """
 
+import asyncio
 import os
 import sys
-import asyncio
-import httpx
 from typing import List, Tuple
-from dotenv import load_dotenv
+
+import httpx
 
 # Add the backend directory to sys.path to import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -72,7 +72,7 @@ class PreflightCheck:
                     json={"model": settings.anthropic_model, "max_tokens": 1, "messages": [{"role": "user", "content": "hi"}]},
                     timeout=10
                 )
-                if resp.status_code == 200 or resp.status_code == 400: # 400 is sometimes returned for "invalid request" but key is valid
+                if resp.status_code in {200, 400}:  # 400 is sometimes returned for "invalid request" but key is valid
                     self.log_result("Anthropic API", True, "Handshake successful.")
                 else:
                     self.log_result("Anthropic API", False, f"Invalid Key (HTTP {resp.status_code})")
