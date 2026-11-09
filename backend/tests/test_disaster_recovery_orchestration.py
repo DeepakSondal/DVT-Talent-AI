@@ -311,7 +311,10 @@ fi
 
 exit 0
 """
-    mock_docker.write_text(docker_script, encoding="utf-8")
+    mock_docker.write_text(docker_script, encoding="utf-8", newline="\n")
+    mock_docker.chmod(0o755)
+    if os.name == "posix":
+        assert os.access(mock_docker, os.X_OK), "Mock docker shim must be executable on POSIX"
 
     env = os.environ.copy()
     path_entry = str(bin_dir) if os.name == "nt" else bin_dir.as_posix()
@@ -327,6 +330,7 @@ exit 0
         args,
         check=False,
         env=env,
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -404,6 +408,7 @@ def test_10_restore_script_storage_extraction_failure_leaves_ingress_blocked(tmp
 
     code, out, err, calls = run_restore_script_with_mocks(tmp_path, db_backup, valid_storage, fail_on="docker_tar")
     assert code != 0
+    assert "tar -xzf" in calls
     assert "PUBLIC INGRESS REMAINS BLOCKED" in out or "PUBLIC INGRESS REMAINS BLOCKED" in err
     assert "start caddy" not in calls
 
@@ -417,6 +422,7 @@ def test_11_restore_script_database_restore_failure_leaves_ingress_blocked(tmp_p
 
     code, out, err, calls = run_restore_script_with_mocks(tmp_path, db_backup, fail_on="docker_psql")
     assert code != 0
+    assert "psql" in calls
     assert "PUBLIC INGRESS REMAINS BLOCKED" in out or "PUBLIC INGRESS REMAINS BLOCKED" in err
     assert "start caddy" not in calls
 
@@ -430,6 +436,7 @@ def test_12_restore_script_reconciliation_failure_leaves_ingress_blocked(tmp_pat
 
     code, out, err, calls = run_restore_script_with_mocks(tmp_path, db_backup, fail_on="reconcile")
     assert code != 0
+    assert "reconcile_post_restore.py" in calls
     assert "PUBLIC INGRESS REMAINS BLOCKED" in out or "PUBLIC INGRESS REMAINS BLOCKED" in err
     assert "start caddy" not in calls
 
@@ -443,6 +450,7 @@ def test_13_restore_script_health_check_failure_leaves_ingress_blocked(tmp_path)
 
     code, out, err, calls = run_restore_script_with_mocks(tmp_path, db_backup, fail_on="health")
     assert code != 0
+    assert "curl" in calls
     assert "PUBLIC INGRESS REMAINS BLOCKED" in out or "PUBLIC INGRESS REMAINS BLOCKED" in err
     assert "start caddy" not in calls
 
@@ -459,6 +467,7 @@ def test_14_confirmation_that_every_failure_path_leaves_ingress_blocked(tmp_path
 
     code, out, err, calls = run_restore_script_with_mocks(tmp_path, db_backup, storage_backup, fail_on=failure_stage)
     assert code != 0
+    assert "stop caddy" in calls
     assert "start caddy" not in calls, f"CRITICAL SECURITY DEFECT: start caddy was executed on {failure_stage} failure!"
 
 
@@ -580,7 +589,10 @@ fi
 
 exit 0
 """
-    mock_docker.write_text(docker_script, encoding="utf-8")
+    mock_docker.write_text(docker_script, encoding="utf-8", newline="\n")
+    mock_docker.chmod(0o755)
+    if os.name == "posix":
+        assert os.access(mock_docker, os.X_OK), "Mock docker shim must be executable on POSIX"
 
     env = os.environ.copy()
     path_entry = str(bin_dir) if os.name == "nt" else bin_dir.as_posix()
@@ -592,6 +604,7 @@ exit 0
         [BASH_EXE, script_path.as_posix()],
         check=False,
         env=env,
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         encoding="utf-8",

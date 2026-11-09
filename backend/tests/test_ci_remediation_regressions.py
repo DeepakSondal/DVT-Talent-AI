@@ -1,6 +1,7 @@
 """Regression unit tests covering CI, SQLite NullPool, auth OTP logging, billing URL, and VectorStore fixes."""
 
 import importlib.metadata
+import os
 import time
 import tomllib
 import uuid
@@ -146,3 +147,32 @@ def test_deterministic_facet_extraction_section_parity_and_speed():
         {"skills": "Next.js, FastAPI, psql, ci/cd"},
     )
     assert {"Next.js", "FastAPI", "PostgreSQL", "CI/CD"}.issubset(set(section_skills))
+
+
+def test_dr_mock_docker_shims_are_executable_and_invoked(tmp_path):
+    """Verify DR scripts use LF endings and mock docker shims are executable with PATH precedence on POSIX."""
+    from tests.test_disaster_recovery_orchestration import (
+        BASH_EXE,
+        create_valid_dummy_sql_gz,
+        run_restore_script_with_mocks,
+    )
+
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    for script_name in ("restore_db.sh", "backup_db.sh"):
+        raw = (repo_root / "scripts" / script_name).read_bytes()
+        assert b"\r\n" not in raw, f"scripts/{script_name} must use LF line endings for Linux CI"
+
+    if not BASH_EXE:
+        pytest.skip("Bash executable not found on host.")
+
+    db_backup = tmp_path / "dummy.sql.gz"
+    create_valid_dummy_sql_gz(db_backup)
+    code, _, err, calls = run_restore_script_with_mocks(tmp_path, db_backup, fail_on=None)
+    assert code == 0, f"DR restore script failed with mock docker: {err}"
+    assert "stop caddy" in calls
+
+    mock_docker = tmp_path / "mock_bin" / "docker"
+    assert mock_docker.is_file()
+    assert b"\r\n" not in mock_docker.read_bytes()
+    if os.name == "posix":
+        assert os.access(mock_docker, os.X_OK)
