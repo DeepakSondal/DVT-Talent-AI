@@ -4,8 +4,10 @@ Provides high-performance Redis client with socket-level circuit breaker,
 zero-latency fallback when Redis is offline, and resilient in-memory fallbacks.
 """
 import asyncio
+import contextlib
 import hashlib
 import socket
+import threading
 import time
 import urllib.parse
 from typing import Dict, Optional, Tuple
@@ -30,6 +32,30 @@ _in_memory_ratelimit: Dict[str, Tuple[int, int, int]] = {}  # key -> (curr_bucke
 _ratelimit_lock = asyncio.Lock()
 
 
+def _probe_tcp_reachable(host: str, port: int, timeout: float) -> bool:
+    """Verify TCP reachability within a strict wall-clock deadline covering DNS lookup."""
+    bounded_timeout = max(0.005, float(timeout))
+    result = False
+    done = threading.Event()
+
+    def _connect() -> None:
+        nonlocal result
+        sock = None
+        try:
+            sock = socket.create_connection((host, port), timeout=bounded_timeout)
+            result = True
+        except OSError:
+            result = False
+        finally:
+            if sock is not None:
+                with contextlib.suppress(OSError):
+                    sock.close()
+            done.set()
+
+    threading.Thread(target=_connect, daemon=True, name="redis-tcp-probe").start()
+    return done.wait(timeout=bounded_timeout) and result
+
+
 def is_redis_available(timeout: float = 0.05) -> bool:
     """
     Fast check with circuit breaker caching.
@@ -50,16 +76,13 @@ def is_redis_available(timeout: float = 0.05) -> bool:
         parsed = urllib.parse.urlparse(settings.redis_url)
         host = parsed.hostname or "127.0.0.1"
         port = parsed.port or 6379
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(timeout)
-        s.connect((host, port))
-        s.close()
-        _circuit_state["available"] = True
-        _circuit_state["last_checked"] = now
-        return True
+        reachable = _probe_tcp_reachable(host, port, timeout)
+        _circuit_state["available"] = reachable
+        _circuit_state["last_checked"] = time.time()
+        return reachable
     except Exception:
         _circuit_state["available"] = False
-        _circuit_state["last_checked"] = now
+        _circuit_state["last_checked"] = time.time()
         return False
 
 

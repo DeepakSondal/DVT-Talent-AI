@@ -31,6 +31,29 @@ def get_upload_dir() -> Path:
 UPLOAD_DIR = get_upload_dir()
 
 
+def _compile_skill_matchers(
+    catalog: Tuple[str, ...],
+    synonyms: Dict[str, str],
+) -> Tuple[Tuple[re.Pattern[str], str], ...]:
+    seen: Dict[str, Tuple[re.Pattern[str], str]] = {}
+    for skill in catalog:
+        key = skill.lower()
+        canonical = synonyms.get(key, skill)
+        if key not in seen:
+            seen[key] = (
+                re.compile(rf"(?<![a-zA-Z0-9]){re.escape(key)}(?![a-zA-Z0-9])"),
+                canonical,
+            )
+    for alias, canonical in synonyms.items():
+        key = alias.lower()
+        if key not in seen:
+            seen[key] = (
+                re.compile(rf"(?<![a-zA-Z0-9]){re.escape(key)}(?![a-zA-Z0-9])"),
+                canonical,
+            )
+    return tuple(seen.values())
+
+
 class ResumeParserService:
     """Enterprise multi-format resume parsing and document extraction service."""
 
@@ -469,44 +492,60 @@ class ResumeParserService:
         "Kafka": "apache-kafka",
     }
 
+    _SKILL_CATALOG: Tuple[str, ...] = (
+        # Languages
+        "Python", "JavaScript", "TypeScript", "Go", "Golang", "Rust", "Java", "C++", "C#",
+        "Ruby", "PHP", "Swift", "Kotlin", "Scala", "SQL", "HTML", "CSS", "Bash", "Shell",
+        # Frameworks & Libraries
+        "React", "Next.js", "Vue", "Angular", "Node.js", "Express", "FastAPI", "Django",
+        "Flask", "Spring Boot", "ASP.NET", "GraphQL", "Tailwind CSS", "Redux", "PyTorch",
+        "TensorFlow", "Pandas", "NumPy", "Scikit-Learn", "LangChain", "LlamaIndex",
+        # Cloud & DevOps
+        "AWS", "GCP", "Google Cloud", "Azure", "Docker", "Kubernetes", "Terraform",
+        "CI/CD", "GitHub Actions", "Jenkins", "GitLab CI", "Ansible", "Linux", "eBPF",
+        # Databases & Queues
+        "PostgreSQL", "Postgres", "MySQL", "MongoDB", "Redis", "Kafka", "Elasticsearch",
+        "DynamoDB", "Cassandra", "Snowflake", "SQLite", "RabbitMQ",
+        # Architecture & AI
+        "Microservices", "Distributed Systems", "REST API", "gRPC", "System Design",
+        "LLMs", "RAG", "Agentic AI", "Vector Databases", "ChromaDB", "Pinecone", "Milvus",
+        "Prompt Engineering", "Agile", "Scrum", "TDD", "WebAssembly", "LLVM",
+    )
+
+    _SKILL_MATCHERS: Tuple[Tuple[re.Pattern[str], str], ...] = _compile_skill_matchers(
+        _SKILL_CATALOG,
+        _SKILL_SYNONYMS,
+    )
+
+    _SENIORITY_PATTERNS: Tuple[Tuple[re.Pattern[str], str, int], ...] = (
+        (re.compile(r"\b(principal|staff|distinguished|architect|vp|director|head)\b"), "Principal/Staff", 8),
+        (re.compile(r"\b(senior|sr\.?|lead|team lead)\b"), "Senior", 5),
+        (re.compile(r"\b(junior|jr\.?|entry|intern|associate|graduate)\b"), "Junior", 1),
+    )
+
+    _WORK_MODE_PATTERNS: Tuple[Tuple[re.Pattern[str], str], ...] = (
+        (re.compile(r"\b(remote|distributed|wfh|work from home|anywhere)\b"), "Remote"),
+        (re.compile(r"\b(hybrid)\b"), "Hybrid"),
+        (re.compile(r"\b(onsite|on-site|in-office|office)\b"), "Onsite"),
+    )
+
     @classmethod
     def _extract_skills(cls, text: str, sections: Dict[str, str]) -> List[str]:
         """Extract multi-domain technical and functional skills from resume text using deterministic taxonomy."""
-        skill_catalog = [
-            # Languages
-            "Python", "JavaScript", "TypeScript", "Go", "Golang", "Rust", "Java", "C++", "C#",
-            "Ruby", "PHP", "Swift", "Kotlin", "Scala", "SQL", "HTML", "CSS", "Bash", "Shell",
-            # Frameworks & Libraries
-            "React", "Next.js", "Vue", "Angular", "Node.js", "Express", "FastAPI", "Django",
-            "Flask", "Spring Boot", "ASP.NET", "GraphQL", "Tailwind CSS", "Redux", "PyTorch",
-            "TensorFlow", "Pandas", "NumPy", "Scikit-Learn", "LangChain", "LlamaIndex",
-            # Cloud & DevOps
-            "AWS", "GCP", "Google Cloud", "Azure", "Docker", "Kubernetes", "Terraform",
-            "CI/CD", "GitHub Actions", "Jenkins", "GitLab CI", "Ansible", "Linux", "eBPF",
-            # Databases & Queues
-            "PostgreSQL", "Postgres", "MySQL", "MongoDB", "Redis", "Kafka", "Elasticsearch",
-            "DynamoDB", "Cassandra", "Snowflake", "SQLite", "RabbitMQ",
-            # Architecture & AI
-            "Microservices", "Distributed Systems", "REST API", "gRPC", "System Design",
-            "LLMs", "RAG", "Agentic AI", "Vector Databases", "ChromaDB", "Pinecone", "Milvus",
-            "Prompt Engineering", "Agile", "Scrum", "TDD", "WebAssembly", "LLVM"
-        ]
-
         found_skills = set()
         text_lower = (text or "").lower()
         skills_sec = sections.get("skills", "").lower()
 
-        for skill in skill_catalog:
-            pattern = rf"(?<![a-zA-Z0-9]){re.escape(skill.lower())}(?![a-zA-Z0-9])"
-            if re.search(pattern, skills_sec) or re.search(pattern, text_lower):
-                found_skills.add(cls._SKILL_SYNONYMS.get(skill.lower(), skill))
+        if skills_sec:
+            for pattern, canonical in cls._SKILL_MATCHERS:
+                if pattern.search(skills_sec) or pattern.search(text_lower):
+                    found_skills.add(canonical)
+        else:
+            for pattern, canonical in cls._SKILL_MATCHERS:
+                if pattern.search(text_lower):
+                    found_skills.add(canonical)
 
-        for alias, canonical in cls._SKILL_SYNONYMS.items():
-            pattern = rf"(?<![a-zA-Z0-9]){re.escape(alias)}(?![a-zA-Z0-9])"
-            if re.search(pattern, skills_sec) or re.search(pattern, text_lower):
-                found_skills.add(canonical)
-
-        return sorted(list(found_skills))
+        return sorted(found_skills)
 
     @classmethod
     def extract_deterministic_facets(cls, text: str) -> Dict[str, Any]:
@@ -519,28 +558,20 @@ class ResumeParserService:
         skills = cls._extract_skills(raw, {})
 
         # Seniority detection
-        if re.search(r"\b(principal|staff|distinguished|architect|vp|director|head)\b", lower):
-            seniority = "Principal/Staff"
-            min_years = 8
-        elif re.search(r"\b(senior|sr\.?|lead|team lead)\b", lower):
-            seniority = "Senior"
-            min_years = 5
-        elif re.search(r"\b(junior|jr\.?|entry|intern|associate|graduate)\b", lower):
-            seniority = "Junior"
-            min_years = 1
-        else:
-            seniority = "Mid-Level"
-            min_years = 3
+        seniority = "Mid-Level"
+        min_years = 3
+        for pattern, label, years in cls._SENIORITY_PATTERNS:
+            if pattern.search(lower):
+                seniority = label
+                min_years = years
+                break
 
         # Work mode detection
-        if re.search(r"\b(remote|distributed|wfh|work from home|anywhere)\b", lower):
-            work_mode = "Remote"
-        elif re.search(r"\b(hybrid)\b", lower):
-            work_mode = "Hybrid"
-        elif re.search(r"\b(onsite|on-site|in-office|office)\b", lower):
-            work_mode = "Onsite"
-        else:
-            work_mode = "Remote"
+        work_mode = "Remote"
+        for pattern, mode in cls._WORK_MODE_PATTERNS:
+            if pattern.search(lower):
+                work_mode = mode
+                break
 
         primary_language = None
         for lang in cls._PRIMARY_LANGUAGES:

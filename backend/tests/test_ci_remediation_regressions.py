@@ -1,15 +1,23 @@
 """Regression unit tests covering CI, SQLite NullPool, auth OTP logging, billing URL, and VectorStore fixes."""
 
+import importlib.metadata
+import time
+import tomllib
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import greenlet
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.routes.billing import _resolve_safe_return_url
 from db.models import AsyncSessionLocal, Tenant
 from db.vector_store import VectorStore
+from services import redis_service
+from services.resume_parser import ResumeParserService
 
 
 @pytest.mark.asyncio
@@ -73,3 +81,68 @@ def test_billing_safe_return_url_allows_frontend_origin_and_blocks_external():
     with pytest.raises(HTTPException) as exc_info:
         _resolve_safe_return_url("https://evil.example.com/phish", "/billing")
     assert exc_info.value.status_code == 400
+
+
+def test_ci_requirements_and_pyproject_declare_sqlalchemy_asyncio():
+    """Verify CI/Docker requirements and pyproject explicitly pull greenlet via sqlalchemy[asyncio]."""
+    backend_root = Path(__file__).resolve().parent.parent
+    req_lines = [
+        line.strip().lower()
+        for line in (backend_root / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    assert any(line.startswith("sqlalchemy[asyncio]") or line.startswith("greenlet") for line in req_lines)
+
+    pyproject = tomllib.loads((backend_root / "pyproject.toml").read_text(encoding="utf-8"))
+    deps = [dep.lower() for dep in pyproject["project"]["dependencies"]]
+    assert any(dep.startswith("sqlalchemy[asyncio]") or dep.startswith("greenlet") for dep in deps)
+
+    assert importlib.metadata.version("greenlet")
+    assert hasattr(greenlet, "greenlet")
+    assert AsyncSession is not None
+
+
+def test_redis_circuit_breaker_respects_timeout_under_slow_dns():
+    """Verify is_redis_available enforces its wall-clock deadline even when DNS lookup stalls."""
+    prev_state = dict(redis_service._circuit_state)
+    redis_service._circuit_state["available"] = None
+    redis_service._circuit_state["last_checked"] = 0.0
+
+    def slow_connect(*args, **kwargs):
+        time.sleep(0.5)
+        raise OSError("Simulated DNS timeout")
+
+    try:
+        with (
+            patch.object(redis_service.settings, "redis_url", "redis://redis:6379/0"),
+            patch("services.redis_service.socket.create_connection", side_effect=slow_connect),
+        ):
+            t0 = time.perf_counter()
+            available = redis_service.is_redis_available(timeout=0.05)
+            elapsed = time.perf_counter() - t0
+
+        assert available is False
+        assert elapsed < 0.1, f"Circuit breaker exceeded 100ms budget during DNS stall: {elapsed:.3f}s"
+        assert redis_service._circuit_state["available"] is False
+    finally:
+        redis_service._circuit_state.clear()
+        redis_service._circuit_state.update(prev_state)
+
+
+def test_deterministic_facet_extraction_section_parity_and_speed():
+    """Verify precompiled facet matchers preserve section extraction and stay well below the 20ms SLA."""
+    query = "Senior Staff golang developer with k8s, tailwind css, and postgres remote"
+    t0 = time.perf_counter()
+    facets = ResumeParserService.extract_deterministic_facets(query)
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    assert elapsed_ms < 20.0, f"Facet extraction too slow: {elapsed_ms:.2f}ms"
+    assert {"Go", "Kubernetes", "PostgreSQL", "Tailwind CSS", "CSS"}.issubset(set(facets["skills"]))
+    assert facets["seniority"] == "Principal/Staff"
+    assert facets["work_mode"] == "Remote"
+
+    section_skills = ResumeParserService._extract_skills(
+        "General summary",
+        {"skills": "Next.js, FastAPI, psql, ci/cd"},
+    )
+    assert {"Next.js", "FastAPI", "PostgreSQL", "CI/CD"}.issubset(set(section_skills))
