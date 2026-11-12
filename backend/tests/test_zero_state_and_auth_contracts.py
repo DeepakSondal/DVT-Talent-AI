@@ -210,45 +210,173 @@ async def test_registration_email_otp_contract():
 
 
 @pytest.mark.asyncio
-async def test_registration_otp_explicit_dev_bypass_and_attempt_cap(monkeypatch):
-    """Verify dev_code is exposed ONLY with explicit allow_dev_otp_bypass=True, '123456' is still rejected, and 5 failures lock OTP."""
+async def test_verify_email_otp_rejects_123456_when_dev_mode_false(monkeypatch):
+    """Verify '123456' is rejected via verify_email_otp and /auth/register when dev_mode is False."""
+    from config import settings
+    from services.redis_service import store_email_otp, verify_email_otp
+
+    monkeypatch.setattr(settings, "allow_dev_otp_bypass", False)
+    assert settings.dev_mode is False
+
+    email = f"otp_no_dev_{uuid.uuid4().hex[:8]}@example.com"
+    assert await verify_email_otp(email, "123456") is False
+
+    await store_email_otp(email, "739104", ttl_seconds=600)
+    assert await verify_email_otp(email, "123456") is False
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.post("/api/v1/auth/register", json={
+            "email": email,
+            "password": "SecurePassword123!",
+            "full_name": "Recruiter FailClosed",
+            "role": "recruiter",
+            "company_name": "FailClosed Org",
+            "otp": "123456",
+        })
+        assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_verify_email_otp_rejects_123456_when_dev_mode_true(monkeypatch):
+    """Verify '123456' is still rejected even when dev_mode is explicitly enabled."""
     from config import settings
     from services.redis_service import store_email_otp, verify_email_otp
 
     monkeypatch.setattr(settings, "is_production", False)
     monkeypatch.setattr(settings, "allow_dev_otp_bypass", True)
+    assert settings.dev_mode is True
 
-    unique_email = f"otp_dev_{uuid.uuid4().hex[:8]}@example.com"
+    email = f"otp_dev_reject_{uuid.uuid4().hex[:8]}@example.com"
+    await store_email_otp(email, "849201", ttl_seconds=600)
+    assert await verify_email_otp(email, "123456") is False
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        otp_req = await client.post("/api/v1/auth/register/send-otp", json={"email": unique_email})
+        res = await client.post("/api/v1/auth/register", json={
+            "email": email,
+            "password": "SecurePassword123!",
+            "full_name": "Dev Recruiter",
+            "role": "recruiter",
+            "company_name": "Dev Test Agency",
+            "otp": "123456",
+        })
+        assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_dev_code_none_when_is_production_true(monkeypatch):
+    """Verify send-otp omits dev_code (None) whenever is_production=True."""
+    from config import settings
+
+    monkeypatch.setattr(settings, "is_production", True)
+    assert settings.dev_mode is False
+
+    email = f"otp_prod_{uuid.uuid4().hex[:8]}@example.com"
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        otp_req = await client.post("/api/v1/auth/register/send-otp", json={"email": email})
         assert otp_req.status_code == 200
-        dev_code = otp_req.json().get("dev_code")
+        assert otp_req.json().get("dev_code") is None
+
+
+@pytest.mark.asyncio
+async def test_dev_code_none_when_app_env_unset(monkeypatch):
+    """Verify fresh Settings with APP_ENV unset defaults to fail-closed production and send-otp returns dev_code=None."""
+    from api.routes import auth as auth_route
+    from config import Settings
+
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("IS_PRODUCTION", raising=False)
+    monkeypatch.delenv("ALLOW_DEV_OTP_BYPASS", raising=False)
+
+    unset_settings = Settings(_env_file=None)
+    assert unset_settings.is_production is True
+    assert unset_settings.dev_mode is False
+
+    monkeypatch.setattr(auth_route, "settings", unset_settings)
+    email = f"otp_unset_{uuid.uuid4().hex[:8]}@example.com"
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        otp_req = await client.post("/api/v1/auth/register/send-otp", json={"email": email})
+        assert otp_req.status_code == 200
+        assert otp_req.json().get("dev_code") is None
+
+
+@pytest.mark.asyncio
+async def test_dev_code_present_only_when_dev_mode_true(monkeypatch):
+    """Verify dev_code is returned ONLY when is_production=False AND allow_dev_otp_bypass=True."""
+    from config import settings
+
+    monkeypatch.setattr(settings, "is_production", False)
+    monkeypatch.setattr(settings, "allow_dev_otp_bypass", False)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        off_res = await client.post(
+            "/api/v1/auth/register/send-otp",
+            json={"email": f"otp_off_{uuid.uuid4().hex[:8]}@example.com"},
+        )
+        assert off_res.status_code == 200
+        assert off_res.json().get("dev_code") is None
+
+        monkeypatch.setattr(settings, "allow_dev_otp_bypass", True)
+        assert settings.dev_mode is True
+        on_res = await client.post(
+            "/api/v1/auth/register/send-otp",
+            json={"email": f"otp_on_{uuid.uuid4().hex[:8]}@example.com"},
+        )
+        assert on_res.status_code == 200
+        dev_code = on_res.json().get("dev_code")
         assert dev_code is not None and len(dev_code) == 6
 
-        # Even in explicit dev bypass mode, universal "123456" bypass must be rejected (unless randomly generated)
-        if dev_code != "123456":
-            bypass_res = await client.post("/api/v1/auth/register", json={
-                "email": unique_email,
-                "password": "SecurePassword123!",
-                "full_name": "Dev Recruiter",
-                "role": "recruiter",
-                "company_name": "Dev Test Agency",
-                "otp": "123456",
-            })
-            assert bypass_res.status_code == 400
 
-    # Per-OTP attempt cap (5 wrong attempts invalidate the OTP even for the real code)
+@pytest.mark.asyncio
+async def test_otp_locked_after_five_failed_attempts():
+    """Verify 5 failed OTP verification attempts invalidate the stored OTP even for the real code, and expired OTPs fail."""
+    from services.redis_service import store_email_otp, verify_email_otp
+
     capped_email = f"otp_cap_{uuid.uuid4().hex[:8]}@example.com"
     await store_email_otp(capped_email, "739104", ttl_seconds=600)
     for attempt in range(5):
         assert await verify_email_otp(capped_email, f"00000{attempt}") is False
+    # 6th attempt with the real code must fail because OTP was invalidated at attempt #5
     assert await verify_email_otp(capped_email, "739104") is False
 
-    # Expired OTP must be rejected
+    # Expired OTP must also be rejected
     expired_email = f"otp_exp_{uuid.uuid4().hex[:8]}@example.com"
     await store_email_otp(expired_email, "842109", ttl_seconds=-1)
     assert await verify_email_otp(expired_email, "842109") is False
+
+
+@pytest.mark.asyncio
+async def test_otp_request_rate_limited_per_email():
+    """Verify /auth/register/send-otp enforces 5 requests per 10 minutes per email."""
+    target_email = f"otp_rl_email_{uuid.uuid4().hex[:8]}@example.com"
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        for _ in range(5):
+            res = await client.post("/api/v1/auth/register/send-otp", json={"email": target_email})
+            assert res.status_code == 200
+        blocked = await client.post("/api/v1/auth/register/send-otp", json={"email": target_email})
+        assert blocked.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_otp_request_rate_limited_per_ip():
+    """Verify /auth/register/send-otp enforces per-IP rate limiting across distinct emails."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        for idx in range(20):
+            res = await client.post(
+                "/api/v1/auth/register/send-otp",
+                json={"email": f"otp_rl_ip_{idx}_{uuid.uuid4().hex[:6]}@example.com"},
+            )
+            assert res.status_code == 200
+        blocked = await client.post(
+            "/api/v1/auth/register/send-otp",
+            json={"email": f"otp_rl_ip_21_{uuid.uuid4().hex[:6]}@example.com"},
+        )
+        assert blocked.status_code == 429
 
 
 def test_settings_production_otp_bypass_startup_assertion(monkeypatch):
