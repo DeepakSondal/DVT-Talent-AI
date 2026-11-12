@@ -393,3 +393,53 @@ async def verify_email_otp(email: str, otp: str) -> bool:
             _in_memory_otp_attempts[clean_email] = new_attempts
 
     return False
+
+
+# ── Single-use OAuth Link Confirmation Nonces ─────────────────────────────────
+_in_memory_oauth_links: Dict[str, Tuple[str, float]] = {}  # nonce -> (payload_json, expires_at)
+_oauth_link_lock = asyncio.Lock()
+
+
+async def store_oauth_link_nonce(nonce: str, payload_json: str, ttl_seconds: int = 900) -> None:
+    """Store a single-use OAuth account-linking nonce with short TTL (default 15 minutes)."""
+    now = time.time()
+    expires_at = now + ttl_seconds
+    async with _oauth_link_lock:
+        _in_memory_oauth_links[nonce] = (payload_json, expires_at)
+
+    client = get_redis_client()
+    if client:
+        try:
+            await client.setex(f"oauth_link:{nonce}", ttl_seconds, payload_json)
+        except Exception:
+            _circuit_state["available"] = False
+            _circuit_state["last_checked"] = now
+
+
+async def consume_oauth_link_nonce(nonce: str) -> Optional[str]:
+    """Atomically retrieve and delete a single-use OAuth linking nonce, or return None."""
+    now = time.time()
+    client = get_redis_client()
+    if client:
+        try:
+            key = f"oauth_link:{nonce}"
+            pipe = client.pipeline()
+            pipe.get(key)
+            pipe.delete(key)
+            payload, _ = await pipe.execute()
+            if payload is not None:
+                async with _oauth_link_lock:
+                    _in_memory_oauth_links.pop(nonce, None)
+                return str(payload)
+        except Exception:
+            _circuit_state["available"] = False
+            _circuit_state["last_checked"] = now
+
+    async with _oauth_link_lock:
+        entry = _in_memory_oauth_links.pop(nonce, None)
+        if not entry:
+            return None
+        payload_json, expires_at = entry
+        if now > expires_at:
+            return None
+        return payload_json

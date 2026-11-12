@@ -28,6 +28,7 @@ async def test_social_callback_creates_user_with_tenant():
     mock_token = {
         "userinfo": {
             "email": "social_new_user_test@example.com",
+            "email_verified": True,
             "name": "Social User",
             "sub": "google-12345"
         }

@@ -98,12 +98,15 @@ class UserOut(BaseModel):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
-async def verify_password(plain: str, hashed: str) -> bool:
-    if not plain or not hashed or not hashed.startswith(("$2a$", "$2b$", "$2y$")):
+async def verify_password(plain: str, hashed: Optional[str]) -> bool:
+    if not plain or not hashed or not isinstance(hashed, str):
+        return False
+    if not hashed.startswith(("$2a$", "$2b$", "$2y$")):
         return False
     try:
-        return await asyncio.to_thread(bcrypt.checkpw, plain.encode('utf-8'), hashed.encode('utf-8'))
-    except ValueError:
+        return await asyncio.to_thread(bcrypt.checkpw, plain.encode("utf-8"), hashed.encode("utf-8"))
+    except (ValueError, TypeError) as exc:
+        log.error("password_verification_error", error=str(exc))
         return False
 
 
@@ -446,8 +449,8 @@ async def login(
     result = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     user = result.scalar_one_or_none()
 
-    if not user:
-        # Constant-time dummy bcrypt check to prevent user enumeration via timing
+    if not user or not user.hashed_password:
+        # Constant-time dummy bcrypt check to prevent user/OAuth-only enumeration via timing
         await verify_password(form_data.password or "", _DUMMY_BCRYPT_HASH)
         password_ok = False
     else:

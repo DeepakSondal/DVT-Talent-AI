@@ -345,7 +345,7 @@ class User(Base, TimestampMixin):
     team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", use_alter=True, name="fk_users_team_id"), nullable=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     full_name = Column(String(255), nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=True)
     role = Column(Enum(UserRole), default=UserRole.RECRUITER, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)

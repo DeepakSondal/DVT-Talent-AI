@@ -10,30 +10,98 @@ Regression test suite for full-codebase bug scan remediations:
 import base64
 import hashlib
 import hmac
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from agents.pydantic_config import _hash_key_id
 from agents.sourcing_pydantic import fast_hybrid_candidate_search
-from api.routes.auth import verify_password
+from api.routes.auth import hash_password, verify_password
+from api.routes.auth_social import _select_verified_primary_email
 from api.routes.billing import _verify_dodo_webhook_signature
-from db.models import CandidateStatus, EmailStatus, UserRole
+from db.models import AsyncSessionLocal, CandidateStatus, EmailStatus, User, UserRole
 from services.redis_service import store_email_otp, verify_email_otp
 
 
 @pytest.mark.asyncio
 async def test_otp_universal_bypass_removed_and_oauth_sentinel_password_safe():
-    """Verify '123456' is no longer accepted when Redis has no matching OTP, and OAuth password sentinel returns False instead of 500."""
+    """Verify '123456' is no longer accepted when Redis has no matching OTP, and non-bcrypt hashes fail safely."""
     with patch("services.redis_service.get_redis_client", return_value=None):
         assert await verify_email_otp("victim@example.com", "123456") is False
         await store_email_otp("victim@example.com", "654321", ttl_seconds=60)
         assert await verify_email_otp("victim@example.com", "123456") is False
         assert await verify_email_otp("victim@example.com", "654321") is True
 
-    # Non-bcrypt OAuth sentinel must return False cleanly instead of raising ValueError: Invalid salt
-    assert await verify_password("any_password", "oauth_managed_no_password") is False
+    assert await verify_password("any_password", "non_bcrypt_legacy_value") is False
     assert await verify_password("any_password", "") is False
+    assert await verify_password("any_password", None) is False
+
+
+@pytest.mark.asyncio
+async def test_verify_password_none_and_garbage_return_false():
+    """NULL, empty, non-bcrypt garbage, and corrupt bcrypt hashes must return False without raising."""
+    assert await verify_password("Secret123!", None) is False
+    assert await verify_password("Secret123!", "") is False
+    assert await verify_password("Secret123!", "garbage") is False
+    assert await verify_password("Secret123!", "$2b$12$corrupt_short_hash") is False
+    assert await verify_password("", "$2b$12$corrupt_short_hash") is False
+
+
+def test_select_verified_primary_email():
+    """Verify strict verified+primary email selection per OAuth provider."""
+    # GitHub: requires verified=True AND primary=True
+    assert _select_verified_primary_email(
+        "github",
+        {"email": "fallback@example.com"},
+        emails=[
+            {"email": "secondary@example.com", "verified": True, "primary": False},
+            {"email": "unverified@example.com", "verified": False, "primary": True},
+            {"email": "Primary@Example.com", "verified": True, "primary": True},
+        ],
+    ) == "primary@example.com"
+
+    with pytest.raises(HTTPException) as exc:
+        _select_verified_primary_email(
+            "github",
+            {"email": "public_unverified@example.com"},
+            emails=[{"email": "unverified@example.com", "verified": False, "primary": True}],
+        )
+    assert exc.value.status_code == 400
+
+    with pytest.raises(HTTPException) as exc:
+        _select_verified_primary_email(
+            "github",
+            {"email": "public@example.com"},
+            emails=[{"email": "secondary@example.com", "verified": True, "primary": False}],
+        )
+    assert exc.value.status_code == 400
+
+    # Google: requires email_verified is True
+    assert _select_verified_primary_email(
+        "google", {"email": "User@Google.com", "email_verified": True}
+    ) == "user@google.com"
+    for bad_google in [
+        {"email": "User@Google.com", "email_verified": False},
+        {"email": "User@Google.com"},
+        {},
+        None,
+    ]:
+        with pytest.raises(HTTPException) as g_exc:
+            _select_verified_primary_email("google", bad_google)
+        assert g_exc.value.status_code == 400
+
+    # LinkedIn OIDC userinfo: requires email_verified is True
+    assert _select_verified_primary_email(
+        "linkedin", {"email": "User@LinkedIn.com", "email_verified": True}
+    ) == "user@linkedin.com"
+    for bad_li in [
+        {"email": "User@LinkedIn.com", "email_verified": False},
+        {"email": "User@LinkedIn.com"},
+    ]:
+        with pytest.raises(HTTPException) as li_exc:
+            _select_verified_primary_email("linkedin", bad_li)
+        assert li_exc.value.status_code == 400
 
 
 def test_enum_validation_and_stage_aliases():
@@ -140,3 +208,296 @@ async def test_compliance_and_copilot_canonical_routes_and_empty_cohort():
         )
         assert resp_impact_post.status_code == 200
         assert resp_impact_post.json()["groups"] == []
+
+
+@pytest.mark.asyncio
+async def test_oauth_registered_user_has_null_hashed_password(client):
+    """New OAuth user must be persisted with hashed_password IS NULL, never a sentinel string."""
+    import uuid
+
+    from sqlalchemy import select
+
+    email = f"oauth_null_pw_{uuid.uuid4().hex[:8]}@example.com"
+    mock_client = AsyncMock()
+    mock_client.authorize_access_token = AsyncMock(
+        return_value={
+            "userinfo": {
+                "email": email,
+                "email_verified": True,
+                "name": "OAuth User",
+                "sub": f"sub-{uuid.uuid4().hex[:6]}",
+            }
+        }
+    )
+
+    with patch("api.routes.auth_social.oauth.create_client", return_value=mock_client):
+        resp = await client.get("/api/v1/auth/callback/google", follow_redirects=False)
+
+    assert resp.status_code == 302
+    async with AsyncSessionLocal() as session:
+        user = (await session.execute(select(User).where(User.email == email))).scalar_one()
+        assert user.hashed_password is None
+        assert user.provider == "google"
+
+
+@pytest.mark.asyncio
+async def test_oauth_only_user_password_login_returns_401_not_500(client):
+    """Password login for an OAuth-only user (hashed_password IS NULL) must return 401 with generic detail."""
+    import uuid
+
+    oauth_email = f"oauth_only_{uuid.uuid4().hex[:8]}@example.com"
+    pw_email = f"pw_user_{uuid.uuid4().hex[:8]}@example.com"
+    async with AsyncSessionLocal() as session:
+        session.add(
+            User(
+                email=oauth_email,
+                full_name="OAuth Only",
+                hashed_password=None,
+                provider="google",
+                provider_id="g-only-1",
+                role=UserRole.RECRUITER,
+                is_active=True,
+                is_verified=True,
+            )
+        )
+        session.add(
+            User(
+                email=pw_email,
+                full_name="Password User",
+                hashed_password=await hash_password("RealPassword123!"),
+                provider=None,
+                role=UserRole.RECRUITER,
+                is_active=True,
+                is_verified=True,
+            )
+        )
+        await session.commit()
+
+    oauth_login_resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": oauth_email, "password": "SomePassword123!"},
+    )
+    wrong_pw_resp = await client.post(
+        "/api/v1/auth/login",
+        data={"username": pw_email, "password": "WrongPassword123!"},
+    )
+    assert oauth_login_resp.status_code == 401
+    assert wrong_pw_resp.status_code == 401
+    assert oauth_login_resp.json()["detail"] == wrong_pw_resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_social_callback_rejects_unverified_primary(client):
+    """Providers returning unverified or missing email_verified must fail closed with HTTP 400 and create no user."""
+    import uuid
+
+    from sqlalchemy import select
+
+    # 1. GitHub: only unverified primary email + verified secondary
+    gh_email = f"gh_unverified_{uuid.uuid4().hex[:8]}@example.com"
+    gh_client = AsyncMock()
+    gh_client.authorize_access_token = AsyncMock(return_value={"access_token": "tok"})
+    gh_user_resp = MagicMock()
+    gh_user_resp.json.return_value = {"id": 9991, "login": "ghtester", "email": gh_email}
+    gh_emails_resp = MagicMock()
+    gh_emails_resp.json.return_value = [
+        {"email": gh_email, "verified": False, "primary": True},
+        {"email": f"alt_{gh_email}", "verified": True, "primary": False},
+    ]
+    gh_client.get = AsyncMock(side_effect=[gh_user_resp, gh_emails_resp])
+
+    with patch("api.routes.auth_social.oauth.create_client", return_value=gh_client):
+        resp_gh = await client.get("/api/v1/auth/callback/github", follow_redirects=False)
+    assert resp_gh.status_code == 400
+
+    # 2. Google: email_verified=False
+    g_email = f"g_unverified_{uuid.uuid4().hex[:8]}@example.com"
+    g_client = AsyncMock()
+    g_client.authorize_access_token = AsyncMock(
+        return_value={"userinfo": {"email": g_email, "email_verified": False, "sub": "g-unv"}}
+    )
+    with patch("api.routes.auth_social.oauth.create_client", return_value=g_client):
+        resp_g = await client.get("/api/v1/auth/callback/google", follow_redirects=False)
+    assert resp_g.status_code == 400
+
+    # 3. LinkedIn: missing email_verified field
+    li_email = f"li_unverified_{uuid.uuid4().hex[:8]}@example.com"
+    li_client = AsyncMock()
+    li_client.authorize_access_token = AsyncMock(return_value={"access_token": "tok"})
+    li_resp = MagicMock()
+    li_resp.json.return_value = {"email": li_email, "sub": "li-unv"}
+    li_client.get = AsyncMock(return_value=li_resp)
+    with patch("api.routes.auth_social.oauth.create_client", return_value=li_client):
+        resp_li = await client.get("/api/v1/auth/callback/linkedin", follow_redirects=False)
+    assert resp_li.status_code == 400
+
+    async with AsyncSessionLocal() as session:
+        for email in (gh_email, f"alt_{gh_email}", g_email, li_email):
+            assert (await session.execute(select(User).where(User.email == email))).scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_social_callback_409_on_email_collision(client):
+    """Colliding verified email must NEVER auto-link; returns 409 with no cookies and sends confirmation token."""
+    import uuid
+
+    from sqlalchemy import select
+
+    pw_email = f"collision_pw_{uuid.uuid4().hex[:8]}@example.com"
+    google_email = f"collision_goog_{uuid.uuid4().hex[:8]}@example.com"
+    async with AsyncSessionLocal() as session:
+        session.add(
+            User(
+                email=pw_email,
+                full_name="Password Owner",
+                hashed_password=await hash_password("OwnerPass123!"),
+                provider=None,
+                provider_id=None,
+                role=UserRole.RECRUITER,
+                is_active=True,
+                is_verified=True,
+            )
+        )
+        session.add(
+            User(
+                email=google_email,
+                full_name="Google Owner",
+                hashed_password=None,
+                provider="google",
+                provider_id="google-orig-sub",
+                role=UserRole.RECRUITER,
+                is_active=True,
+                is_verified=True,
+            )
+        )
+        await session.commit()
+
+    # Case 1: existing password-only user (provider=None) collided by Google OAuth
+    g_client = AsyncMock()
+    g_client.authorize_access_token = AsyncMock(
+        return_value={"userinfo": {"email": pw_email, "email_verified": True, "sub": "attacker-sub"}}
+    )
+    with (
+        patch("api.routes.auth_social.oauth.create_client", return_value=g_client),
+        patch("api.routes.auth_social.email_service.send_email", new_callable=AsyncMock, return_value=True) as mock_mail,
+    ):
+        resp1 = await client.get("/api/v1/auth/callback/google", follow_redirects=False)
+
+    assert resp1.status_code == 409
+    assert "dvt_token" not in resp1.cookies
+    assert "dvt_refresh_token" not in resp1.cookies
+    mock_mail.assert_awaited_once()
+
+    # Case 2: existing Google OAuth user collided by GitHub OAuth
+    gh_client = AsyncMock()
+    gh_client.authorize_access_token = AsyncMock(return_value={"access_token": "gh-tok"})
+    gh_u = MagicMock()
+    gh_u.json.return_value = {"id": 55522, "login": "ghuser"}
+    gh_e = MagicMock()
+    gh_e.json.return_value = [{"email": google_email, "verified": True, "primary": True}]
+    gh_client.get = AsyncMock(side_effect=[gh_u, gh_e])
+    with (
+        patch("api.routes.auth_social.oauth.create_client", return_value=gh_client),
+        patch("api.routes.auth_social.email_service.send_email", new_callable=AsyncMock, return_value=True) as mock_mail2,
+    ):
+        resp2 = await client.get("/api/v1/auth/callback/github", follow_redirects=False)
+
+    assert resp2.status_code == 409
+    assert "dvt_token" not in resp2.cookies
+    assert "dvt_refresh_token" not in resp2.cookies
+    mock_mail2.assert_awaited_once()
+
+    async with AsyncSessionLocal() as session:
+        u1 = (await session.execute(select(User).where(User.email == pw_email))).scalar_one()
+        u2 = (await session.execute(select(User).where(User.email == google_email))).scalar_one()
+        assert u1.provider is None
+        assert u1.provider_id is None
+        assert u2.provider == "google"
+        assert u2.provider_id == "google-orig-sub"
+
+
+@pytest.mark.asyncio
+async def test_social_callback_same_provider_relinks(client):
+    """Existing OAuth user authenticating with the SAME provider signs in cleanly."""
+    import uuid
+
+    email = f"same_prov_{uuid.uuid4().hex[:8]}@example.com"
+    async with AsyncSessionLocal() as session:
+        session.add(
+            User(
+                email=email,
+                full_name="Google Returning User",
+                hashed_password=None,
+                provider="google",
+                provider_id="google-sub-1",
+                role=UserRole.RECRUITER,
+                is_active=True,
+                is_verified=True,
+            )
+        )
+        await session.commit()
+
+    g_client = AsyncMock()
+    g_client.authorize_access_token = AsyncMock(
+        return_value={"userinfo": {"email": email, "email_verified": True, "sub": "google-sub-1"}}
+    )
+    with patch("api.routes.auth_social.oauth.create_client", return_value=g_client):
+        resp = await client.get("/api/v1/auth/callback/google", follow_redirects=False)
+
+    assert resp.status_code == 302
+    assert "dvt_token" in resp.cookies
+    assert "dvt_refresh_token" in resp.cookies
+
+
+@pytest.mark.asyncio
+async def test_link_oauth_endpoint_consumes_single_use_token(client):
+    """POST /api/v1/auth/link-oauth consumes the emailed single-use token once, links provider, and rejects replay."""
+    import re
+    import uuid
+
+    from sqlalchemy import select
+
+    email = f"link_confirm_{uuid.uuid4().hex[:8]}@example.com"
+    async with AsyncSessionLocal() as session:
+        session.add(
+            User(
+                email=email,
+                full_name="Existing User",
+                hashed_password=await hash_password("ExistingPass123!"),
+                provider=None,
+                provider_id=None,
+                role=UserRole.RECRUITER,
+                is_active=True,
+                is_verified=True,
+            )
+        )
+        await session.commit()
+
+    g_client = AsyncMock()
+    g_client.authorize_access_token = AsyncMock(
+        return_value={"userinfo": {"email": email, "email_verified": True, "sub": "google-confirmed-sub"}}
+    )
+    with (
+        patch("api.routes.auth_social.oauth.create_client", return_value=g_client),
+        patch("api.routes.auth_social.email_service.send_email", new_callable=AsyncMock, return_value=True) as mock_mail,
+    ):
+        collision_resp = await client.get("/api/v1/auth/callback/google", follow_redirects=False)
+
+    assert collision_resp.status_code == 409
+    sent_body = mock_mail.await_args.kwargs["body"]
+    match = re.search(r"Linking token:\s*(\S+)", sent_body)
+    assert match, f"Confirmation token not found in email body: {sent_body}"
+    link_token = match.group(1)
+
+    link_resp = await client.post("/api/v1/auth/link-oauth", json={"token": link_token})
+    assert link_resp.status_code == 200
+    assert link_resp.json() == {"status": "linked", "provider": "google"}
+
+    async with AsyncSessionLocal() as session:
+        user = (await session.execute(select(User).where(User.email == email))).scalar_one()
+        assert user.provider == "google"
+        assert user.provider_id == "google-confirmed-sub"
+
+    # Replay must fail closed with 400
+    replay_resp = await client.post("/api/v1/auth/link-oauth", json={"token": link_token})
+    assert replay_resp.status_code == 400

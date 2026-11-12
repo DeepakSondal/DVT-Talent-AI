@@ -22,6 +22,7 @@ async def ensure_db_tables():
     from db.models import engine
     from services.redis_service import (
         _in_memory_blacklist,
+        _in_memory_oauth_links,
         _in_memory_otp_attempts,
         _in_memory_otps,
         _in_memory_ratelimit,
@@ -29,6 +30,7 @@ async def ensure_db_tables():
 
     _in_memory_ratelimit.clear()
     _in_memory_blacklist.clear()
+    _in_memory_oauth_links.clear()
     _in_memory_otps.clear()
     _in_memory_otp_attempts.clear()
 
