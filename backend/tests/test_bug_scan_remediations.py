@@ -102,17 +102,21 @@ async def test_compliance_and_copilot_canonical_routes_and_empty_cohort():
     from httpx import ASGITransport, AsyncClient
 
     from main import app
+    from services.redis_service import store_email_otp
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        comp_email = f"comp_{uuid.uuid4().hex[:8]}@example.com"
+        await store_email_otp(comp_email, "654321")
         reg = await client.post(
             "/api/v1/auth/register",
             json={
-                "email": f"comp_{uuid.uuid4().hex[:8]}@example.com",
+                "email": comp_email,
                 "password": "SecurePassword123!",
                 "full_name": "Compliance Tester",
                 "role": "recruiter",
                 "company_name": "Compliance Test Org",
+                "otp": "654321",
             },
         )
         assert reg.status_code == 201

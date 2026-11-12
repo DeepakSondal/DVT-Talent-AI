@@ -22,7 +22,9 @@ class Settings(BaseSettings):
 
     # App
     app_name: str = "DVT Talent AI"
-    app_env: str = "development"
+    app_env: str = "production"
+    is_production: bool = True
+    allow_dev_otp_bypass: bool = False
     app_host: str = "0.0.0.0"  # noqa: S104
     app_port: int = 8000
     secret_key: str = "change-me-in-production"  # noqa: S105
@@ -144,8 +146,8 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.allowed_origins.split(",")]
 
     @property
-    def is_production(self) -> bool:
-        return self.app_env == "production"
+    def dev_mode(self) -> bool:
+        return not self.is_production and self.allow_dev_otp_bypass
 
     @property
     def primary_llm_api_key(self) -> str:
@@ -182,9 +184,17 @@ class Settings(BaseSettings):
 
     def model_post_init(self, __context) -> None:
         """
-        Auto-derives a deterministic high-entropy secret_key in development/test if default or unset,
-        preventing JWT invalidation across process reloads/workers while retaining strict production gatekeeping.
+        Fail closed to production unless APP_ENV is explicitly dev/test or is_production is overridden.
+        Enforces startup invariant that allow_dev_otp_bypass cannot be enabled in production.
+        Auto-derives a deterministic high-entropy secret_key in development/test if default or unset.
         """
+        if "is_production" not in self.model_fields_set:
+            env_val = (self.app_env or "").strip().lower()
+            self.is_production = env_val not in ("development", "dev", "test", "testing", "local")
+
+        if self.is_production and self.allow_dev_otp_bypass:
+            raise ValueError("allow_dev_otp_bypass cannot be enabled when is_production is True")
+
         if not self.secret_key or self.secret_key == "change-me-in-production":  # noqa: S105
             if not self.is_production:
                 seed = f"dvt-dev-secret:{BASE_DIR}:{self.database_url}:{self.smtp_user}"
@@ -196,6 +206,8 @@ class Settings(BaseSettings):
         Call on startup to prevent app from running with insecure defaults.
         Returns list of warnings if non-fatal.
         """
+        if self.is_production and self.allow_dev_otp_bypass:
+            raise ValueError("allow_dev_otp_bypass cannot be enabled when is_production is True")
         if not self.primary_llm_api_key:
             raise ValueError("No LLM key set — agents will fail. Set GROQ_API_KEY, KIMI_API_KEY, DEEPSEEK_API_KEY, or OPENAI_API_KEY")
         if self.is_production:

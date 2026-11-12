@@ -104,7 +104,7 @@ def is_load_test_bypass_allowed(request: Optional[Request]) -> bool:
     2. If load_test_bypass_secret is configured, requires constant-time match.
     3. Otherwise in local dev/test mode, only allowed from loopback peer without external X-Forwarded-For.
     """
-    if request is None or settings.is_production:
+    if request is None or settings.is_production or (settings.app_env or "").strip().lower() == "production":
         return False
 
     bypass_header = request.headers.get("X-Load-Test-Bypass")

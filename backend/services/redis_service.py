@@ -6,6 +6,7 @@ zero-latency fallback when Redis is offline, and resilient in-memory fallbacks.
 import asyncio
 import contextlib
 import hashlib
+import hmac
 import socket
 import threading
 import time
@@ -286,12 +287,14 @@ async def reset_rate_limit(key: str, window_seconds: int = 60) -> None:
 
 
 # ── Registration Email OTP Storage & Verification ───────────────────────────
+MAX_OTP_VERIFY_ATTEMPTS = 5
 _in_memory_otps: Dict[str, Tuple[str, float]] = {}  # email -> (otp_hash, expires_at)
+_in_memory_otp_attempts: Dict[str, int] = {}  # email -> failed verification count
 _otp_lock = asyncio.Lock()
 
 
 async def store_email_otp(email: str, otp: str, ttl_seconds: int = 600) -> None:
-    """Store 6-digit email OTP with SHA-256 hash and 10-minute expiry."""
+    """Store 6-digit email OTP with SHA-256 hash, reset attempt counter, and set expiry."""
     otp_hash = hashlib.sha256(otp.encode("utf-8")).hexdigest()
     now = time.time()
     expires_at = now + ttl_seconds
@@ -299,18 +302,25 @@ async def store_email_otp(email: str, otp: str, ttl_seconds: int = 600) -> None:
 
     async with _otp_lock:
         _in_memory_otps[clean_email] = (otp_hash, expires_at)
+        _in_memory_otp_attempts.pop(clean_email, None)
 
     client = get_redis_client()
     if client:
         try:
-            await client.setex(f"email_otp:{clean_email}", ttl_seconds, otp_hash)
+            pipe = client.pipeline()
+            pipe.setex(f"email_otp:{clean_email}", ttl_seconds, otp_hash)
+            pipe.delete(f"email_otp_attempts:{clean_email}")
+            await pipe.execute()
         except Exception:
             _circuit_state["available"] = False
             _circuit_state["last_checked"] = now
 
 
 async def verify_email_otp(email: str, otp: str) -> bool:
-    """Verify 6-digit email OTP. Single-use: deletes OTP upon successful verification."""
+    """
+    Verify 6-digit email OTP with constant-time hash comparison and attempt cap.
+    Single-use: deletes OTP upon successful verification or once attempts reach MAX_OTP_VERIFY_ATTEMPTS.
+    """
     clean_email = email.strip().lower()
     clean_otp = (otp or "").strip()
     expected_hash = hashlib.sha256(clean_otp.encode("utf-8")).hexdigest()
@@ -319,22 +329,67 @@ async def verify_email_otp(email: str, otp: str) -> bool:
     client = get_redis_client()
     if client:
         try:
-            stored_hash = await client.get(f"email_otp:{clean_email}")
-            if stored_hash and stored_hash == expected_hash:
-                await client.delete(f"email_otp:{clean_email}")
-                async with _otp_lock:
-                    _in_memory_otps.pop(clean_email, None)
-                return True
+            otp_key = f"email_otp:{clean_email}"
+            attempts_key = f"email_otp_attempts:{clean_email}"
+            pipe = client.pipeline()
+            pipe.get(otp_key)
+            pipe.get(attempts_key)
+            stored_hash, attempts_raw = await pipe.execute()
+            if stored_hash:
+                prior_attempts = int(attempts_raw) if attempts_raw else 0
+                if prior_attempts >= MAX_OTP_VERIFY_ATTEMPTS:
+                    await client.delete(otp_key, attempts_key)
+                    async with _otp_lock:
+                        _in_memory_otps.pop(clean_email, None)
+                        _in_memory_otp_attempts.pop(clean_email, None)
+                    return False
+
+                if hmac.compare_digest(str(stored_hash), expected_hash):
+                    await client.delete(otp_key, attempts_key)
+                    async with _otp_lock:
+                        _in_memory_otps.pop(clean_email, None)
+                        _in_memory_otp_attempts.pop(clean_email, None)
+                    return True
+
+                new_attempts = await client.incr(attempts_key)
+                if new_attempts == 1:
+                    await client.expire(attempts_key, 600)
+                if new_attempts >= MAX_OTP_VERIFY_ATTEMPTS:
+                    await client.delete(otp_key, attempts_key)
+                    async with _otp_lock:
+                        _in_memory_otps.pop(clean_email, None)
+                        _in_memory_otp_attempts.pop(clean_email, None)
+                return False
         except Exception:
             _circuit_state["available"] = False
             _circuit_state["last_checked"] = now
 
     async with _otp_lock:
         stored = _in_memory_otps.get(clean_email)
-        if stored:
-            stored_hash, expires_at = stored
-            if now <= expires_at and stored_hash == expected_hash:
-                _in_memory_otps.pop(clean_email, None)
-                return True
+        if not stored:
+            return False
+        stored_hash, expires_at = stored
+        if now > expires_at:
+            _in_memory_otps.pop(clean_email, None)
+            _in_memory_otp_attempts.pop(clean_email, None)
+            return False
+
+        prior_attempts = _in_memory_otp_attempts.get(clean_email, 0)
+        if prior_attempts >= MAX_OTP_VERIFY_ATTEMPTS:
+            _in_memory_otps.pop(clean_email, None)
+            _in_memory_otp_attempts.pop(clean_email, None)
+            return False
+
+        if hmac.compare_digest(stored_hash, expected_hash):
+            _in_memory_otps.pop(clean_email, None)
+            _in_memory_otp_attempts.pop(clean_email, None)
+            return True
+
+        new_attempts = prior_attempts + 1
+        if new_attempts >= MAX_OTP_VERIFY_ATTEMPTS:
+            _in_memory_otps.pop(clean_email, None)
+            _in_memory_otp_attempts.pop(clean_email, None)
+        else:
+            _in_memory_otp_attempts[clean_email] = new_attempts
 
     return False

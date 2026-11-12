@@ -3,7 +3,6 @@ DVT Talent AI — Authentication API
 JWT-based auth with secure HttpOnly cookies
 """
 import asyncio
-import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -200,7 +199,7 @@ async def send_registration_otp(
     """
     clean_email = payload.email.strip().lower()
 
-    # Rate limiting
+    # Rate limiting (per-email and per-IP)
     await enforce_endpoint_rate_limit(
         request,
         scope="auth_send_otp",
@@ -208,6 +207,15 @@ async def send_registration_otp(
         limit=5,
         window_seconds=600,
         detail="Too many OTP requests. Please wait a few minutes before trying again.",
+    )
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="auth_send_otp_ip",
+        identifier=client_ip,
+        limit=20,
+        window_seconds=600,
+        detail="Too many OTP requests from this IP. Please try again later.",
     )
 
     # Check if user already exists
@@ -242,12 +250,11 @@ async def send_registration_otp(
     except Exception as exc:
         log.warning("otp_email_send_exception", error=str(exc))
 
-    is_dev = not settings.is_production and os.getenv("APP_ENV", "").lower() != "production"
     return {
         "status": "success",
         "message": f"Verification code sent to {clean_email}",
         "expires_in": 600,
-        "dev_code": otp_code if is_dev else None,
+        "dev_code": otp_code if settings.dev_mode else None,
     }
 
 
@@ -266,6 +273,15 @@ async def register(
         window_seconds=3600,
         detail="Too many registration attempts from this IP. Please try again later.",
     )
+    clean_email = user_data.email.strip().lower()
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="auth_verify_otp_email",
+        identifier=clean_email,
+        limit=10,
+        window_seconds=600,
+        detail="Too many registration verification attempts for this email. Please wait before trying again.",
+    )
 
     # Check if email exists
     result = await db.execute(select(User).where(User.email == user_data.email))
@@ -273,9 +289,9 @@ async def register(
         raise HTTPException(status_code=400, detail="Email already registered")
 
     # OTP Verification Gate:
-    # If otp is provided, or in production mode, verify email ownership
-    if user_data.otp or settings.is_production:
-        if not user_data.otp or not await verify_email_otp(user_data.email, user_data.otp):
+    # Require valid email OTP unless explicit non-production dev bypass is enabled
+    if user_data.otp or not settings.dev_mode:
+        if not user_data.otp or not await verify_email_otp(clean_email, user_data.otp):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired verification code. Please request a new code.",
