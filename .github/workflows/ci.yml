@@ -73,3 +73,88 @@ jobs:
           NEXT_PUBLIC_WS_URL: "ws://localhost:8000/api/v1/ws"
         run: npm --prefix frontend run build
 
+  postgres-migration-check:
+    name: Postgres Migration & Schema Check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: dvt_ci
+          POSTGRES_PASSWORD: ci_postgres_test_password
+          POSTGRES_DB: dvt_ci_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TESTING: "true"
+      DATABASE_URL: "postgresql+asyncpg://dvt_ci:ci_postgres_test_password@localhost:5432/dvt_ci_db"
+      DATABASE_SYNC_URL: "postgresql://dvt_ci:ci_postgres_test_password@localhost:5432/dvt_ci_db"
+      SECRET_KEY: "ci-secret-key-for-testing-purposes-only-32bytes"
+      JWT_SECRET: "ci-jwt-secret-key-for-testing-purposes-only-32bytes"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+
+      - name: Install dependencies
+        run: uv pip install --system -r backend/requirements.txt
+
+      - name: Verify Alembic upgrade -> inspect PG -> downgrade -> upgrade
+        working-directory: backend
+        run: |
+          alembic upgrade head
+          python -c '
+          import os, uuid, psycopg2
+          from db.models import Base
+          conn = psycopg2.connect(os.environ["DATABASE_SYNC_URL"])
+          cur = conn.cursor()
+          cur.execute("SELECT extname FROM pg_extension WHERE extname = '\''vector'\'';")
+          assert cur.fetchone() == ("vector",), "pgvector extension not installed"
+          cur.execute("SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid WHERE t.typname = '\''userrole'\'' ORDER BY e.enumsortorder;")
+          userroles = [r[0] for r in cur.fetchall()]
+          assert userroles == ["ADMIN", "MANAGER", "RECRUITER", "CANDIDATE"], f"Unexpected userrole labels: {userroles}"
+          cur.execute("SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid WHERE t.typname = '\''candidatestatus'\'' ORDER BY e.enumsortorder;")
+          cand_statuses = [r[0] for r in cur.fetchall()]
+          assert cand_statuses == ["SOURCED", "SCREENED", "INTERVIEWING", "OFFERED", "HIRED", "REJECTED"], f"Unexpected candidatestatus labels: {cand_statuses}"
+          cur.execute("SELECT is_nullable FROM information_schema.columns WHERE table_name = '\''users'\'' AND column_name = '\''hashed_password'\'';")
+          assert cur.fetchone() == ("YES",), "users.hashed_password must be nullable at head"
+          cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = '\''public'\'';")
+          pg_tables = {r[0] for r in cur.fetchall()}
+          missing = set(Base.metadata.tables.keys()) - pg_tables
+          assert not missing, f"Missing tables in Postgres: {sorted(missing)}"
+          cur.execute("INSERT INTO users (id, email, full_name, hashed_password, role, is_active, is_verified) VALUES (%s, %s, %s, NULL, '\''RECRUITER'\'', true, true);", (str(uuid.uuid4()), "pg_oauth_null@example.com", "PG OAuth Null Check"))
+          conn.rollback()
+          cur.close()
+          conn.close()
+          print("Live Postgres schema + enum + nullable hashed_password verified.")
+          '
+          alembic downgrade base
+          python -c '
+          import os, psycopg2
+          from db.models import Base
+          conn = psycopg2.connect(os.environ["DATABASE_SYNC_URL"])
+          cur = conn.cursor()
+          cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = '\''public'\'';")
+          pg_tables = {r[0] for r in cur.fetchall()}
+          leftover = set(Base.metadata.tables.keys()) & pg_tables
+          assert not leftover, f"Tables survived downgrade base: {sorted(leftover)}"
+          cur.close()
+          conn.close()
+          print("Downgrade to base cleanly removed all ORM tables.")
+          '
+          alembic upgrade head
+          pytest tests/test_alembic_schema_consistency.py -v
+
