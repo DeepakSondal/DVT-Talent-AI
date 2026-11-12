@@ -7,23 +7,17 @@ Revision ID: 003_billing_stripe
 Revises: 002_initial (adjust to your previous revision id)
 """
 import sqlalchemy as sa
+from alembic import context, op
 from sqlalchemy.dialects import postgresql
-
-from alembic import op
 
 # revision identifiers
 revision = '003_billing_stripe'
-down_revision = '0002'
+down_revision = None
 branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
-    existing_tables = set(inspector.get_table_names())
-    tenant_cols = {c['name'] for c in inspector.get_columns('tenants')} if 'tenants' in existing_tables else set()
-
+def _emit_ddl(existing_tables: set[str], tenant_cols: set[str]) -> None:
     # ── subscription_plans table ────────────────────────────────────────────
     if 'subscription_plans' not in existing_tables:
         op.create_table(
@@ -83,6 +77,24 @@ def upgrade() -> None:
              '["Unlimited credits", "Autopilot + Copilot", "25 user seats", "SSO (SAML)", "ATS sync", "Dedicated CSM"]'::json, true)
         ON CONFLICT (name) DO NOTHING;
     """)
+
+
+def upgrade() -> None:
+    if context.is_offline_mode():
+        # sa.inspect() requires a live connection; --sql offline mode passes a
+        # MockConnection which raises NoInspectionAvailable. Emit DDL
+        # unconditionally in offline mode; online runs inspect the live DB.
+        existing_tables: set[str] = set()
+        tenant_cols: set[str] = set()
+    else:
+        inspector = sa.inspect(op.get_bind())
+        existing_tables = set(inspector.get_table_names())
+        tenant_cols = (
+            {c['name'] for c in inspector.get_columns('tenants')}
+            if 'tenants' in existing_tables
+            else set()
+        )
+    _emit_ddl(existing_tables, tenant_cols)
 
 
 def downgrade() -> None:

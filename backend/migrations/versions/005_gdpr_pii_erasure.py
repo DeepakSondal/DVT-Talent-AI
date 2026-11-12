@@ -6,7 +6,6 @@ Revision ID: 005_gdpr_pii_erasure
 Revises: 004_ats_integrations
 """
 import sqlalchemy as sa
-
 from alembic import op
 
 revision = '005_gdpr_pii_erasure'

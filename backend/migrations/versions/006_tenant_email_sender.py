@@ -6,7 +6,6 @@ Revision ID: 006_tenant_email_sender
 Revises: 005_gdpr_pii_erasure
 """
 import sqlalchemy as sa
-
 from alembic import op
 
 revision = '006_tenant_email_sender'

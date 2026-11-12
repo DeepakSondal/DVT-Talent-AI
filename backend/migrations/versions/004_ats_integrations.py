@@ -7,9 +7,8 @@ Revision ID: 004_ats_integrations
 Revises: 003_billing_stripe
 """
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision = '004_ats_integrations'
 down_revision = '003_billing_stripe'

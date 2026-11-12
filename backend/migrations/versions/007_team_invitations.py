@@ -6,9 +6,8 @@ Revision ID: 007_team_invitations
 Revises: 006_tenant_email_sender
 """
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision = '007_team_invitations'
 down_revision = '006_tenant_email_sender'
