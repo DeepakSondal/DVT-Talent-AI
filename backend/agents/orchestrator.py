@@ -349,10 +349,11 @@ class AgentOrchestrator:
                 results["stages"]["sourcing"] = _serialize(sourc_data)
 
                 broadcast_signal("Agent 'critic' initiating logic audit...", "agent_start", self.tenant_id)
+                role_desc = self._extract_role_summary(disc_data, industry)
                 sanitized_candidates = _trim_candidates_for_critic(candidates)
                 audit_res = await self._run_agent_with_retry(
                     critic_agent,
-                    f"Audit these trimmed candidates: {sanitized_candidates}",
+                    f"Audit these trimmed candidates for role '{role_desc}': {sanitized_candidates}",
                     deps=deps,
                     model=dynamic_model,
                     model_settings={"max_tokens": 1200},
@@ -371,7 +372,7 @@ class AgentOrchestrator:
                     await self._persist_sourcing_and_ledger(
                         candidates=candidates,
                         audit_data=_serialize(c_data),
-                        role_title=self._extract_role_summary(disc_data, industry),
+                        role_title=role_desc,
                     )
 
                 # 4, 5 & 6. Concurrent Post-Sourcing Execution (Outreach + Analytics + Optional Screening)
@@ -379,7 +380,6 @@ class AgentOrchestrator:
                     c.get("full_name") or c.get("name") if isinstance(c, dict) else getattr(c, "full_name", str(c))
                     for c in candidates[:5]
                 ]
-                role_desc = self._extract_role_summary(disc_data, industry)
 
                 broadcast_signal("Agent 'outreach' drafting personalized sequences in bulk...", "agent_start", self.tenant_id)
                 broadcast_signal("Agent 'analytics' generating run report...", "agent_start", self.tenant_id)
@@ -658,8 +658,12 @@ class AgentOrchestrator:
                     if isinstance(d, dict) and cand_email and d.get("candidate_email") == cand_email:
                         matched_draft = d
                         break
-                if not matched_draft:
-                    matched_draft = drafts_list[idx % len(drafts_list)]
+                if not matched_draft and len(drafts_list) == 1:
+                    matched_draft = drafts_list[0]
+                elif not matched_draft and idx < len(drafts_list) and not any(
+                    isinstance(d, dict) and d.get("candidate_email") for d in drafts_list
+                ):
+                    matched_draft = drafts_list[idx]
             cand_outreach = matched_draft if (matched_draft and isinstance(outreach_data, dict) and "subject" not in outreach_data) else outreach_data
             res_item = {"candidate": cand_name, "email": cand_email, "outreach": cand_outreach}
             if screening_guide:
@@ -778,8 +782,7 @@ class AgentOrchestrator:
                         qualification_score=int(round(score_val)),
                         confidence_level="HIGH" if score_val >= 85 else "MEDIUM",
                         evidence_signals={
-                            "candidate_name": f"{cand_row.first_name} {cand_row.last_name}",
-                            "candidate_email": cand_row.email,
+                            "candidate_id": str(cand_row.id),
                             "role_title": role_title,
                             "skills": cand_row.skills or [],
                             "critic_passed": audit_passed,

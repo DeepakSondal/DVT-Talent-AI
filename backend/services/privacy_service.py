@@ -37,6 +37,7 @@ from config import settings
 from db.models import (
     AgentTask,
     AgentTaskStatus,
+    AIDecisionLedger,
     Candidate,
     CandidateStatus,
     JobCandidate,
@@ -438,6 +439,25 @@ async def erase_candidate_personal_data(
         app.career_ops_scoring = {}
         app.match_score = 0.0
         app.status = CandidateStatus.REJECTED
+
+    # Scrub AI Decision Ledger PII signals and reasoning for this candidate
+    ledgers_stmt = select(AIDecisionLedger).where(AIDecisionLedger.candidate_id == candidate.id)
+    ledger_rows = (await db.execute(ledgers_stmt)).scalars().all()
+    for ledger_row in ledger_rows:
+        sig = dict(ledger_row.evidence_signals) if isinstance(ledger_row.evidence_signals, dict) else {}
+        sig.pop("candidate_name", None)
+        sig.pop("candidate_email", None)
+        sig["pii_erased"] = True
+        ledger_row.evidence_signals = sig
+        ledger_row.reasoning_summary = "[Personal data erased per GDPR Article 17 request]"
+
+    # Deactivate linked candidate portal User account if present
+    if candidate.user_id:
+        linked_user = await db.get(User, candidate.user_id)
+        if linked_user and getattr(linked_user.role, "value", str(linked_user.role)) == "candidate":
+            linked_user.is_active = False
+            linked_user.full_name = "Erased Candidate"
+            linked_user.email = f"erased_user_{linked_user.id}@erased.local"
 
     # Cancel pending background tasks
     if candidate.tenant_id:

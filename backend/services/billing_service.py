@@ -51,7 +51,7 @@ async def deduct_credits(
 
             if not tenant:
                 log.warning("credit_deduction_tenant_not_found", tenant_id=tenant_id)
-                return True  # Fail open — don't block if tenant isn't found
+                return False  # Fail closed when tenant does not exist
 
             if (tenant.credits_balance or 0) < amount:
                 log.warning(
@@ -87,6 +87,5 @@ async def deduct_credits(
     except InsufficientCreditsError:
         raise
     except Exception as e:
-        # Never block agent execution on billing DB errors — fail open
         log.error("credit_deduction_db_error", error=str(e), tenant_id=tenant_id)
-        return True
+        return False

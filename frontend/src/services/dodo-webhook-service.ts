@@ -3,8 +3,25 @@
  * Domain handlers for payment.succeeded and subscription.active events
  */
 
-// In-memory set for event deduplication / idempotency (can be augmented by Redis/DB in multi-tenant cluster)
+// Bounded in-memory set for event deduplication / idempotency
+const MAX_PROCESSED_EVENTS = 10000;
 const processedEvents = new Set<string>();
+
+function recordProcessedEvent(eventId: string) {
+  if (processedEvents.size >= MAX_PROCESSED_EVENTS) {
+    const oldest = processedEvents.values().next().value;
+    if (oldest) processedEvents.delete(oldest);
+  }
+  processedEvents.add(eventId);
+}
+
+function resolveBackendApiUrl(): string {
+  const internalUrl = process.env.INTERNAL_API_URL;
+  if (internalUrl && /^https?:\/\//i.test(internalUrl)) return internalUrl.replace(/\/$/, "");
+  const pubUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (pubUrl && /^https?:\/\//i.test(pubUrl)) return pubUrl.replace(/\/$/, "");
+  return "http://127.0.0.1:8000/api/v1";
+}
 
 export interface PaymentSucceededEventData {
   payload_type?: "Payment";
@@ -51,7 +68,7 @@ export async function handlePaymentSucceeded(payload: {
     console.warn(`[Dodo Webhook] Duplicate payment.succeeded skipped: ${paymentId}`);
     return { status: "duplicate", paymentId };
   }
-  processedEvents.add(paymentId);
+  recordProcessedEvent(paymentId);
 
   // 2. Extract key details
   const customerEmail = payment.customer?.email || "unknown";
@@ -62,9 +79,9 @@ export async function handlePaymentSucceeded(payload: {
   console.info(`[Dodo Payment Succeeded] ID: ${paymentId} | Customer: ${customerEmail} (${customerId}) | Amount: ${amount} ${currency}`);
 
   // 3. Dispatch internal backend synchronization
-  const backendApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+  const backendApiUrl = resolveBackendApiUrl();
   try {
-    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.NEXTAUTH_SECRET || "";
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.SECRET_KEY || process.env.NEXTAUTH_SECRET || "";
     await fetch(`${backendApiUrl}/billing/webhook-sync`, {
       method: "POST",
       signal: AbortSignal.timeout(3000),
@@ -106,7 +123,7 @@ export async function handleSubscriptionActive(payload: {
     console.warn(`[Dodo Webhook] Duplicate subscription.active skipped: ${subscriptionId}`);
     return { status: "duplicate", subscriptionId };
   }
-  processedEvents.add(subscriptionId);
+  recordProcessedEvent(subscriptionId);
 
   // 2. Extract key details
   const customerEmail = subscription.customer?.email || "unknown";
@@ -118,9 +135,9 @@ export async function handleSubscriptionActive(payload: {
   console.info(`[Dodo Subscription Active] ID: ${subscriptionId} | Customer: ${customerEmail} | Product: ${productId} | Next: ${nextBilling}`);
 
   // 3. Dispatch internal backend synchronization
-  const backendApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+  const backendApiUrl = resolveBackendApiUrl();
   try {
-    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.NEXTAUTH_SECRET || "";
+    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.SECRET_KEY || process.env.NEXTAUTH_SECRET || "";
     await fetch(`${backendApiUrl}/billing/webhook-sync`, {
       method: "POST",
       signal: AbortSignal.timeout(3000),
@@ -131,6 +148,7 @@ export async function handleSubscriptionActive(payload: {
       body: JSON.stringify({
         provider: "dodopayments",
         event_type: "subscription.active",
+        payment_id: subscriptionId,
         subscription_id: subscriptionId,
         customer_id: customerId,
         customer_email: customerEmail,

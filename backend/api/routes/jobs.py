@@ -103,7 +103,13 @@ async def create_job(
     await db.refresh(job)
     # Trigger candidate sourcing in background
     if data.skills_required:
-        background_tasks.add_task(_source_candidates_bg, str(job.id), data.skills_required, data.location)
+        background_tasks.add_task(
+            _source_candidates_bg,
+            str(job.id),
+            data.skills_required,
+            data.location,
+            str(current_user.tenant_id),
+        )
     return JobOut.model_validate(job)
 
 @router.get("/{job_id}")
@@ -126,10 +132,10 @@ async def deactivate_job(job_id: UUID, db: AsyncSession = Depends(get_db), curre
     await db.commit()
     return {"message": "Job deactivated"}
 
-async def _source_candidates_bg(job_id: str, skills: list, location: Optional[str]):
+async def _source_candidates_bg(job_id: str, skills: list, location: Optional[str], tenant_id: str = "default"):
     try:
         from workers.tasks import safe_dispatch_task, source_candidates_for_job
-        safe_dispatch_task(source_candidates_for_job, job_id, skills, location)
+        safe_dispatch_task(source_candidates_for_job, job_id, skills, location, tenant_id)
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning(f"Could not enqueue source_candidates_for_job task: {e}")

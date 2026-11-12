@@ -57,7 +57,7 @@ async def test_deduct_credits_insufficient():
 
 @pytest.mark.asyncio
 async def test_deduct_credits_db_error_fails_open():
-    """If the DB is unavailable, agent execution continues (fail open)."""
+    """If the DB is unavailable, credit deduction fails closed (returns False)."""
     from services.billing_service import deduct_credits
 
     with patch("db.models.AsyncSessionLocal") as mock_session_factory:
@@ -65,7 +65,7 @@ async def test_deduct_credits_db_error_fails_open():
         mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
         result = await deduct_credits("00000000-0000-0000-0000-000000000000", amount=1)
-        assert result is True  # Should NOT raise — fail open
+        assert result is False
 
 
 # ── Webhook Security & Dodo Payments Sync ─────────────────────────────────────

@@ -13,21 +13,46 @@ function AuthContent() {
     const token = searchParams.get("token");
     const tenantId = searchParams.get("tenant_id");
     const role = searchParams.get("role");
+    const redirectParam = searchParams.get("redirect");
 
-    if (token) {
-      localStorage.setItem("dvt_token", token);
-      if (tenantId) {
-        localStorage.setItem("tenant_id", tenantId);
+    const finishSignIn = (resolvedToken: string, resolvedTenantId?: string | null, resolvedRole?: string | null) => {
+      localStorage.setItem("dvt_token", resolvedToken);
+      if (resolvedTenantId) {
+        localStorage.setItem("tenant_id", resolvedTenantId);
       }
       const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
-      document.cookie = `dvt_token=${token}; path=/; max-age=86400; SameSite=Lax${isSecure}`;
+      document.cookie = `dvt_token=${resolvedToken}; path=/; max-age=86400; SameSite=Lax${isSecure}`;
 
       toast.success("Successfully signed in!");
-      router.push(role === "candidate" ? "/portal" : "/dashboard");
-    } else {
-      toast.error("Authentication failed. Please try again.");
-      router.push("/auth/login");
+      const dest =
+        redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+          ? redirectParam
+          : resolvedRole === "candidate"
+            ? "/portal"
+            : "/dashboard";
+      router.push(dest);
+    };
+
+    if (token) {
+      finishSignIn(token, tenantId, role);
+      return;
     }
+
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+    fetch(`${apiBase}/auth/refresh`, { method: "POST", credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.access_token) {
+          finishSignIn(data.access_token, data.tenant_id || tenantId, data.role || role);
+        } else {
+          toast.error("Authentication failed. Please try again.");
+          router.push("/auth/login");
+        }
+      })
+      .catch(() => {
+        toast.error("Authentication failed. Please try again.");
+        router.push("/auth/login");
+      });
   }, [router, searchParams]);
 
   return (

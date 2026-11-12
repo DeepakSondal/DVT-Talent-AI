@@ -40,7 +40,9 @@ async def get_policy_packs(current_user: User = Depends(get_current_user)):
     return compliance_service.get_policy_packs_status()
 
 @router.get("/adverse-impact")
+@router.post("/adverse-impact/report")
 async def get_adverse_impact_report(
+    payload: Optional[dict] = Body(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -49,6 +51,13 @@ async def get_adverse_impact_report(
     Uses live tenant candidate cohorts grouped by source when available.
     """
     _require_compliance_access(current_user, write=False)
+    if payload and "pool_a_applied" in payload and "pool_b_applied" in payload:
+        cohort = [
+            {"group": "Pool A", "total": int(payload.get("pool_a_applied") or 0), "selected": int(payload.get("pool_a_hired") or 0)},
+            {"group": "Pool B", "total": int(payload.get("pool_b_applied") or 0), "selected": int(payload.get("pool_b_hired") or 0)},
+        ]
+        return compliance_service.calculate_adverse_impact([c for c in cohort if c["total"] > 0])
+
     rows = (
         await db.execute(
             select(
@@ -78,12 +87,6 @@ async def get_adverse_impact_report(
         for src, total, selected in rows
         if total and total > 0
     ]
-    if not cohort:
-        cohort = [
-            {"group": "Cohort Alpha", "total": 120, "selected": 96},
-            {"group": "Cohort Beta", "total": 85, "selected": 61},
-            {"group": "Cohort Gamma", "total": 45, "selected": 34},
-        ]
     return compliance_service.calculate_adverse_impact(cohort)
 
 @router.get("/decision-ledger")
@@ -116,7 +119,10 @@ async def get_decision_ledger(
             "qualification_score": r.qualification_score,
             "confidence_score": round((r.qualification_score or 88) / 100.0, 2),
             "confidence_level": r.confidence_level,
-            "evidence_signals": r.evidence_signals,
+            "evidence_signals": {
+                k: v for k, v in (r.evidence_signals.items() if isinstance(r.evidence_signals, dict) else [])
+                if k not in ("candidate_name", "candidate_email")
+            },
             "evidence_hash": r.input_data_hash,
             "reasoning_summary": r.reasoning_summary,
             "reasoning": r.reasoning_summary,

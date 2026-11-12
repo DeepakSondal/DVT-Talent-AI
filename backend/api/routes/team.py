@@ -574,7 +574,6 @@ async def list_team_members(db: AsyncSession = Depends(get_db), manager: User = 
 @router.get("/analytics")
 async def get_team_analytics(db: AsyncSession = Depends(get_db), manager: User = Depends(require_manager)):
     """Aggregate KPIs across the team."""
-    # Count total candidates sourced by recruiters under this manager
     subq = select(User.id).where(User.manager_id == manager.id, User.tenant_id == manager.tenant_id)
     stmt = select(func.count(Candidate.id)).where(
         Candidate.tenant_id == manager.tenant_id,
@@ -584,10 +583,18 @@ async def get_team_analytics(db: AsyncSession = Depends(get_db), manager: User =
     res = await db.execute(stmt)
     total_sourced = res.scalar() or 0
 
+    active_res = await db.execute(
+        select(func.count(User.id)).where(
+            User.tenant_id == manager.tenant_id,
+            User.is_active.is_(True),
+        )
+    )
+    active_recruiters = active_res.scalar() or 0
+
     return {
         "total_sourced_candidates": total_sourced,
-        "active_recruiters": 5, # Mock value, ideally calculated dynamically
-        "credit_usage_total": 12500
+        "active_recruiters": active_recruiters,
+        "credit_usage_total": 0,
     }
 
 @router.patch("/members/{user_id}/quota")
@@ -651,18 +658,32 @@ def _mask_api_key(encrypted: Optional[str]) -> Optional[str]:
     except Exception:
         return "••••"
 
+async def _resolve_manager_or_tenant_team(db: AsyncSession, manager: User) -> Team:
+    stmt = select(Team).where(Team.manager_id == manager.id, Team.tenant_id == manager.tenant_id)
+    team = (await db.execute(stmt)).scalar_one_or_none()
+    if not team and getattr(manager.role, "value", str(manager.role)) == "admin" and manager.tenant_id:
+        fallback_stmt = select(Team).where(Team.tenant_id == manager.tenant_id).limit(1)
+        team = (await db.execute(fallback_stmt)).scalar_one_or_none()
+        if not team:
+            team = Team(
+                name="Default Workspace Team",
+                tenant_id=manager.tenant_id,
+                manager_id=manager.id,
+            )
+            db.add(team)
+            await db.flush()
+    if not team:
+        raise HTTPException(status_code=404, detail="No team found for this manager")
+    return team
+
+
 @router.get("/keys", response_model=TeamApiKeysOut)
 async def get_team_api_keys(
     db: AsyncSession = Depends(get_db),
     manager: User = Depends(require_manager)
 ):
     """Fetch masked team API keys."""
-    # Find team
-    stmt = select(Team).where(Team.manager_id == manager.id, Team.tenant_id == manager.tenant_id)
-    result = await db.execute(stmt)
-    team = result.scalar_one_or_none()
-    if not team:
-        raise HTTPException(status_code=404, detail="No team found for this manager")
+    team = await _resolve_manager_or_tenant_team(db, manager)
         
     stmt_keys = select(TeamApiKeys).where(TeamApiKeys.team_id == team.id)
     res_keys = await db.execute(stmt_keys)
@@ -677,17 +698,14 @@ async def get_team_api_keys(
     )
 
 @router.post("/keys")
+@router.patch("/keys")
 async def save_team_api_keys(
     payload: TeamApiKeysConfig,
     db: AsyncSession = Depends(get_db),
     manager: User = Depends(require_manager)
 ):
     """Save encrypted team API keys."""
-    stmt = select(Team).where(Team.manager_id == manager.id, Team.tenant_id == manager.tenant_id)
-    result = await db.execute(stmt)
-    team = result.scalar_one_or_none()
-    if not team:
-        raise HTTPException(status_code=404, detail="No team found for this manager")
+    team = await _resolve_manager_or_tenant_team(db, manager)
         
     stmt_keys = select(TeamApiKeys).where(TeamApiKeys.team_id == team.id)
     res_keys = await db.execute(stmt_keys)

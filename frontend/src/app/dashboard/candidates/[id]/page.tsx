@@ -30,9 +30,8 @@ import { toast } from "sonner";
 const STAGES = [
   { id: "sourced", label: "Sourced" },
   { id: "screened", label: "AI Screened" },
-  { id: "shortlisted", label: "Shortlisted" },
   { id: "contacted", label: "Contacted" },
-  { id: "interviewed", label: "Interviewed" },
+  { id: "interviewing", label: "Interviewing" },
   { id: "offered", label: "Offered" },
   { id: "placed", label: "Placed" },
   { id: "rejected", label: "Rejected" },
@@ -100,7 +99,8 @@ export default function CandidateDetailPage() {
       toast.success(`Moved to ${newStatus.toUpperCase()} stage`);
       setCandidate((prev: any) => prev ? { ...prev, status: newStatus } : prev);
     } catch (err: any) {
-      toast.success(`Stage updated locally to ${newStatus.toUpperCase()}`);
+      setCandidateStatus(previousStatus);
+      toast.error("Failed to update candidate stage.");
     }
   };
 
@@ -132,7 +132,7 @@ export default function CandidateDetailPage() {
       toast.error("Please pick a date");
       return;
     }
-    handleStatusChange("interviewed");
+    handleStatusChange("interviewing");
     toast.success("Interview Scheduled", {
       description: `Confirmed for ${scheduleDate} at ${scheduleTime || "10:00 AM"}.`
     });
@@ -290,12 +290,12 @@ export default function CandidateDetailPage() {
 
               <div>
                 <span className="text-[10px] text-muted-foreground block font-medium">Phone Number</span>
-                <p className="font-semibold text-foreground mt-0.5">{candidate.phone || "+1 (555) 341-9082"}</p>
+                <p className="font-semibold text-foreground mt-0.5">{candidate.phone || "Not provided"}</p>
               </div>
 
               <div>
                 <span className="text-[10px] text-muted-foreground block font-medium">Location</span>
-                <p className="font-semibold text-foreground mt-0.5">{candidate.location || "San Francisco, CA"}</p>
+                <p className="font-semibold text-foreground mt-0.5">{candidate.location || "Remote"}</p>
               </div>
             </div>
 

@@ -67,8 +67,7 @@ export default function TeamPage() {
   const handleSaveKeys = async () => {
     setIsSavingKeys(true);
     try {
-      // Hit the new manager API endpoint to save the keys to TeamApiKeys table
-      await api.patch(`/team/keys`, keys).catch(() => {});
+      await api.post(`/team/keys`, keys);
       toast.success("API keys updated! Your team will now inherit these keys.");
     } catch (err) {
       toast.error("Failed to update workspace API keys.");

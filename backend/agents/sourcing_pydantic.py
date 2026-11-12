@@ -245,10 +245,10 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
     Strictly scoped to tenant_id.
     """
     try:
-        from backend.db.models import AsyncSessionLocal, Candidate
+        from backend.db.models import AsyncSessionLocal, Candidate, Tenant
         from backend.db.vector_store import vector_store
     except ImportError:
-        from db.models import AsyncSessionLocal, Candidate  # pyrefly: ignore[missing-import]  # type: ignore
+        from db.models import AsyncSessionLocal, Candidate, Tenant  # pyrefly: ignore[missing-import]  # type: ignore
         from db.vector_store import vector_store  # pyrefly: ignore[missing-import]  # type: ignore
     import uuid
 
@@ -261,13 +261,16 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
         except (ValueError, TypeError):
             pass
 
+    if not tenant_uuid:
+        return []
+
     facets = ResumeParserService.extract_deterministic_facets(keywords or "")
     raw_candidates: List[Dict[str, Any]] = []
 
     # 1. Fast hybrid vector + BM25 search on VectorStore
     try:
         hybrid_hits = vector_store.hybrid_search_resumes(
-            tenant_id=str(tenant_uuid or tenant_id or "default"),
+            tenant_id=str(tenant_uuid),
             query_text=keywords or "Software Engineer",
             limit=limit,
         )
@@ -298,12 +301,19 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
     # 2. Multi-keyword + canonical skill SQL search scoped to tenant
     try:
         async with AsyncSessionLocal() as session:
+            tenant_obj = await session.get(Tenant, tenant_uuid)
+            blocked_identifiers = set()
+            if tenant_obj:
+                if tenant_obj.domain:
+                    blocked_identifiers.add(tenant_obj.domain.strip().lower())
+                if tenant_obj.name:
+                    blocked_identifiers.add(tenant_obj.name.strip().lower())
+
             base_filters = [
                 Candidate.is_searchable.isnot(False),
                 Candidate.pii_erased.isnot(True),
+                Candidate.tenant_id == tenant_uuid,
             ]
-            if tenant_uuid:
-                base_filters.append(Candidate.tenant_id == tenant_uuid)
 
             stmt = select(Candidate).where(*base_filters)
 
@@ -329,6 +339,9 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
                 candidates = (await session.execute(fallback_stmt)).scalars().all()
 
             for c in candidates:
+                hidden = [str(x).strip().lower() for x in (c.hide_from_companies or []) if x]
+                if blocked_identifiers and any(b in hidden for b in blocked_identifiers):
+                    continue
                 full_name = f"{c.first_name} {c.last_name}".strip()
                 raw_candidates.append({
                     "id": str(c.id),

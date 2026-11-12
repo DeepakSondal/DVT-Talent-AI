@@ -99,10 +99,10 @@ export default function MonitoringPage() {
     const activeTasks = tasks.filter(t => t.status === "running" || t.status === "pending").length;
     const completedTasks = tasks.filter(t => t.status === "completed").length;
     const errorTasks = tasks.filter(t => t.status === "failed").length;
-    const totalCount = tasks.length || 12;
+    const totalCount = tasks.length;
     const successRate = totalCount > 0 ? (((totalCount - errorTasks) / totalCount) * 100).toFixed(1) : "100.0";
 
-    const hoursSaved = Math.max(18, Math.floor(completedTasks * 1.8 + 14));
+    const hoursSaved = Math.floor(completedTasks * 1.8);
     const totalDollarsSaved = hoursSaved * hourlyRate;
 
     const filteredSignals = signals.filter(s => {

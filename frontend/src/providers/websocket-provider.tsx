@@ -41,11 +41,16 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         host = window.location.host;
       }
       
-      const wsUrl = explicitWsUrl
-        ? `${explicitWsUrl.replace(/\/$/, "")}/pipeline-events?token=${token}`
-        : `${protocol}//${host}/api/v1/ws/pipeline-events?token=${token}`;
-
-      console.log(`[WS] Syncing with Intelligence Stream at ${wsUrl}`);
+      let baseWs: string;
+      if (explicitWsUrl && explicitWsUrl.trim() !== "") {
+        const cleanExplicit = explicitWsUrl.trim().replace(/\/$/, "").replace(/\/pipeline-events$/, "");
+        baseWs = cleanExplicit.startsWith("ws://") || cleanExplicit.startsWith("wss://")
+          ? cleanExplicit
+          : `${protocol}//${window.location.host}${cleanExplicit.startsWith("/") ? "" : "/"}${cleanExplicit}`;
+      } else {
+        baseWs = `${protocol}//${host}/api/v1/ws`;
+      }
+      const wsUrl = `${baseWs}/pipeline-events?token=${encodeURIComponent(token)}`;
       
       const ws = new WebSocket(wsUrl);
 

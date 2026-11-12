@@ -90,9 +90,11 @@ async def list_plans(db: AsyncSession = Depends(get_db)):
             "name": p.name,
             "product_id": p.stripe_price_id,  # Product/Price ID in payment processor
             "credits": p.credits_per_month,
+            "credits_per_month": p.credits_per_month,
             "features": p.features,
             "is_one_time": p.is_one_time,
-            "price_usd": p.price_usd_cents / 100,
+            "price_usd": (p.price_usd_cents or 0) / 100,
+            "price_usd_cents": p.price_usd_cents or 0,
         }
         for p in plans
     ]
@@ -119,11 +121,23 @@ async def create_checkout(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    # Get plan
-    plan_result = await db.execute(
-        select(SubscriptionPlan).where(SubscriptionPlan.id == req.plan_id, SubscriptionPlan.is_active.is_(True))
-    )
-    plan: Optional[SubscriptionPlan] = plan_result.scalar_one_or_none()
+    # Get plan (support UUID or fallback slug/stripe_price_id)
+    plan: Optional[SubscriptionPlan] = None
+    try:
+        plan_uuid = uuid.UUID(str(req.plan_id))
+        plan_result = await db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.id == plan_uuid, SubscriptionPlan.is_active.is_(True))
+        )
+        plan = plan_result.scalar_one_or_none()
+    except (ValueError, TypeError):
+        slug_name = str(req.plan_id).removeprefix("plan_").replace("_", " ").strip()
+        plan_result = await db.execute(
+            select(SubscriptionPlan).where(
+                SubscriptionPlan.is_active.is_(True),
+                (SubscriptionPlan.stripe_price_id == req.plan_id) | (SubscriptionPlan.name.ilike(slug_name)),
+            )
+        )
+        plan = plan_result.scalar_one_or_none()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
 
@@ -217,14 +231,15 @@ async def _process_webhook_sync(req: WebhookSyncRequest, db: AsyncSession) -> Di
         log.warning("dodo_sync_tenant_not_found", email=req.customer_email)
         return {"status": "ignored", "reason": "Tenant not identified"}
 
-    # Idempotency check: skip already processed payment IDs
-    if req.payment_id:
+    # Idempotency check: skip already processed payment or subscription IDs
+    dedup_key = req.payment_id or req.subscription_id
+    if dedup_key:
         existing_tx = await db.execute(
-            select(CreditTransaction).where(CreditTransaction.description.contains(req.payment_id))
+            select(CreditTransaction).where(CreditTransaction.description.contains(dedup_key))
         )
         if existing_tx.scalar_one_or_none():
-            log.info("dodo_sync_duplicate_skipped", payment_id=req.payment_id)
-            return {"status": "duplicate_skipped", "payment_id": req.payment_id}
+            log.info("dodo_sync_duplicate_skipped", payment_id=dedup_key)
+            return {"status": "duplicate_skipped", "payment_id": dedup_key}
 
     plan_id_str = req.metadata.get("plan_id") if req.metadata else None
     plan: Optional[SubscriptionPlan] = None
@@ -249,7 +264,7 @@ async def _process_webhook_sync(req: WebhookSyncRequest, db: AsyncSession) -> Di
             tenant_id=tenant.id,
             amount=credits_to_grant,
             type=CreditTransactionType.CREDIT,
-            description=f"Dodo Payments: {plan_name} (+{credits_to_grant} credits) [{req.payment_id or 'direct'}]",
+            description=f"Dodo Payments: {plan_name} (+{credits_to_grant} credits) [{dedup_key or 'direct'}]",
         )
         db.add(tx)
         await db.commit()
@@ -277,6 +292,42 @@ async def sync_dodo_webhook(
 
 
 # ── Direct Dodo Webhook Receiver ──────────────────────────────────────────────
+def _verify_dodo_webhook_signature(
+    raw_body: bytes,
+    secret: str,
+    webhook_signature: Optional[str],
+    webhook_id: str = "",
+    webhook_timestamp: str = "",
+) -> bool:
+    """Verify Standard Webhooks (whsec_ base64 + v1,<base64>) or hex HMAC-SHA256 signatures."""
+    if not secret or not webhook_signature:
+        return False
+    import base64
+
+    raw_secret = secret.removeprefix("whsec_")
+    try:
+        secret_bytes = base64.b64decode(raw_secret)
+    except Exception:
+        secret_bytes = secret.encode("utf-8")
+
+    sig_candidates = [
+        s.split(",", 1)[-1].replace("v1=", "").strip()
+        for s in webhook_signature.split()
+        if s.strip()
+    ] or [webhook_signature.split(",")[-1].replace("v1=", "").strip()]
+
+    if webhook_id and webhook_timestamp:
+        signed_content = f"{webhook_id}.{webhook_timestamp}.".encode("utf-8") + raw_body
+        for key_bytes in (secret_bytes, secret.encode("utf-8")):
+            expected_b64 = base64.b64encode(hmac.new(key_bytes, signed_content, hashlib.sha256).digest()).decode("utf-8")
+            if any(hmac.compare_digest(expected_b64, cand) for cand in sig_candidates):
+                return True
+
+    expected_hex = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    clean_sig = webhook_signature.split(",")[-1].replace("v1=", "").strip()
+    return hmac.compare_digest(expected_hex.lower(), clean_sig.lower())
+
+
 @router.post("/webhook", include_in_schema=False, summary="Direct Dodo Payments webhook receiver")
 async def dodo_webhook(
     request: Request,
@@ -289,9 +340,13 @@ async def dodo_webhook(
     if dodo_webhook_key or settings.is_production:
         if not dodo_webhook_key or not sig_header:
             raise HTTPException(status_code=400, detail="Missing webhook signature header")
-        expected_sig = hmac.new(dodo_webhook_key.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-        clean_sig = sig_header.split(",")[-1].replace("v1=", "").strip()
-        if not hmac.compare_digest(expected_sig.lower(), clean_sig.lower()):
+        if not _verify_dodo_webhook_signature(
+            raw_body=raw_body,
+            secret=dodo_webhook_key,
+            webhook_signature=sig_header,
+            webhook_id=request.headers.get("webhook-id", ""),
+            webhook_timestamp=request.headers.get("webhook-timestamp", ""),
+        ):
             raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     try:

@@ -197,12 +197,12 @@ class ResumeParserService:
         elif ext == ".pdf":
             text = cls._extract_from_pdf(content_bytes)
             
-        # 2. Word (DOCX / DOC) Extraction
-        elif ext in {".docx", ".doc"}:
+        # 2. Word (DOCX) Extraction — exclude legacy binary OLE2 .doc
+        elif ext == ".docx" or (ext == ".doc" and content_bytes.startswith(b"PK\x03\x04")):
             text = cls._extract_from_docx(content_bytes)
             
-        # 3. Plain Text / Fallback (only if not a failed binary container like %PDF or PK zip)
-        if not text.strip() and not content_bytes.startswith((b"%PDF", b"PK\x03\x04")):
+        # 3. Plain Text / Fallback (only if not a failed binary container like %PDF, PK zip, or OLE2 .doc)
+        if not text.strip() and not content_bytes.startswith((b"%PDF", b"PK\x03\x04", b"\xd0\xcf\x11\xe0")):
             text = cls._extract_from_plain_text(content_bytes)
 
         # Normalize line endings, sanitize prompt injection vectors, and bound size

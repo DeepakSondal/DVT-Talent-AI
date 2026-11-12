@@ -187,7 +187,7 @@ services:
       - dvt_network
 
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: dvt_db
     restart: always
     environment:

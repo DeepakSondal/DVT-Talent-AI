@@ -66,7 +66,7 @@ export default function CandidatesPage() {
                     github_url: c.github_url,
                     ai_summary: c.ai_summary,
                     created_at: c.created_at ? c.created_at.split("T")[0] : new Date().toISOString().split("T")[0],
-                    resume_file_name: c.resume_file_name || `${c.first_name.toLowerCase()}_resume.pdf`
+                    resume_file_name: c.resume_file_name || `${(c.first_name || "candidate").toLowerCase()}_resume.pdf`
                 }));
                 setCandidates(mapped);
             })
@@ -145,21 +145,27 @@ export default function CandidatesPage() {
             const headers = ["First Name", "Last Name", "Email", "Phone", "Title", "Company", "Location", "Experience (Yrs)", "AI Match Score", "Status", "Source Platform", "Skills", "AI Reasoning"];
             const csvRows = [headers.join(",")];
 
+            const escapeCsvCell = (val: unknown) => {
+                const str = String(val ?? "").replace(/"/g, '""');
+                const safe = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+                return `"${safe}"`;
+            };
+
             dataToExport.forEach(c => {
                 const row = [
-                    `"${c.first_name}"`,
-                    `"${c.last_name}"`,
-                    `"${c.email}"`,
-                    `"${c.phone || ''}"`,
-                    `"${c.title}"`,
-                    `"${c.company}"`,
-                    `"${c.location}"`,
+                    escapeCsvCell(c.first_name),
+                    escapeCsvCell(c.last_name),
+                    escapeCsvCell(c.email),
+                    escapeCsvCell(c.phone || ""),
+                    escapeCsvCell(c.title),
+                    escapeCsvCell(c.company),
+                    escapeCsvCell(c.location),
                     c.experience_years,
                     `${c.score}%`,
-                    `"${c.status}"`,
-                    `"${c.source}"`,
-                    `"${c.skills.join("; ")}"`,
-                    `"${(c.ai_summary || "").replace(/"/g, '""')}"`
+                    escapeCsvCell(c.status),
+                    escapeCsvCell(c.source),
+                    escapeCsvCell(c.skills.join("; ")),
+                    escapeCsvCell(c.ai_summary || "")
                 ];
                 csvRows.push(row.join(","));
             });
@@ -173,6 +179,7 @@ export default function CandidatesPage() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
 
             toast.success("Talent Directory Export Complete", {
                 description: `Exported ${dataToExport.length} candidate records.`

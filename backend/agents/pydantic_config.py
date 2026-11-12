@@ -51,6 +51,11 @@ def _build_anthropic_model(model_name: str, api_key: str):
     return AnthropicModel(model_name)
 
 
+def _hash_key_id(key: str) -> str:
+    import hashlib
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
+
 # 2. Unified Model Routing
 # We use the existing settings to decide which model to use for Pydantic AI
 def get_pydantic_model(dynamic_api_key: str = None, deps: Optional['AgentDeps'] = None):
@@ -61,7 +66,7 @@ def get_pydantic_model(dynamic_api_key: str = None, deps: Optional['AgentDeps'] 
     """
     # 1. Direct key override
     if dynamic_api_key:
-        cache_k = f"openai_dyn:{settings.openai_model}:{dynamic_api_key[:8]}"
+        cache_k = f"openai_dyn:{settings.openai_model}:{_hash_key_id(dynamic_api_key)}"
         if cache_k not in _MODEL_CACHE:
             _MODEL_CACHE[cache_k] = _build_openai_model(settings.openai_model, api_key=dynamic_api_key)
         return _MODEL_CACHE[cache_k]
@@ -69,12 +74,12 @@ def get_pydantic_model(dynamic_api_key: str = None, deps: Optional['AgentDeps'] 
     # 2. AgentDeps override (Tenant/Team Keys)
     if deps:
         if deps.anthropic_key:
-            cache_k = f"anthropic:{settings.anthropic_model}:{deps.anthropic_key[:8]}"
+            cache_k = f"anthropic:{settings.anthropic_model}:{_hash_key_id(deps.anthropic_key)}"
             if cache_k not in _MODEL_CACHE:
                 _MODEL_CACHE[cache_k] = _build_anthropic_model(settings.anthropic_model, deps.anthropic_key)
             return _MODEL_CACHE[cache_k]
         if deps.openai_key:
-            cache_k = f"openai_deps:{settings.openai_model}:{deps.openai_key[:8]}"
+            cache_k = f"openai_deps:{settings.openai_model}:{_hash_key_id(deps.openai_key)}"
             if cache_k not in _MODEL_CACHE:
                 _MODEL_CACHE[cache_k] = _build_openai_model(settings.openai_model, api_key=deps.openai_key)
             return _MODEL_CACHE[cache_k]

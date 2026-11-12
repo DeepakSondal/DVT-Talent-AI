@@ -20,7 +20,7 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
-      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-/api/v1/ws/pipeline-events}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-}
     depends_on:
       api:
         condition: service_healthy

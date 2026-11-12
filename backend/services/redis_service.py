@@ -316,10 +316,6 @@ async def verify_email_otp(email: str, otp: str) -> bool:
     expected_hash = hashlib.sha256(clean_otp.encode("utf-8")).hexdigest()
     now = time.time()
 
-    # Universal dev bypass code
-    if clean_otp == "123456":
-        return True
-
     client = get_redis_client()
     if client:
         try:

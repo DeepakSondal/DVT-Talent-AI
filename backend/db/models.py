@@ -175,11 +175,11 @@ class UserRole(str, enum.Enum):
     @classmethod
     def _missing_(cls, value):
         if isinstance(value, str):
-            val_lower = value.lower()
+            val_lower = value.strip().lower()
             for member in cls:
                 if member.value.lower() == val_lower or member.name.lower() == val_lower:
                     return member
-        return cls.RECRUITER
+        return None
 
 
 class LeadStatus(str, enum.Enum):
@@ -194,7 +194,7 @@ class LeadStatus(str, enum.Enum):
     @classmethod
     def _missing_(cls, value):
         if isinstance(value, str):
-            val_lower = value.lower()
+            val_lower = value.strip().lower()
             for member in cls:
                 if member.value.lower() == val_lower or member.name.lower() == val_lower:
                     return member
@@ -215,7 +215,13 @@ class CandidateStatus(str, enum.Enum):
     @classmethod
     def _missing_(cls, value):
         if isinstance(value, str):
-            val_lower = value.lower()
+            val_lower = value.strip().lower()
+            aliases = {
+                "shortlisted": cls.SCREENED,
+                "interviewed": cls.INTERVIEWING,
+            }
+            if val_lower in aliases:
+                return aliases[val_lower]
             for member in cls:
                 if member.value.lower() == val_lower or member.name.lower() == val_lower:
                     return member
@@ -230,7 +236,17 @@ class EmailStatus(str, enum.Enum):
     CLICKED = "clicked"
     REPLIED = "replied"
     BOUNCED = "bounced"
+    FAILED = "failed"
     UNSUBSCRIBED = "unsubscribed"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            val_lower = value.strip().lower()
+            for member in cls:
+                if member.value.lower() == val_lower or member.name.lower() == val_lower:
+                    return member
+        return None
 
 
 class InterviewStatus(str, enum.Enum):

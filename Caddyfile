@@ -5,6 +5,15 @@
 
 # Snippet: shared config for frontend + API routing
 (frontend_config) {
+    # Next.js Dodo Payments Webhook Routes — route to frontend before catch-all /api/*
+    handle /api/webhook* {
+        reverse_proxy frontend:3000
+    }
+
+    handle /api/webhooks/* {
+        reverse_proxy frontend:3000
+    }
+
     # API Routes — must come before the catch-all frontend
     handle /api/* {
         reverse_proxy api:8000

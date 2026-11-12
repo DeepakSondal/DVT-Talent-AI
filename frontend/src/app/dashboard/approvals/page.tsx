@@ -84,9 +84,7 @@ export default function ApprovalsPage() {
             toast.success(`Decision ${overrideStatus === "APPROVED" ? "approved" : "rejected"} successfully!`);
             setItems(prev => prev.map(item => item.id === id ? { ...item, status: overrideStatus } : item));
         } catch (e) {
-            // Fallback for mock state
-            toast.success(`Decision ${overrideStatus === "APPROVED" ? "approved" : "rejected"} in local workspace.`);
-            setItems(prev => prev.map(item => item.id === id ? { ...item, status: overrideStatus } : item));
+            toast.error("Failed to record decision override. Please try again.");
         }
     };
 
@@ -95,9 +93,14 @@ export default function ApprovalsPage() {
             toast.error("Please enter a calibration prompt/note.");
             return;
         }
-        await complianceApi.overrideDecision(id, "REJECTED", `Calibration: ${calibrationNote.trim()}`).catch(() => {}); toast.success("Agent Swarm memory updated with recruiter calibration note.");
-        setCalibratingId(null);
-        setCalibrationNote("");
+        try {
+            await complianceApi.overrideDecision(id, "REJECTED", `Calibration: ${calibrationNote.trim()}`);
+            toast.success("Agent Swarm memory updated with recruiter calibration note.");
+            setCalibratingId(null);
+            setCalibrationNote("");
+        } catch {
+            toast.error("Failed to save calibration note.");
+        }
     };
 
     const pendingCount = items.filter(i => i.status === "PENDING").length;

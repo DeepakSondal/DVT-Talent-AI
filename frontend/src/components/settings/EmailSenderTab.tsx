@@ -76,10 +76,14 @@ export function EmailSenderSettings() {
         sender_name: senderName || undefined,
         sender_email: senderEmail || undefined,
       });
-      toast.success("Mailbox connected!", { description: res.message });
-      await loadConfig();
       if (res.authorization_url) {
+        toast.info("Redirecting to OAuth Consent", {
+          description: "Complete mailbox authorization in the newly opened window.",
+        });
         window.open(res.authorization_url, "_blank", "noopener,noreferrer");
+      } else {
+        toast.success("Mailbox connected!", { description: res.message });
+        await loadConfig();
       }
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Failed to connect mailbox via OAuth 2.0.";

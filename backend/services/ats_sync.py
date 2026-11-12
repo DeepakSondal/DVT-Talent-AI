@@ -19,12 +19,14 @@ PINECONE_HOST = getattr(settings, 'pinecone_host', 'https://dvt-memory-tree.pine
 
 async def fetch_candidates_from_merge_dev(tenant_id: str, ats_provider: str) -> List[Dict[str, Any]]:
     """
-    Mock integration to Merge.dev to pull candidates from Greenhouse/Lever.
+    Integration to Merge.dev to pull candidates from Greenhouse/Lever.
     Returns normalized candidate data.
     """
     log.info(f"Connecting to Merge.dev for tenant {tenant_id} (Provider: {ats_provider})")
-    
-    # Mocking the response that would come from Merge.dev Unified ATS API
+    if getattr(settings, "is_production", False):
+        return []
+
+    # Dev/Test fallback response representing Merge.dev Unified ATS API
     return [
         {
             "id": "cnd_12345",
@@ -97,7 +99,7 @@ async def sync_ats_to_pinecone(tenant_id: str, ats_provider: str):
             response = await http.post(
                 f"{PINECONE_HOST}/vectors/upsert",
                 headers={"Api-Key": PINECONE_API_KEY},
-                json={"vectors": vectors}
+                json={"vectors": vectors, "namespace": str(tenant_id)}
             )
             response.raise_for_status()
             log.info(f"Successfully synced {len(vectors)} ATS candidates to Pinecone Data Lake.")

@@ -188,12 +188,15 @@ def analyze_resume_task(
         raw_text = ResumeParserService.extract_text(file_bytes, filename)
         if not raw_text.strip():
             raw_text = f"Resume document: {filename}"
+        anonymized_text, _ = ResumeParserService.extract_anonymized_text(file_bytes, filename)
+        if not anonymized_text.strip():
+            anonymized_text = raw_text
         
         async def _run():
             import httpx
             async with httpx.AsyncClient() as client:
                 deps = AgentDeps(http_client=client, tenant_id=resolved_tenant_id)
-                prompt = f"Analyze this resume against the JD: {job_description or 'Software Engineer'}. Resume text: {raw_text}"
+                prompt = f"Analyze this resume against the JD: {job_description or 'Software Engineer'}. Resume text: {anonymized_text}"
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
                 
@@ -237,18 +240,33 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
             
             jd_text = "Software Engineer"
             if job_id:
-                jd_row = conn.execute(
-                    text("SELECT description FROM jobs WHERE id = :jid"),
-                    {"jid": job_id}
-                ).fetchone()
-                if jd_row:
+                if resolved_tenant_id and resolved_tenant_id != "default":
+                    clean_tid = resolved_tenant_id.replace("-", "")
+                    hyphen_tid = str(uuid.UUID(clean_tid)) if len(clean_tid) == 32 else resolved_tenant_id
+                    jd_row = conn.execute(
+                        text("SELECT description FROM jobs WHERE id = :jid AND (tenant_id = :tid OR tenant_id = :htid)"),
+                        {"jid": job_id, "tid": clean_tid, "htid": hyphen_tid}
+                    ).fetchone()
+                else:
+                    jd_row = conn.execute(
+                        text("SELECT description FROM jobs WHERE id = :jid"),
+                        {"jid": job_id}
+                    ).fetchone()
+                if jd_row and jd_row[0]:
                     jd_text = jd_row[0]
+
+        redacted_resume_text = row[0]
+        try:
+            from services.pii_service import pii_service
+            redacted_resume_text, _ = pii_service.mask_pii(row[0])
+        except Exception as e:
+            log.warning("score_candidate_pii_mask_fallback", error=str(e))
 
         async def _run():
             import httpx
             async with httpx.AsyncClient() as client:
                 deps = AgentDeps(http_client=client, tenant_id=resolved_tenant_id)
-                prompt = f"Score this candidate against JD: {jd_text}. Candidate info: {row[0]}"
+                prompt = f"Score this candidate against JD: {jd_text}. Candidate info: {redacted_resume_text}"
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
 
@@ -257,15 +275,16 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
         with engine.connect() as conn:
             candidates = result.get("candidates", [])
             cand_data = candidates[0] if candidates else {}
+            extracted_title = (cand_data.get("current_title") or cand_data.get("title") or "").strip()[:255] or None
             conn.execute(
                 text("""
                     UPDATE candidates
-                    SET score = :score, title = :title, ai_summary = :summary
+                    SET score = :score, title = COALESCE(:title, title), ai_summary = :summary
                     WHERE (id = :cid OR id = :hcid) AND pii_erased = FALSE
                 """),
                 {
                     "score": cand_data.get("match_score", 0),
-                    "title": jd_text,
+                    "title": extracted_title,
                     "summary": cand_data.get("ai_reasoning", {}).get("alignment", ""),
                     "cid": clean_cid,
                     "hcid": hyphen_cid,

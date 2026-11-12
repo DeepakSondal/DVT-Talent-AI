@@ -4,8 +4,10 @@ export const complianceService = {
   getPolicyPacks: (): Promise<any[]> =>
     http.get("/compliance/policy-packs").then((r) => r.data),
 
-  getAdverseImpactReport: (payload: { pool_a_hired: number; pool_a_applied: number; pool_b_hired: number; pool_b_applied: number }): Promise<any> =>
-    http.post("/compliance/adverse-impact/report", payload).then((r) => r.data),
+  getAdverseImpactReport: (payload?: { pool_a_hired: number; pool_a_applied: number; pool_b_hired: number; pool_b_applied: number }): Promise<any> =>
+    payload
+      ? http.post("/compliance/adverse-impact/report", payload).then((r) => r.data)
+      : http.get("/compliance/adverse-impact").then((r) => r.data),
 
   getLedger: (limit = 50): Promise<any[]> =>
     http.get("/compliance/ledgers", { params: { limit } }).then((r) => r.data),

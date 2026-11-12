@@ -6,6 +6,7 @@ Revision ID: 007_team_invitations
 Revises: 006_tenant_email_sender
 """
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -17,7 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     invitation_status_enum = sa.Enum('pending', 'accepted', 'revoked', 'expired', name='invitationstatus')
-    user_role_enum = sa.Enum('admin', 'manager', 'recruiter', 'viewer', 'candidate', name='userrole')
+    user_role_enum = postgresql.ENUM('admin', 'manager', 'recruiter', 'viewer', 'candidate', name='userrole', create_type=False)
 
     op.create_table(
         'team_invitations',

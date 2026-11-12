@@ -235,7 +235,7 @@ export default function JobDetailPage() {
               <Users className="w-3.5 h-3.5 text-primary" />
               Requisition Hiring Funnel
             </span>
-            <span className="text-primary">{matches.length + 6} Total Active In Flow</span>
+            <span className="text-primary">{matches.length} Total Active In Flow</span>
           </div>
           <div className="w-full h-2.5 rounded-full bg-muted flex overflow-hidden">
             <div className="bg-blue-500 h-full w-[45%]" title="Sourced" />

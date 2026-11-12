@@ -32,7 +32,7 @@ def sync_all_ats_jobs(self, tenant_id: str):
                 results.append({"provider": conn.provider, "error": str(e)})
         return results
 
-    return asyncio.get_event_loop().run_until_complete(_run())
+    return asyncio.run(_run())
 
 
 @celery_app.task(bind=True, name="workers.ats_tasks.export_candidate_task", max_retries=3)
@@ -62,7 +62,7 @@ def export_candidate_task(
         )
 
     try:
-        result = asyncio.get_event_loop().run_until_complete(_run())
+        result = asyncio.run(_run())
         log.info("ats_export_task_done", provider=provider, result=result)
         return result
     except Exception as exc:

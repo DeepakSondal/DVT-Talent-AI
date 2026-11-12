@@ -70,8 +70,16 @@ async def list_campaigns(
     current_user: User = Depends(get_current_user),
 ):
     _require_campaign_access(current_user, write=False)
-    query = select(EmailCampaign).where(EmailCampaign.owner_id == current_user.id)
-    count_q = select(func.count(EmailCampaign.id)).where(EmailCampaign.owner_id == current_user.id)
+    query = (
+        select(EmailCampaign)
+        .join(User, EmailCampaign.owner_id == User.id)
+        .where(User.tenant_id == current_user.tenant_id)
+    )
+    count_q = (
+        select(func.count(EmailCampaign.id))
+        .join(User, EmailCampaign.owner_id == User.id)
+        .where(User.tenant_id == current_user.tenant_id)
+    )
     total = (await db.execute(count_q)).scalar()
     query = query.order_by(desc(EmailCampaign.created_at)).offset((page - 1) * page_size).limit(page_size)
     items = (await db.execute(query)).scalars().all()
@@ -98,9 +106,11 @@ async def get_campaign(
     current_user: User = Depends(get_current_user),
 ):
     _require_campaign_access(current_user, write=False)
-    result = await db.execute(select(EmailCampaign).where(
-        EmailCampaign.id == campaign_id, EmailCampaign.owner_id == current_user.id
-    ))
+    result = await db.execute(
+        select(EmailCampaign)
+        .join(User, EmailCampaign.owner_id == User.id)
+        .where(EmailCampaign.id == campaign_id, User.tenant_id == current_user.tenant_id)
+    )
     campaign = result.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
@@ -113,9 +123,11 @@ async def toggle_campaign(
     current_user: User = Depends(get_current_user),
 ):
     _require_campaign_access(current_user, write=True)
-    result = await db.execute(select(EmailCampaign).where(
-        EmailCampaign.id == campaign_id, EmailCampaign.owner_id == current_user.id
-    ))
+    result = await db.execute(
+        select(EmailCampaign)
+        .join(User, EmailCampaign.owner_id == User.id)
+        .where(EmailCampaign.id == campaign_id, User.tenant_id == current_user.tenant_id)
+    )
     campaign = result.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
@@ -149,9 +161,11 @@ async def send_campaign(
         window_seconds=300,
         detail="This campaign was just triggered. Please wait 5 minutes before triggering again.",
     )
-    result = await db.execute(select(EmailCampaign).where(
-        EmailCampaign.id == campaign_id, EmailCampaign.owner_id == current_user.id
-    ))
+    result = await db.execute(
+        select(EmailCampaign)
+        .join(User, EmailCampaign.owner_id == User.id)
+        .where(EmailCampaign.id == campaign_id, User.tenant_id == current_user.tenant_id)
+    )
     campaign = result.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
@@ -185,8 +199,12 @@ async def get_campaign_emails(
     query = select(EmailSent).where(EmailSent.campaign_id == campaign_id)
     count_q = select(func.count(EmailSent.id)).where(EmailSent.campaign_id == campaign_id)
     if status:
-        query = query.where(EmailSent.status == status)
-        count_q = count_q.where(EmailSent.status == status)
+        try:
+            status_enum = EmailStatus(status)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid email status '{status}'") from exc
+        query = query.where(EmailSent.status == status_enum)
+        count_q = count_q.where(EmailSent.status == status_enum)
     total = (await db.execute(count_q)).scalar() or 0
     query = query.order_by(desc(EmailSent.created_at)).offset((page - 1) * page_size).limit(page_size)
     emails = (await db.execute(query)).scalars().all()

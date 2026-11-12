@@ -128,12 +128,15 @@ async def export_candidate(
             return {"error": f"Job {job_id} not found"}
         external_job_id = str(job.meta_data.get("external_id", job_id)) if (job and job.meta_data) else job_id
 
+        resume_url_val = getattr(candidate, "resume_url", None) or (
+            candidate.meta_data.get("resume_url", "") if isinstance(candidate.meta_data, dict) else ""
+        )
         candidate_data = {
             "name": f"{candidate.first_name} {candidate.last_name}",
             "email": candidate.email or "",
             "phone": candidate.phone or "",
             "linkedin_url": candidate.linkedin_url or "",
-            "resume_url": candidate.resume_url or "",
+            "resume_url": resume_url_val or "",
             "source": candidate.source or "dvt_ai",
         }
 

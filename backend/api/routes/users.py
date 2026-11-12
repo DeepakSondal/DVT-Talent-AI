@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -131,24 +131,32 @@ async def list_users(
     users = result.scalars().all()
     return {"items": [UserOut.model_validate(u) for u in users], "total": len(users)}
 
+class RoleUpdatePayload(BaseModel):
+    role: UserRole
+
+
 @router.patch("/{user_id}/role")
 async def update_user_role(
     user_id: UUID,
-    role: UserRole,
+    role: Optional[UserRole] = Query(None),
+    payload: Optional[RoleUpdatePayload] = Body(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     if not current_user.tenant_id:
         raise HTTPException(status_code=403, detail="Workspace tenant context required")
+    resolved_role = role or (payload.role if payload else None)
+    if not resolved_role:
+        raise HTTPException(status_code=422, detail="Role is required")
     result = await db.execute(
         select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id)
     )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user.role = role
+    user.role = resolved_role
     await db.commit()
-    return {"message": f"Role updated to {role.value}", "user_id": str(user_id)}
+    return {"message": f"Role updated to {resolved_role.value}", "user_id": str(user_id)}
 
 @router.patch("/{user_id}/deactivate")
 async def deactivate_user(

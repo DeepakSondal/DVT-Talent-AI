@@ -33,7 +33,7 @@ async def get_recent_signals(
         tenant_str = str(current_user.tenant_id)
         return [
             s for s in parsed
-            if not s.get("tenant_id") or str(s.get("tenant_id")) == tenant_str
+            if str(s.get("tenant_id") or "") == tenant_str
         ]
     except Exception as e:
         log.error("signals_fetch_failed", error=str(e))
@@ -84,8 +84,6 @@ async def get_active_mediations(
             latest_entry = await r.lindex(latest_key, 0)
             if latest_entry:
                 latest_reconciliation = f"{latest_key}: {latest_entry}"
-
-        await r.aclose()
 
         return {
             "active_locks": len(active_locks),

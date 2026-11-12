@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.rate_limit import (
@@ -100,7 +100,12 @@ class UserOut(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 async def verify_password(plain: str, hashed: str) -> bool:
-    return await asyncio.to_thread(bcrypt.checkpw, plain.encode('utf-8'), hashed.encode('utf-8'))
+    if not plain or not hashed or not hashed.startswith(("$2a$", "$2b$", "$2y$")):
+        return False
+    try:
+        return await asyncio.to_thread(bcrypt.checkpw, plain.encode('utf-8'), hashed.encode('utf-8'))
+    except ValueError:
+        return False
 
 
 async def hash_password(password: str) -> str:
@@ -237,7 +242,7 @@ async def send_registration_otp(
     except Exception as exc:
         log.warning("otp_email_send_exception", error=str(exc))
 
-    is_dev = not settings.is_production or os.getenv("APP_ENV") != "production"
+    is_dev = not settings.is_production and os.getenv("APP_ENV", "").lower() != "production"
     return {
         "status": "success",
         "message": f"Verification code sent to {clean_email}",
@@ -381,7 +386,7 @@ async def register(
         key="dvt_refresh_token",
         value=refresh_token,
         httponly=True,
-        path="/api/v1/auth/refresh",
+        path="/",
         max_age=30 * 24 * 60 * 60,
         samesite="lax",
         secure=settings.is_production,
@@ -422,7 +427,7 @@ async def login(
                 headers={"Retry-After": "900"},
             )
 
-    result = await db.execute(select(User).where(User.email == form_data.username))
+    result = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -485,7 +490,7 @@ async def login(
         key="dvt_refresh_token",
         value=refresh_token,
         httponly=True,
-        path="/api/v1/auth/refresh",
+        path="/",
         max_age=30 * 24 * 60 * 60,
         samesite="lax",
         secure=settings.is_production,
@@ -572,7 +577,7 @@ async def refresh_token_route(
         key="dvt_refresh_token",
         value=refresh_token,
         httponly=True,
-        path="/api/v1/auth/refresh",
+        path="/",
         max_age=30 * 24 * 60 * 60,
         samesite="lax",
         secure=settings.is_production,
@@ -617,6 +622,7 @@ async def logout(
 
     response = JSONResponse(content={"message": "Logged out successfully"})
     response.delete_cookie(key="dvt_token", path="/", samesite="lax")
+    response.delete_cookie(key="dvt_refresh_token", path="/", samesite="lax")
     response.delete_cookie(key="dvt_refresh_token", path="/api/v1/auth/refresh", samesite="lax")
     return response
 
@@ -625,10 +631,17 @@ class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
 
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
+
+
 @router.post("/forgot-password")
 async def forgot_password(
     payload: ForgotPasswordRequest,
     request: Request,
+    db: AsyncSession = Depends(get_db),
 ):
     """Rate-limited password reset request that never leaks whether an email is registered."""
     client_ip = get_real_client_ip(request)
@@ -640,6 +653,55 @@ async def forgot_password(
         window_seconds=600,
         detail="Too many password reset requests. Please try again later.",
     )
+    clean_email = str(payload.email).strip().lower()
+    user = (await db.execute(select(User).where(func.lower(User.email) == clean_email))).scalar_one_or_none()
+    if user and user.is_active:
+        reset_code = f"{secrets.randbelow(900000) + 100000:06d}"
+        await store_email_otp(f"reset:{clean_email}", reset_code, ttl_seconds=600)
+        try:
+            await email_service.send_email(
+                email_id=f"pwreset_{uuid.uuid4().hex[:12]}",
+                to_address=clean_email,
+                subject="DVT Talent AI — Password Reset Code",
+                body=(
+                    f"Hello,\n\n"
+                    f"Your DVT Talent AI password reset code is:\n\n"
+                    f"   {reset_code}\n\n"
+                    f"This code expires in 10 minutes. If you did not request a reset, ignore this email."
+                ),
+            )
+        except Exception as exc:
+            log.warning("password_reset_email_failed", error=str(exc))
     return {
         "message": f"If an account exists for {payload.email}, password reset instructions have been sent."
     }
+
+
+@router.post("/reset-password")
+async def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Completes a password reset using the single-use OTP emailed via /forgot-password."""
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="reset_password_ip",
+        identifier=client_ip,
+        limit=5,
+        window_seconds=600,
+        detail="Too many password reset attempts. Please try again later.",
+    )
+    if len(payload.new_password or "") < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    clean_email = str(payload.email).strip().lower()
+    otp_valid = await verify_email_otp(f"reset:{clean_email}", payload.otp)
+    if not otp_valid:
+        raise HTTPException(status_code=400, detail="Invalid or expired password reset code")
+    user = (await db.execute(select(User).where(func.lower(User.email) == clean_email))).scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=400, detail="Invalid or expired password reset code")
+    user.hashed_password = await hash_password(payload.new_password)
+    await db.commit()
+    return {"status": "success", "message": "Password has been reset successfully."}

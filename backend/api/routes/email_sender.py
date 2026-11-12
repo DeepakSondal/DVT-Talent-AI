@@ -241,26 +241,23 @@ async def connect_oauth_sender(
 
     auth_url = _build_oauth_authorize_url(provider_clean, state_token)
     if auth_url and not (payload and payload.code):
-        # Also stage sender identity so the workspace has immediate fallback until redirect completes
-        _store_tenant_oauth(
-            tenant=tenant,
-            provider=provider_clean,
-            sender_name=sender_name,
-            sender_email=sender_email,
-            access_token=f"dvt_oauth_{provider_clean}_{secrets.token_urlsafe(16)}",
-        )
-        await db.commit()
         return {
-            "status": "connected",
+            "status": "pending_authorization",
             "oauth_provider": provider_clean,
             "authorization_url": auth_url,
             "sender_email": sender_email,
             "sender_name": sender_name,
-            "sender_verified": True,
-            "message": f"Connected {sender_email} via {provider_clean.title()} OAuth 2.0.",
+            "sender_verified": False,
+            "message": f"Redirecting to {provider_clean.title()} OAuth 2.0 consent.",
         }
 
-    # Instant One-Click OAuth binding using authenticated recruiter session
+    if settings.is_production and not (payload and payload.code):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{provider_clean.title()} OAuth client credentials are not configured.",
+        )
+
+    # Local dev / test simulation binding when OAuth client IDs are not configured
     _store_tenant_oauth(
         tenant=tenant,
         provider=provider_clean,
@@ -306,7 +303,7 @@ async def oauth_sender_callback(
     tenant = await _get_tenant(tenant_uuid, db)
     redirect_uri = f"{settings.app_base_url}/api/v1/email-sender/oauth/{provider_clean}/callback"
 
-    access_token = f"dvt_oauth_{provider_clean}_{secrets.token_urlsafe(16)}"
+    access_token: Optional[str] = None
     refresh_token: Optional[str] = None
     sender_email = claims.get("sender_email") or tenant.sender_email or ""
     sender_name = claims.get("sender_name") or tenant.sender_name or tenant.name
@@ -329,16 +326,17 @@ async def oauth_sender_callback(
                     )
                     if resp.status_code == 200:
                         tok = resp.json()
-                        access_token = tok.get("access_token") or access_token
+                        access_token = tok.get("access_token")
                         refresh_token = tok.get("refresh_token")
-                        userinfo = await client.get(
-                            "https://www.googleapis.com/oauth2/v2/userinfo",
-                            headers={"Authorization": f"Bearer {access_token}"},
-                        )
-                        if userinfo.status_code == 200:
-                            u_data = userinfo.json()
-                            sender_email = u_data.get("email") or sender_email
-                            sender_name = u_data.get("name") or sender_name
+                        if access_token:
+                            userinfo = await client.get(
+                                "https://www.googleapis.com/oauth2/v2/userinfo",
+                                headers={"Authorization": f"Bearer {access_token}"},
+                            )
+                            if userinfo.status_code == 200:
+                                u_data = userinfo.json()
+                                sender_email = u_data.get("email") or sender_email
+                                sender_name = u_data.get("name") or sender_name
 
             elif provider_clean == "microsoft":
                 client_id = getattr(settings, "microsoft_client_id", "") or os.getenv("MICROSOFT_CLIENT_ID", "")
@@ -356,18 +354,24 @@ async def oauth_sender_callback(
                     )
                     if resp.status_code == 200:
                         tok = resp.json()
-                        access_token = tok.get("access_token") or access_token
+                        access_token = tok.get("access_token")
                         refresh_token = tok.get("refresh_token")
-                        me_resp = await client.get(
-                            "https://graph.microsoft.com/v1.0/me",
-                            headers={"Authorization": f"Bearer {access_token}"},
-                        )
-                        if me_resp.status_code == 200:
-                            m_data = me_resp.json()
-                            sender_email = m_data.get("mail") or m_data.get("userPrincipalName") or sender_email
-                            sender_name = m_data.get("displayName") or sender_name
+                        if access_token:
+                            me_resp = await client.get(
+                                "https://graph.microsoft.com/v1.0/me",
+                                headers={"Authorization": f"Bearer {access_token}"},
+                            )
+                            if me_resp.status_code == 200:
+                                m_data = me_resp.json()
+                                sender_email = m_data.get("mail") or m_data.get("userPrincipalName") or sender_email
+                                sender_name = m_data.get("displayName") or sender_name
     except Exception as e:
         log.warning("oauth_code_exchange_fallback", provider=provider_clean, error=str(e))
+
+    if not access_token:
+        if settings.is_production:
+            raise HTTPException(status_code=400, detail="OAuth token exchange with provider failed")
+        access_token = f"dvt_oauth_{provider_clean}_{secrets.token_urlsafe(16)}"
 
     _store_tenant_oauth(
         tenant=tenant,

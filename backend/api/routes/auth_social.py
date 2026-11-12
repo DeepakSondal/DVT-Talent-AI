@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.routes.auth import create_access_token
+from api.routes.auth import create_access_token, create_refresh_token
 from config import settings
 from db.models import Tenant, User, get_db
 
@@ -76,27 +76,38 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
 
     # Get user details from provider
     user_info = None
+    email_verified = True
     if provider == "google":
         user_info = token.get("userinfo")
+        if user_info and user_info.get("email_verified") is False:
+            email_verified = False
     elif provider == "github":
         resp = await client.get("user", token=token)
         user_info = resp.json()
-        if not user_info.get("email"):
-            emails_resp = await client.get("user/emails", token=token)
-            emails = emails_resp.json()
-            primary_email = next((e["email"] for e in emails if e["primary"]), emails[0]["email"])
+        emails_resp = await client.get("user/emails", token=token)
+        emails = emails_resp.json() if emails_resp else []
+        verified_emails = [
+            e for e in (emails if isinstance(emails, list) else [])
+            if isinstance(e, dict) and e.get("verified") and e.get("email")
+        ]
+        if verified_emails:
+            primary_email = next((e["email"] for e in verified_emails if e.get("primary")), verified_emails[0]["email"])
             user_info["email"] = primary_email
+        elif not user_info.get("email"):
+            email_verified = False
     elif provider == "linkedin":
         # New LinkedIn V2 userinfo endpoint (OpenID Connect)
         resp = await client.get("https://api.linkedin.com/v2/userinfo", token=token)
         user_info = resp.json()
         # LinkedIn uses 'sub' instead of 'id' in OIDC
         user_info["id"] = user_info.get("sub")
+        if user_info.get("email_verified") is False:
+            email_verified = False
 
-    if not user_info or not user_info.get("email"):
-        raise HTTPException(status_code=400, detail="Failed to fetch user email from provider")
+    if not user_info or not user_info.get("email") or not email_verified:
+        raise HTTPException(status_code=400, detail="Failed to fetch verified user email from provider")
 
-    email = user_info["email"]
+    email = user_info["email"].strip().lower()
     provider_id = str(user_info.get("id") or user_info.get("sub"))
 
     # Find or Create User
@@ -131,29 +142,32 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
         )
         db.add(user)
         log.info("social_user_created", email=email, provider=provider)
-    elif not user.provider:
-        # Link existing user to provider if not already linked
-        user.provider = provider
-        user.provider_id = provider_id
-        log.info("social_user_linked", email=email, provider=provider)
+    else:
+        if not user.is_active:
+            raise HTTPException(status_code=400, detail="Account is disabled")
+        if not user.provider:
+            user.provider = provider
+            user.provider_id = provider_id
+            log.info("social_user_linked", email=email, provider=provider)
 
     await db.commit()
     await db.refresh(user)
 
-    # Auto-link workspace OAuth email sender when signing in with Google
+    # Auto-link workspace OAuth email sender only when Gmail send scope was actually granted
     if provider == "google" and user.tenant_id:
         tenant_obj = await db.get(Tenant, user.tenant_id)
-        if tenant_obj and not tenant_obj.sender_email:
+        granted_scope = str(token.get("scope", "")) if isinstance(token, dict) else ""
+        raw_access = token.get("access_token") if isinstance(token, dict) else None
+        if tenant_obj and not tenant_obj.sender_email and raw_access and "gmail.send" in granted_scope:
             from datetime import datetime, timezone
 
             from services.security_service import encrypt_pii
 
-            raw_access = token.get("access_token") if isinstance(token, dict) else None
             raw_refresh = token.get("refresh_token") if isinstance(token, dict) else None
             t_settings = dict(tenant_obj.settings) if isinstance(tenant_obj.settings, dict) else {}
             t_settings["email_oauth"] = {
                 "provider": "google",
-                "access_token_encrypted": encrypt_pii(raw_access or f"dvt_oauth_google_{user.id}"),
+                "access_token_encrypted": encrypt_pii(raw_access),
                 "refresh_token_encrypted": encrypt_pii(raw_refresh) if raw_refresh else None,
                 "connected_at": datetime.now(timezone.utc).isoformat(),
                 "sender_email": email,
@@ -165,21 +179,22 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
             tenant_obj.sender_verified = True
             await db.commit()
 
-    # Generate JWT
-    access_token = create_access_token(data={
+    role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
+    token_data = {
         "sub": str(user.id),
-        "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+        "role": role_str,
         "tenant_id": str(user.tenant_id) if user.tenant_id else "",
-    })
-    
-    # ── Security Hardening [H-08]: Use HttpOnly Cookies ─────────────────────
-    # Instead of passing the token in the URL, we set it as a secure cookie.
-    # This prevents token leakage and protects against XSS.
-    
-    # Get the primary frontend origin for redirect
-    response = RedirectResponse(url=f"{settings.frontend_url}/dashboard", status_code=302)
-    
-    # Set the session cookie
+    }
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
+
+    target_dest = "/portal" if role_str == "candidate" else "/dashboard"
+    redirect_url = (
+        f"{settings.frontend_url}/auth/callback"
+        f"?redirect={target_dest}&role={role_str}&tenant_id={token_data['tenant_id']}"
+    )
+    response = RedirectResponse(url=redirect_url, status_code=302)
+
     response.set_cookie(
         key="dvt_token",
         value=f"Bearer {access_token}",
@@ -187,8 +202,17 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
         max_age=settings.access_token_expire_minutes * 60,
         expires=settings.access_token_expire_minutes * 60,
         samesite="lax",
-        secure=settings.is_production, # Only use 'secure' over HTTPS
+        secure=settings.is_production,
     )
-    
+    response.set_cookie(
+        key="dvt_refresh_token",
+        value=refresh_token,
+        httponly=True,
+        path="/",
+        max_age=30 * 24 * 60 * 60,
+        samesite="lax",
+        secure=settings.is_production,
+    )
+
     log.info("social_login_success", email=email, provider=provider)
     return response
