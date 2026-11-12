@@ -116,12 +116,18 @@ SERPER_API_KEY=your_serper_key
    docker compose -f docker-compose.prod.yml exec api alembic upgrade head
    ```
 
-3. **Verify container health:**
+3. **Seed initial workspace and admin user:**
+   (`pilot_seed.py` validates that the database is at Alembic head before seeding.)
+   ```bash
+   docker compose -f docker-compose.prod.yml exec api python scripts/pilot_seed.py
+   ```
+
+4. **Verify container health:**
    ```bash
    docker compose -f docker-compose.prod.yml ps
    ```
 
-4. **Verify API health:**
+5. **Verify API health:**
    ```bash
    curl -k https://localhost/ping
    curl -k https://localhost/health

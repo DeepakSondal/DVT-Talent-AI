@@ -64,9 +64,10 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/dvt_staging
 SECRET_KEY=generate_a_secure_random_hex_key_here
 ```
 
-Run database migrations:
+Run database migrations and seed initial workspace data:
 ```powershell
 python -m alembic upgrade head
+python scripts/pilot_seed.py
 ```
 
 Start the FastAPI backend server:
@@ -119,8 +120,9 @@ cp .env.example .env
 # Build and start all services
 docker compose up --build -d
 
-# Run migrations
+# Run migrations and seed initial workspace data
 docker compose exec api alembic upgrade head
+docker compose exec api python scripts/pilot_seed.py
 ```
 
 ### Services Launched:
@@ -160,6 +162,7 @@ nano .env
 ```bash
 docker compose -f docker-compose.prod.yml up --build -d
 docker compose -f docker-compose.prod.yml exec api alembic upgrade head
+docker compose -f docker-compose.prod.yml exec api python scripts/pilot_seed.py
 ```
 
 ### 4. Automated HTTPS with Caddy

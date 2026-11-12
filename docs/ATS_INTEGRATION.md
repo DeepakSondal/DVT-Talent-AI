@@ -182,8 +182,8 @@ backend/api/routes/
 backend/workers/
 └── ats_tasks.py                   # Celery: sync_all_ats_jobs, export_candidate_task
 
-backend/alembic/versions/
-└── 004_ats_integrations.py        # Migration: integration_connections + ats_export_logs
+backend/migrations/versions/
+└── 0001_initial_schema.py         # Baseline schema including integration_connections + ats_export_logs
 
 frontend/src/app/dashboard/settings/integrations/
 └── page.tsx                       # Provider tabs, key form, jobs list, export logs

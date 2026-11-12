@@ -7,12 +7,16 @@ import os
 import sys
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 import bcrypt
 
 # Add backend root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import select
 
 from db.models import (
@@ -22,18 +26,36 @@ from db.models import (
     Tenant,
     User,
     UserRole,
+    engine,
 )
 
 
 async def seed():
     print("🚀 Initiating Master Pilot Seed...")
-    
-    # 🏗️ SDET: Build the foundation first! 
-    # Ensure all tables are created in the fresh DB file.
-    from db.models import Base, engine
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("  ✅ Database Schema Initialized.")
+
+    alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
+    cfg = Config(str(alembic_ini))
+    cfg.set_main_option(
+        "script_location",
+        str(Path(__file__).resolve().parent.parent / "migrations"),
+    )
+    expected_head = ScriptDirectory.from_config(cfg).get_current_head()
+
+    async with engine.connect() as conn:
+        current = await conn.run_sync(
+            lambda sync_conn: MigrationContext.configure(sync_conn).get_current_revision()
+        )
+
+    if current != expected_head:
+        print(
+            "ERROR: database is not at Alembic head.\n"
+            f"  Current:  {current or '(none — not migrated)'}\n"
+            f"  Expected: {expected_head}\n"
+            "  Run:      alembic upgrade head\n"
+        )
+        sys.exit(1)
+
+    print("  ✅ Schema at head.")
     
     async with AsyncSessionLocal() as session:
         # 1. Check if Elite Tenant already exists

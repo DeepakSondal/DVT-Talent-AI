@@ -156,7 +156,7 @@ The Candidate Portal incorporates the specialized **Career-Ops AI Engine** locat
 - **Production:** PostgreSQL 16 Alpine (`dvt_db`), internal port `5432`, database `dvt_talent` on dedicated volume `postgres_prod_data`, native `vector` extension.
 
 ### Schema, Candidate & Company Isolation
-- **26 Tables, 8 Enums:** Governed exclusively by Alembic migrations (current stamp: `007_team_invitations`).
+- **25 Tables, 8 Enums:** Governed exclusively by Alembic migrations (current stamp: `0001_initial_schema`).
 - **Candidate Isolation Partial Index:**
   ```sql
   CREATE UNIQUE INDEX uq_candidate_tenant_email 

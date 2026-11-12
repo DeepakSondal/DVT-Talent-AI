@@ -82,7 +82,7 @@
 - **Database ORM:** Async SQLAlchemy 2.0 with connection pooling
 - **Vector Search:** FastEmbed CPU ONNX + PostgreSQL pgvector (384 dimensions)
 - **Billing & MoR:** Dodo Payments SDK (`dodopayments`)
-- **Schema & Migrations:** Alembic (Head: `007_team_invitations`)
+- **Schema & Migrations:** Alembic (Head: `0001_initial_schema`)
 - **Task Queue & Cache:** Celery & Redis 7
 - **Reverse Proxy:** Caddy 2 with automated TLS
 - **Testing:** Pytest (213 passed, 3 skipped)
@@ -128,6 +128,7 @@ docker compose up --build -d
 # Production Stack (Caddy + Next.js + FastAPI + PostgreSQL 16 dvt_talent + Redis + Celery)
 docker compose -f docker-compose.prod.yml up --build -d
 docker compose -f docker-compose.prod.yml exec api alembic upgrade head
+docker compose -f docker-compose.prod.yml exec api python scripts/pilot_seed.py
 ```
 
 ---

@@ -172,7 +172,7 @@ The platform maintains strict separation between testing/staging and production 
 - **Total Tables:** 26 relational tables.
 - **Custom Postgres Enums:** 8 enums (`UserRole`, `LeadStatus`, `CandidateStatus`, `EmailStatus`, `InterviewStatus`, `AgentTaskStatus`, `InvitationStatus`, `CreditTransactionType`).
 - **Migration Governance:** Managed strictly via Alembic (`alembic upgrade head`). Destructive `Base.metadata.create_all` calls are eliminated from application startup.
-- **Current Migration Stamp:** `007_team_invitations`.
+- **Current Migration Stamp:** `0001_initial_schema`.
 
 ### 3.3 Multi-Tenant Candidate & Company Isolation
 1. **Candidate Scoping:**

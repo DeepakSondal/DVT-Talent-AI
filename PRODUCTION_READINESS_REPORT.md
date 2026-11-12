@@ -236,8 +236,10 @@ Verify all 7 containers are healthy and running:
 docker compose -f docker-compose.prod.yml ps
 ```
 
-### Step 5: Bootstrap Database & Initial Admin User
+### Step 5: Migrate Database & Seed Initial Admin User
+`pilot_seed.py` validates that the database is at Alembic head before seeding:
 ```bash
+docker compose -f docker-compose.prod.yml exec api alembic upgrade head
 ADMIN_PASSWORD="YourStrongAdminPasswordHere!" \
 docker compose -f docker-compose.prod.yml exec api python scripts/pilot_seed.py
 ```

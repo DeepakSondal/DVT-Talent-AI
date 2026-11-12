@@ -44,8 +44,8 @@ backend/
 │   ├── outreach_agent.py       # Personalized sequence drafting
 │   └── swarm_memory.py         # Redis shared agent state
 │
-├── alembic/                    # Database schema versioning & migration scripts
-│   ├── versions/               # Sequential migration files (Head: 007_team_invitations)
+├── migrations/                 # Database schema versioning & migration scripts
+│   ├── versions/               # Sequential migration files (Head: 0001_initial_schema)
 │   └── env.py                  # Async Alembic execution environment
 │
 ├── api/                        # HTTP interface layer
