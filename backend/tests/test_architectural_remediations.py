@@ -167,7 +167,7 @@ async def test_auth_logout_and_revocation(db_session):
 
     from services.redis_service import is_token_revoked
 
-    response = await logout(request=mock_request, current_user=test_user)
+    response = await logout(request=mock_request)
     assert response.status_code == 200
     # Verify token was blacklisted via redis_service
     assert await is_token_revoked(token) is True
