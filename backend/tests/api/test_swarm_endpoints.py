@@ -112,8 +112,13 @@ async def test_swarm_trigger_candidate_forbidden(mock_candidate):
 
 
 @pytest.mark.asyncio
-async def test_monster_webhook_intake():
+async def test_monster_webhook_intake(monkeypatch):
     """Verify that Monster webhooks correctly ingest applicants."""
+    from config import settings
+
+    monkeypatch.setattr(settings, "is_production", False)
+    monkeypatch.setattr(settings, "monster_webhook_secret", "")
+
     payload = {
         "applicant": {
             "firstName": "John",

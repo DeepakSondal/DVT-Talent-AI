@@ -11,6 +11,7 @@ jobs:
     name: Backend Tests & Security
     runs-on: ubuntu-latest
     env:
+      APP_ENV: "testing"
       TESTING: "true"
       DATABASE_URL: "sqlite+aiosqlite:///:memory:"
       DATABASE_SYNC_URL: "sqlite:///:memory:"
@@ -91,6 +92,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      APP_ENV: "testing"
       TESTING: "true"
       DATABASE_URL: "postgresql+asyncpg://dvt_ci:ci_postgres_test_password@localhost:5432/dvt_ci_db"
       DATABASE_SYNC_URL: "postgresql://dvt_ci:ci_postgres_test_password@localhost:5432/dvt_ci_db"
@@ -125,7 +127,7 @@ jobs:
           assert cur.fetchone() == ("vector",), "pgvector extension not installed"
           cur.execute("SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid WHERE t.typname = '\''userrole'\'' ORDER BY e.enumsortorder;")
           userroles = [r[0] for r in cur.fetchall()]
-          assert userroles == ["ADMIN", "MANAGER", "RECRUITER", "CANDIDATE"], f"Unexpected userrole labels: {userroles}"
+          assert userroles == ["ADMIN", "MANAGER", "RECRUITER", "VIEWER", "CANDIDATE"], f"Unexpected userrole labels: {userroles}"
           cur.execute("SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid WHERE t.typname = '\''candidatestatus'\'' ORDER BY e.enumsortorder;")
           cand_statuses = [r[0] for r in cur.fetchall()]
           assert cand_statuses == ["SOURCED", "SCREENED", "INTERVIEWING", "OFFERED", "HIRED", "REJECTED"], f"Unexpected candidatestatus labels: {cand_statuses}"

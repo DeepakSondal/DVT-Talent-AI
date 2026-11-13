@@ -94,6 +94,9 @@ async def test_webhook_sync_authorized(monkeypatch):
     from db.models import get_db
     from main import app
 
+    monkeypatch.delenv("INTERNAL_SERVICE_SECRET", raising=False)
+    monkeypatch.setattr(settings, "is_production", False)
+    monkeypatch.setattr(settings, "internal_service_secret", "")
     monkeypatch.setattr(settings, "secret_key", "test_internal_secret")
 
     mock_db = AsyncMock()
@@ -134,6 +137,9 @@ async def test_webhook_sync_idempotency_skip(monkeypatch):
     from db.models import CreditTransaction, get_db
     from main import app
 
+    monkeypatch.delenv("INTERNAL_SERVICE_SECRET", raising=False)
+    monkeypatch.setattr(settings, "is_production", False)
+    monkeypatch.setattr(settings, "internal_service_secret", "")
     monkeypatch.setattr(settings, "secret_key", "test_internal_secret")
 
     mock_db = AsyncMock()
