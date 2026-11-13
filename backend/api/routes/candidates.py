@@ -7,7 +7,7 @@ import csv
 import io
 import uuid as _uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import structlog
@@ -68,10 +68,20 @@ class CandidateOut(BaseModel):
     source: Optional[str]
     score: float
     ai_summary: Optional[str]
+    meta_data: Optional[Dict[str, Any]] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class CandidateNoteIn(BaseModel):
+    note: str
+
+
+class CandidateInterviewIn(BaseModel):
+    scheduled_date: str
+    scheduled_time: Optional[str] = "10:00 AM"
 
 
 class CandidateList(BaseModel):
@@ -348,6 +358,71 @@ async def update_candidate_status(
     candidate.status = status
     await db.commit()
     return {"status": "updated", "new_status": status.value}
+
+
+@router.post("/{candidate_id}/notes")
+async def add_candidate_note(
+    candidate_id: UUID,
+    payload: CandidateNoteIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Persist a recruiter note onto the candidate's metadata record."""
+    _require_recruiter_workspace_access(current_user)
+    clean_note = (payload.note or "").strip()
+    if not clean_note:
+        raise HTTPException(status_code=400, detail="Note cannot be empty")
+
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    )
+    candidate = result.scalar_one_or_none()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    meta = dict(candidate.meta_data or {})
+    notes = list(meta.get("notes") or [])
+    notes.insert(0, clean_note)
+    meta["notes"] = notes
+    candidate.meta_data = meta
+    await db.commit()
+    return {"notes": notes}
+
+
+@router.post("/{candidate_id}/interviews")
+async def schedule_candidate_interview(
+    candidate_id: UUID,
+    payload: CandidateInterviewIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Persist an interview schedule entry and move candidate to INTERVIEWING."""
+    _require_recruiter_workspace_access(current_user)
+    clean_date = (payload.scheduled_date or "").strip()
+    if not clean_date:
+        raise HTTPException(status_code=400, detail="scheduled_date is required")
+
+    result = await db.execute(
+        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    )
+    candidate = result.scalar_one_or_none()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    meta = dict(candidate.meta_data or {})
+    interviews = list(meta.get("scheduled_interviews") or [])
+    interviews.insert(
+        0,
+        {
+            "scheduled_date": clean_date,
+            "scheduled_time": (payload.scheduled_time or "10:00 AM").strip(),
+        },
+    )
+    meta["scheduled_interviews"] = interviews
+    candidate.meta_data = meta
+    candidate.status = CandidateStatus.INTERVIEWING
+    await db.commit()
+    return {"scheduled_interviews": interviews, "status": candidate.status.value}
 
 
 @router.post("/{candidate_id}/resume")

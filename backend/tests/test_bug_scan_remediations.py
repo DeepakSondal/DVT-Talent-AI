@@ -1444,3 +1444,50 @@ def test_legacy_doc_raises_unsupported_format_without_converter_and_uses_antiwor
     monkeypatch.setattr("services.resume_parser.subprocess.run", lambda *a, **kw: fake_proc)
     extracted = ResumeParserService.extract_text(ole2_bytes, "legacy_cv.doc")
     assert "Senior Python Engineer" in extracted
+
+
+@pytest.mark.asyncio
+async def test_candidate_notes_and_interview_schedule_persist_in_metadata():
+    """P2-1: Candidate notes and interview schedules persist in Candidate.meta_data instead of client-only state."""
+    import uuid
+
+    from api.routes.candidates import (
+        CandidateInterviewIn,
+        CandidateNoteIn,
+        add_candidate_note,
+        schedule_candidate_interview,
+    )
+    from db.models import Candidate
+
+    tenant_id = uuid.uuid4()
+    cand_id = uuid.uuid4()
+    user = User(id=uuid.uuid4(), email="rec@test.com", full_name="Rec", role=UserRole.RECRUITER, tenant_id=tenant_id)
+    cand = Candidate(
+        id=cand_id,
+        tenant_id=tenant_id,
+        first_name="Jane",
+        last_name="Doe",
+        email="jane@test.com",
+        status=CandidateStatus.SOURCED,
+        meta_data={},
+    )
+
+    mock_db = MagicMock()
+    res_obj = MagicMock()
+    res_obj.scalar_one_or_none.return_value = cand
+    mock_db.execute = AsyncMock(return_value=res_obj)
+    mock_db.commit = AsyncMock()
+
+    note_res = await add_candidate_note(cand_id, CandidateNoteIn(note="Strong systems background"), db=mock_db, current_user=user)
+    assert note_res["notes"] == ["Strong systems background"]
+    assert cand.meta_data["notes"] == ["Strong systems background"]
+
+    sched_res = await schedule_candidate_interview(
+        cand_id,
+        CandidateInterviewIn(scheduled_date="2026-12-01", scheduled_time="14:00"),
+        db=mock_db,
+        current_user=user,
+    )
+    assert sched_res["status"] == "interviewing"
+    assert cand.status == CandidateStatus.INTERVIEWING
+    assert cand.meta_data["scheduled_interviews"][0]["scheduled_date"] == "2026-12-01"

@@ -100,7 +100,7 @@ export default function MonitoringPage() {
     const completedTasks = tasks.filter(t => t.status === "completed").length;
     const errorTasks = tasks.filter(t => t.status === "failed").length;
     const totalCount = tasks.length;
-    const successRate = totalCount > 0 ? (((totalCount - errorTasks) / totalCount) * 100).toFixed(1) : "100.0";
+    const successRate = totalCount > 0 ? (((totalCount - errorTasks) / totalCount) * 100).toFixed(1) : "—";
 
     const hoursSaved = Math.floor(completedTasks * 1.8);
     const totalDollarsSaved = hoursSaved * hourlyRate;
@@ -131,7 +131,7 @@ export default function MonitoringPage() {
                         </Badge>
                         <span className="text-[10px] font-bold text-slate-400 font-semibold flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none" />
-                            System Health: 100% Operational (12ms Latency)
+                            System Health: {totalCount > 0 ? `${successRate}% Success Rate` : "Operational (Idle)"}
                         </span>
                     </div>
 
@@ -149,12 +149,14 @@ export default function MonitoringPage() {
                     <div className="flex items-center gap-6 bg-slate-900/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-slate-800">
                         <div className="text-center">
                             <p className="text-[9px] font-black text-slate-400">Active Agents</p>
-                            <p className="text-2xl font-black text-emerald-400 break-words">8 Active</p>
+                            <p className="text-2xl font-black text-emerald-400 break-words">{activeTasks} Active</p>
                         </div>
                         <div className="h-8 w-px bg-slate-800" />
                         <div className="text-center">
-                            <p className="text-[9px] font-black text-slate-400">System Uptime</p>
-                            <p className="text-2xl font-black text-blue-400 break-words">99.98%</p>
+                            <p className="text-[9px] font-black text-slate-400">Success Rate</p>
+                            <p className="text-2xl font-black text-blue-400 break-words">
+                                {successRate === "—" ? "—" : `${successRate}%`}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -210,7 +212,9 @@ export default function MonitoringPage() {
                             <Zap className="w-5 h-5" />
                             <p className="text-xs font-black font-semibold">Synthesis Velocity</p>
                         </div>
-                        <p className="text-5xl font-black text-blue-400">{successRate}%</p>
+                        <p className="text-5xl font-black text-blue-400">
+                            {successRate === "—" ? "—" : `${successRate}%`}
+                        </p>
                         <p className="text-[10px] font-bold text-slate-400 font-semibold">
                             Pipeline Accuracy & Completion Index
                         </p>
@@ -221,8 +225,8 @@ export default function MonitoringPage() {
             {/* Infrastructure Metrics Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                    { label: "Active Pipelines", val: `${activeTasks > 0 ? activeTasks : 4} Active`, icon: Zap, color: "text-indigo-500", bg: "bg-indigo-500/10" },
-                    { label: "Success Rate", val: `${successRate}%`, icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+                    { label: "Active Pipelines", val: `${activeTasks} Active`, icon: Zap, color: "text-indigo-500", bg: "bg-indigo-500/10" },
+                    { label: "Success Rate", val: successRate === "—" ? "—" : `${successRate}%`, icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10" },
                     { label: "State Conflict Locks", val: `${mediations.active_locks || 0} Resolved`, icon: Shield, color: "text-blue-500", bg: "bg-blue-500/10" },
                     { label: "Total Executions", val: `${totalCount} Tasks`, icon: Activity, color: "text-purple-500", bg: "bg-purple-500/10" }
                 ].map((item, i) => (
@@ -322,28 +326,30 @@ export default function MonitoringPage() {
                                 <Cpu className="w-4 h-4 text-emerald-500" /> Recruiting Agent Fleet Status
                             </h3>
                             <Badge className="bg-emerald-500/10 text-emerald-500 text-[9px] font-black">
-                                5 Agents Active
+                                {activeTasks} Active
                             </Badge>
                         </div>
 
                         <div className="space-y-4 text-xs font-bold">
-                            {[
-                                { name: "Discovery Engine Worker", load: "14%", status: "HEALTHY", speed: "12ms" },
-                                { name: "Sourcing Scanner Worker", load: "28%", status: "HEALTHY", speed: "18ms" },
-                                { name: "Outreach Sequence Dispatcher", load: "8%", status: "HEALTHY", speed: "9ms" },
-                                { name: "EEOC Compliance Auditor", load: "2%", status: "HEALTHY", speed: "5ms" },
-                                { name: "Prompt Injection Sanitizer", load: "5%", status: "HEALTHY", speed: "7ms" }
-                            ].map((node, i) => (
-                                <div key={i} className="p-3 bg-muted/40 rounded-2xl flex items-center justify-between">
-                                    <div className="space-y-1">
-                                        <p className="text-foreground font-black">{node.name}</p>
-                                        <p className="text-[10px] text-muted-foreground">Load: {node.load} , Latency: {node.speed}</p>
+                            {tasks.length === 0 ? (
+                                <p className="text-muted-foreground text-center py-8">
+                                    No agent execution tasks recorded yet.
+                                </p>
+                            ) : (
+                                tasks.slice(0, 5).map((task, i) => (
+                                    <div key={task.id || i} className="p-3 bg-muted/40 rounded-2xl flex items-center justify-between">
+                                        <div className="space-y-1">
+                                            <p className="text-foreground font-black">{task.agent_name || task.task_type || "Pipeline Task"}</p>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                ID: {String(task.id || "—").slice(0, 8)}
+                                            </p>
+                                        </div>
+                                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-black uppercase">
+                                            {task.status || "unknown"}
+                                        </Badge>
                                     </div>
-                                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-black">
-                                        {node.status}
-                                    </Badge>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     </Card>
 

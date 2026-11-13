@@ -81,8 +81,8 @@ export default function JobsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: "Active Roles", value: rawJobs.length.toString(), icon: Target, color: "text-blue-600 dark:text-blue-400" },
-          { label: "Average Candidate Match", value: "86%", icon: Activity, color: "text-amber-600 dark:text-amber-400" },
-          { label: "Average Time to Fill", value: "2.4 weeks", icon: Clock, color: "text-emerald-600 dark:text-emerald-400" },
+          { label: "Average Candidate Match", value: "—", icon: Activity, color: "text-amber-600 dark:text-amber-400" },
+          { label: "Average Time to Fill", value: "—", icon: Clock, color: "text-emerald-600 dark:text-emerald-400" },
         ].map((stat, i) => (
           <Card key={i} className="p-4 bg-card border-border rounded-xl flex items-center gap-4 shadow-xs">
             <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">

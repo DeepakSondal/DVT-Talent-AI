@@ -72,14 +72,7 @@ export default function CandidateDetailPage() {
           setCandidate(candData);
           setCandidateStatus(candData.status || "sourced");
           setResumeDetails(resumeData);
-          const storedNotes = typeof window !== "undefined" ? localStorage.getItem(`dvt_cand_notes_${id}`) : null;
-          if (storedNotes) {
-            try {
-              setNotes(JSON.parse(storedNotes));
-            } catch {
-              setNotes([]);
-            }
-          }
+          setNotes(Array.isArray((candData as any).meta_data?.notes) ? (candData as any).meta_data.notes : []);
         }
       } catch (err) {
         console.warn("Failed to load candidate:", err);
@@ -104,15 +97,16 @@ export default function CandidateDetailPage() {
     }
   };
 
-  const handleAddNote = () => {
-    if (!newNote.trim()) return;
-    const updated = [newNote.trim(), ...notes];
-    setNotes(updated);
-    if (typeof window !== "undefined" && id) {
-      localStorage.setItem(`dvt_cand_notes_${id}`, JSON.stringify(updated));
+  const handleAddNote = async () => {
+    if (!newNote.trim() || !id) return;
+    try {
+      const res = await candidatesApi.addNote(id as string, newNote.trim());
+      setNotes(res.notes);
+      setNewNote("");
+      toast.success("Note Saved to Candidate Record");
+    } catch {
+      toast.error("Failed to save note.");
     }
-    setNewNote("");
-    toast.success("Note Saved to Candidate Record");
   };
 
   const handleDownloadResume = async () => {
@@ -126,17 +120,26 @@ export default function CandidateDetailPage() {
     }
   };
 
-  const handleConfirmSchedule = (e: React.FormEvent) => {
+  const handleConfirmSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!scheduleDate) {
+    if (!scheduleDate || !id) {
       toast.error("Please pick a date");
       return;
     }
-    handleStatusChange("interviewing");
-    toast.success("Interview Scheduled", {
-      description: `Confirmed for ${scheduleDate} at ${scheduleTime || "10:00 AM"}.`
-    });
-    setIsScheduleOpen(false);
+    try {
+      const res = await candidatesApi.scheduleInterview(id as string, {
+        scheduled_date: scheduleDate,
+        scheduled_time: scheduleTime || "10:00 AM",
+      });
+      setCandidateStatus(res.status || "interviewing");
+      setCandidate((prev: any) => (prev ? { ...prev, status: res.status || "interviewing" } : prev));
+      toast.success("Interview Scheduled", {
+        description: `Confirmed for ${scheduleDate} at ${scheduleTime || "10:00 AM"}.`
+      });
+      setIsScheduleOpen(false);
+    } catch {
+      toast.error("Failed to schedule interview.");
+    }
   };
 
   if (loading) {
@@ -200,23 +203,23 @@ export default function CandidateDetailPage() {
             </div>
 
             <p className="text-sm text-muted-foreground font-medium mt-1 truncate">
-              {candidate.title || "Technical Specialist"} at <span className="text-foreground font-semibold">{candidate.current_company || candidate.company || "Enterprise Systems"}</span>
+              {candidate.title || "—"} at <span className="text-foreground font-semibold">{candidate.current_company || candidate.company || "—"}</span>
             </p>
 
             <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-muted-foreground/80" />
-                {candidate.location || "Remote"}
+                {candidate.location || "—"}
               </span>
               <span>•</span>
               <span className="flex items-center gap-1.5">
                 <Briefcase className="w-3.5 h-3.5 text-muted-foreground/80" />
-                {candidate.experience_years || 5} Years Experience
+                {candidate.experience_years != null ? `${candidate.experience_years} Years Experience` : "—"}
               </span>
               <span>•</span>
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-muted-foreground/80" />
-                Source: {candidate.source || "Sourcing Lab"}
+                Source: {candidate.source || "—"}
               </span>
             </div>
           </div>
@@ -295,7 +298,7 @@ export default function CandidateDetailPage() {
 
               <div>
                 <span className="text-[10px] text-muted-foreground block font-medium">Location</span>
-                <p className="font-semibold text-foreground mt-0.5">{candidate.location || "Remote"}</p>
+                <p className="font-semibold text-foreground mt-0.5">{candidate.location || "—"}</p>
               </div>
             </div>
 
@@ -341,19 +344,21 @@ export default function CandidateDetailPage() {
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Notice Period</span>
-                <span className="font-semibold text-foreground">2 Weeks</span>
+                <span className="font-semibold text-foreground">{candidate.availability || "—"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Work Auth</span>
-                <span className="font-semibold text-foreground">Citizen / Authorized</span>
+                <span className="font-semibold text-foreground">{candidate.work_authorization || "—"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Target Comp</span>
-                <span className="font-semibold text-foreground">$175k - $210k</span>
+                <span className="font-semibold text-foreground">
+                  {candidate.expected_salary ? `$${Number(candidate.expected_salary).toLocaleString()}` : "—"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Workplace</span>
-                <span className="font-semibold text-foreground">Remote or Hybrid</span>
+                <span className="font-semibold text-foreground">{candidate.workplace_preference || "—"}</span>
               </div>
             </div>
           </Card>

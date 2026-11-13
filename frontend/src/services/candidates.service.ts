@@ -24,6 +24,15 @@ export const candidatesService = {
   updateStatus: (id: string, status: string): Promise<Candidate> =>
     http.patch(`/candidates/${id}/status`, null, { params: { status } }).then((r) => r.data),
 
+  addNote: (id: string, note: string): Promise<{ notes: string[] }> =>
+    http.post(`/candidates/${id}/notes`, { note }).then((r) => r.data),
+
+  scheduleInterview: (
+    id: string,
+    payload: { scheduled_date: string; scheduled_time?: string }
+  ): Promise<{ scheduled_interviews: Array<{ scheduled_date: string; scheduled_time: string }>; status: string }> =>
+    http.post(`/candidates/${id}/interviews`, payload).then((r) => r.data),
+
   uploadResume: (id: string, file: File): Promise<any> => {
     const formData = new FormData();
     formData.append("file", file);
