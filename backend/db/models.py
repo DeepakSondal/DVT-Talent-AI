@@ -352,6 +352,7 @@ class User(Base, TimestampMixin):
     avatar_url = Column(String(500))
     preferences = Column(JSON, default=dict)
     last_login = Column(DateTime(timezone=True))
+    monthly_credit_limit = Column(Integer, nullable=True)
     provider = Column(String(50))  # e.g. "google", "github", "linkedin"
     provider_id = Column(String(255))
 

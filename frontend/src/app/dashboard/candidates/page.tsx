@@ -90,6 +90,7 @@ export default function CandidatesPage() {
 
     // Handle Stage Update (Kanban Drag/Drop & Quick Selector)
     const handleStageChange = async (candidateId: string, newStage: string) => {
+        const previousStage = candidates.find(c => c.id === candidateId)?.status;
         // Optimistic UI update
         setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, status: newStage } : c));
         if (drawerCandidate && drawerCandidate.id === candidateId) {
@@ -101,11 +102,14 @@ export default function CandidatesPage() {
             toast.success("Pipeline Stage Updated", {
                 description: `Candidate moved to ${newStage.toUpperCase()} stage.`
             });
-        } catch (err) {
-            // Non-fatal if demo candidate id is used
-            toast.success("Stage Updated Locally", {
-                description: `Moved to ${newStage.toUpperCase()} stage.`
-            });
+        } catch {
+            if (previousStage !== undefined) {
+                setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, status: previousStage } : c));
+                if (drawerCandidate && drawerCandidate.id === candidateId) {
+                    setDrawerCandidate(prev => prev ? { ...prev, status: previousStage } : null);
+                }
+            }
+            toast.error("Failed to update candidate stage.");
         }
     };
 
@@ -121,11 +125,31 @@ export default function CandidatesPage() {
     const handleBulkShortlist = async () => {
         if (selectedIds.length === 0) return;
         const idsToUpdate = [...selectedIds];
+        const previousStatuses = new Map(
+            candidates.filter(c => idsToUpdate.includes(c.id)).map(c => [c.id, c.status])
+        );
         setCandidates(prev => prev.map(c => idsToUpdate.includes(c.id) ? { ...c, status: "shortlisted" } : c));
         setSelectedIds([]);
-        await Promise.allSettled(
+        const results = await Promise.allSettled(
             idsToUpdate.map(id => candidatesApi.updateStatus(id, "shortlisted"))
         );
+        const failedIds = new Set(
+            idsToUpdate.filter((_, idx) => results[idx]?.status === "rejected")
+        );
+        if (failedIds.size > 0) {
+            setCandidates(prev =>
+                prev.map(c => (failedIds.has(c.id) && previousStatuses.has(c.id))
+                    ? { ...c, status: previousStatuses.get(c.id)! }
+                    : c)
+            );
+            const succeededCount = idsToUpdate.length - failedIds.size;
+            toast.error(
+                succeededCount > 0
+                    ? `Shortlisted ${succeededCount} candidate(s), ${failedIds.size} failed.`
+                    : "Failed to shortlist selected candidates."
+            );
+            return;
+        }
         toast.success(`Shortlisted ${idsToUpdate.length} candidate(s)`, {
             description: "Updated in your candidate pipeline."
         });

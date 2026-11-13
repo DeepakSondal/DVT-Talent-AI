@@ -1354,3 +1354,44 @@ async def test_register_normalizes_email_and_rejects_case_insensitive_duplicate(
     }
     resp_2 = await client.post("/api/v1/auth/register", json=payload_2)
     assert resp_2.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_team_quota_persists_monthly_credit_limit_and_rejects_negative(monkeypatch):
+    """P1-4: set_user_quota rejects negative limits, persists User.monthly_credit_limit, and get_team_analytics sums debits."""
+    import uuid
+
+    from api.routes.team import get_team_analytics, set_user_quota
+
+    tenant_id = uuid.uuid4()
+    manager = User(id=uuid.uuid4(), email="mgr@test.com", full_name="Mgr", role=UserRole.MANAGER, tenant_id=tenant_id)
+    recruiter = User(id=uuid.uuid4(), email="rec@test.com", full_name="Rec", role=UserRole.RECRUITER, tenant_id=tenant_id)
+
+    mock_db = MagicMock()
+    mock_db.commit = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc:
+        await set_user_quota(str(recruiter.id), -5, db=mock_db, manager=manager)
+    assert exc.value.status_code == 400
+
+    res_obj = MagicMock()
+    res_obj.scalar_one_or_none.return_value = recruiter
+    mock_db.execute = AsyncMock(return_value=res_obj)
+
+    out = await set_user_quota(str(recruiter.id), 250, db=mock_db, manager=manager)
+    assert recruiter.monthly_credit_limit == 250
+    assert out["monthly_credit_limit"] == 250
+    mock_db.commit.assert_awaited_once()
+
+    # get_team_analytics returns summed debit credits
+    s1, s2, s3 = MagicMock(), MagicMock(), MagicMock()
+    s1.scalar.return_value = 4
+    s2.scalar.return_value = 2
+    s3.scalar.return_value = 42
+    mock_db.execute = AsyncMock(side_effect=[s1, s2, s3])
+    analytics = await get_team_analytics(db=mock_db, manager=manager)
+    assert analytics == {
+        "total_sourced_candidates": 4,
+        "active_recruiters": 2,
+        "credit_usage_total": 42,
+    }

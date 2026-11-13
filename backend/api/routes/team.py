@@ -569,7 +569,17 @@ async def list_team_members(db: AsyncSession = Depends(get_db), manager: User = 
     stmt = select(User).where(User.manager_id == manager.id, User.tenant_id == manager.tenant_id)
     result = await db.execute(stmt)
     members = result.scalars().all()
-    return {"members": [{"id": m.id, "email": m.email, "role": m.role} for m in members]}
+    return {
+        "members": [
+            {
+                "id": m.id,
+                "email": m.email,
+                "role": m.role,
+                "monthly_credit_limit": m.monthly_credit_limit,
+            }
+            for m in members
+        ]
+    }
 
 @router.get("/analytics")
 async def get_team_analytics(db: AsyncSession = Depends(get_db), manager: User = Depends(require_manager)):
@@ -591,15 +601,25 @@ async def get_team_analytics(db: AsyncSession = Depends(get_db), manager: User =
     )
     active_recruiters = active_res.scalar() or 0
 
+    debit_res = await db.execute(
+        select(func.coalesce(func.sum(func.abs(CreditTransaction.amount)), 0)).where(
+            CreditTransaction.tenant_id == manager.tenant_id,
+            CreditTransaction.type == CreditTransactionType.DEBIT,
+        )
+    )
+    credit_usage_total = int(debit_res.scalar() or 0)
+
     return {
         "total_sourced_candidates": total_sourced,
         "active_recruiters": active_recruiters,
-        "credit_usage_total": 0,
+        "credit_usage_total": credit_usage_total,
     }
 
 @router.patch("/members/{user_id}/quota")
 async def set_user_quota(user_id: str, limit: int, db: AsyncSession = Depends(get_db), manager: User = Depends(require_manager)):
     """Set monthly credit limit for a recruiter within the manager's tenant."""
+    if limit < 0:
+        raise HTTPException(status_code=400, detail="Quota limit must be non-negative")
     try:
         target_uuid = uuid.UUID(user_id)
     except (ValueError, TypeError) as exc:
@@ -613,7 +633,9 @@ async def set_user_quota(user_id: str, limit: int, db: AsyncSession = Depends(ge
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found in this organization")
 
-    return {"message": f"Quota for {user_id} set to {limit} credits."}
+    target_user.monthly_credit_limit = limit
+    await db.commit()
+    return {"message": f"Quota for {user_id} set to {limit} credits.", "monthly_credit_limit": limit}
 
 @router.get("/candidates")
 async def get_team_candidates(recruiter_id: Optional[str] = None, db: AsyncSession = Depends(get_db), manager: User = Depends(require_manager)):
