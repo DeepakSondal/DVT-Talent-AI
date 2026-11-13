@@ -1154,3 +1154,101 @@ async def test_canonical_compliance_and_copilot_routes_no_double_prefix(client):
 
     dup_copilot = await client.post("/api/v1/copilot/copilot/discovery", json={"industry": "Tech", "location": "NY"})
     assert dup_copilot.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_dodo_webhook_rejects_missing_secret_expired_tampered_and_replayed_svix(client, monkeypatch):
+    """P0-10: Dodo webhook fails closed when unconfigured and enforces Svix 300s window + webhook-id replay protection."""
+    import json
+    import time
+
+    from api.routes import billing
+
+    payload = json.dumps({"type": "payment.succeeded", "data": {"payment_id": "pay_123"}}).encode("utf-8")
+
+    # 1. Missing webhook secret -> 503
+    monkeypatch.setattr(billing.settings, "dodo_payments_webhook_key", "")
+    missing_secret_resp = await client.post(
+        "/api/v1/billing/webhook",
+        content=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    assert missing_secret_resp.status_code == 503
+
+    # Configure valid whsec_ key
+    raw_secret = b"p0-10-super-secret-key-material"
+    whsec_key = "whsec_" + base64.b64encode(raw_secret).decode("utf-8")
+    monkeypatch.setattr(billing.settings, "dodo_payments_webhook_key", whsec_key)
+    billing._REPLAYED_WEBHOOK_IDS.clear()
+
+    def _sign(msg_id: str, ts: str, body: bytes) -> str:
+        signed = f"{msg_id}.{ts}.".encode("utf-8") + body
+        digest = base64.b64encode(hmac.new(raw_secret, signed, hashlib.sha256).digest()).decode("utf-8")
+        return f"v1,{digest}"
+
+    # 2. Missing required Svix headers -> 400
+    missing_headers_resp = await client.post(
+        "/api/v1/billing/webhook",
+        content=payload,
+        headers={"Content-Type": "application/json", "webhook-signature": "v1,abc"},
+    )
+    assert missing_headers_resp.status_code == 400
+
+    # 3. Expired timestamp (>300s old) -> 400
+    expired_ts = str(int(time.time()) - 600)
+    expired_id = "msg_expired_001"
+    expired_resp = await client.post(
+        "/api/v1/billing/webhook",
+        content=payload,
+        headers={
+            "Content-Type": "application/json",
+            "webhook-id": expired_id,
+            "webhook-timestamp": expired_ts,
+            "webhook-signature": _sign(expired_id, expired_ts, payload),
+        },
+    )
+    assert expired_resp.status_code == 400
+
+    # 4. Tampered signature -> 400
+    fresh_ts = str(int(time.time()))
+    tampered_id = "msg_tampered_001"
+    tampered_resp = await client.post(
+        "/api/v1/billing/webhook",
+        content=payload,
+        headers={
+            "Content-Type": "application/json",
+            "webhook-id": tampered_id,
+            "webhook-timestamp": fresh_ts,
+            "webhook-signature": "v1,dGFtcGVyZWQ=",
+        },
+    )
+    assert tampered_resp.status_code == 400
+
+    # 5. Valid fresh signature -> 200, then immediate replay -> 400
+    valid_id = "msg_valid_001"
+    valid_headers = {
+        "Content-Type": "application/json",
+        "webhook-id": valid_id,
+        "webhook-timestamp": fresh_ts,
+        "webhook-signature": _sign(valid_id, fresh_ts, payload),
+    }
+    ok_resp = await client.post("/api/v1/billing/webhook", content=payload, headers=valid_headers)
+    assert ok_resp.status_code == 200
+
+    replay_resp = await client.post("/api/v1/billing/webhook", content=payload, headers=valid_headers)
+    assert replay_resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_billing_plans_match_subscription_plan_out_schema(client):
+    """P0-10: GET /api/v1/billing/plans returns items conforming to SubscriptionPlanOut."""
+    from api.routes.billing import SubscriptionPlanOut
+
+    resp = await client.get("/api/v1/billing/plans")
+    assert resp.status_code == 200
+    plans = resp.json()
+    assert isinstance(plans, list)
+    for item in plans:
+        validated = SubscriptionPlanOut.model_validate(item)
+        assert validated.id
+        assert validated.name

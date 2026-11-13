@@ -10,7 +10,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -78,8 +78,20 @@ class WebhookSyncRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class SubscriptionPlanOut(BaseModel):
+    id: str
+    name: str
+    product_id: Optional[str] = None
+    credits: int
+    credits_per_month: int
+    features: Any = None
+    is_one_time: bool = False
+    price_usd: float
+    price_usd_cents: int
+
+
 # ── Plan listing ─────────────────────────────────────────────────────────────
-@router.get("/plans", summary="List all available subscription plans")
+@router.get("/plans", response_model=List[SubscriptionPlanOut], summary="List all available subscription plans")
 async def list_plans(db: AsyncSession = Depends(get_db)):
     """Returns all active subscription plans with their credit allocations."""
     result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.is_active.is_(True)))
@@ -175,8 +187,16 @@ async def create_checkout(
                     return {"checkout_url": checkout_url, "session_id": data.get("session_id", str(uuid.uuid4()))}
                 else:
                     log.error("dodo_checkout_api_error", status_code=resp.status_code, body=resp.text)
+                    if settings.is_production:
+                        raise HTTPException(status_code=502, detail="Payment provider checkout creation failed")
+        except HTTPException:
+            raise
         except Exception as e:
             log.error("dodo_checkout_exception", error=str(e))
+            if settings.is_production:
+                raise HTTPException(status_code=502, detail="Payment provider checkout creation failed") from e
+    elif settings.is_production:
+        raise HTTPException(status_code=503, detail="Payment provider is not configured")
 
     # Dev / Simulation mode when Dodo API key is not yet set in environment
     simulated_url = f"{settings.frontend_url}/dashboard/billing?session_id=sim_dodo_{uuid.uuid4().hex[:12]}&success=1"
@@ -285,10 +305,34 @@ async def sync_dodo_webhook(
     Requires X-Internal-Secret authentication header.
     """
     secret_header = request.headers.get("X-Internal-Secret") or request.headers.get("x-internal-secret")
-    expected_secret = os.getenv("INTERNAL_SERVICE_SECRET") or settings.secret_key
-    if not secret_header or not secrets.compare_digest(secret_header, expected_secret):
+    configured_internal = os.getenv("INTERNAL_SERVICE_SECRET") or getattr(settings, "internal_service_secret", "")
+    expected_secret = configured_internal or ("" if settings.is_production else settings.secret_key)
+    if not expected_secret or not secret_header or not secrets.compare_digest(secret_header, expected_secret):
         raise HTTPException(status_code=403, detail="Unauthorized webhook synchronizer call")
     return await _process_webhook_sync(req, db)
+
+
+_REPLAYED_WEBHOOK_IDS: Dict[str, float] = {}
+
+
+def _record_and_check_webhook_replay(webhook_id: str, now_ts: float) -> bool:
+    """Returns True if webhook_id was already seen within the replay window."""
+    try:
+        from services.redis_service import get_redis_client
+        r = get_redis_client()
+        if r is not None:
+            added = r.set(f"dodo_webhook_seen:{webhook_id}", "1", nx=True, ex=600)
+            return not bool(added)
+    except Exception as exc:
+        log.debug("webhook_replay_redis_fallback", error=str(exc))
+
+    expired = [k for k, exp in _REPLAYED_WEBHOOK_IDS.items() if exp <= now_ts]
+    for k in expired:
+        _REPLAYED_WEBHOOK_IDS.pop(k, None)
+    if webhook_id in _REPLAYED_WEBHOOK_IDS:
+        return True
+    _REPLAYED_WEBHOOK_IDS[webhook_id] = now_ts + 600.0
+    return False
 
 
 # ── Direct Dodo Webhook Receiver ──────────────────────────────────────────────
@@ -299,8 +343,8 @@ def _verify_dodo_webhook_signature(
     webhook_id: str = "",
     webhook_timestamp: str = "",
 ) -> bool:
-    """Verify Standard Webhooks (whsec_ base64 + v1,<base64>) or hex HMAC-SHA256 signatures."""
-    if not secret or not webhook_signature:
+    """Verify Standard Webhooks (whsec_ base64 + v1,<base64>) signatures."""
+    if not secret or not webhook_signature or not webhook_id or not webhook_timestamp:
         return False
     import base64
 
@@ -316,16 +360,12 @@ def _verify_dodo_webhook_signature(
         if s.strip()
     ] or [webhook_signature.split(",")[-1].replace("v1=", "").strip()]
 
-    if webhook_id and webhook_timestamp:
-        signed_content = f"{webhook_id}.{webhook_timestamp}.".encode("utf-8") + raw_body
-        for key_bytes in (secret_bytes, secret.encode("utf-8")):
-            expected_b64 = base64.b64encode(hmac.new(key_bytes, signed_content, hashlib.sha256).digest()).decode("utf-8")
-            if any(hmac.compare_digest(expected_b64, cand) for cand in sig_candidates):
-                return True
-
-    expected_hex = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-    clean_sig = webhook_signature.split(",")[-1].replace("v1=", "").strip()
-    return hmac.compare_digest(expected_hex.lower(), clean_sig.lower())
+    signed_content = f"{webhook_id}.{webhook_timestamp}.".encode("utf-8") + raw_body
+    for key_bytes in (secret_bytes, secret.encode("utf-8")):
+        expected_b64 = base64.b64encode(hmac.new(key_bytes, signed_content, hashlib.sha256).digest()).decode("utf-8")
+        if any(hmac.compare_digest(expected_b64, cand) for cand in sig_candidates):
+            return True
+    return False
 
 
 @router.post("/webhook", include_in_schema=False, summary="Direct Dodo Payments webhook receiver")
@@ -334,20 +374,39 @@ async def dodo_webhook(
     db: AsyncSession = Depends(get_db),
 ):
     """Direct webhook endpoint for Dodo Payments (Standard Webhook payload)."""
+    import time
+
     dodo_webhook_key = getattr(settings, "dodo_payments_webhook_key", "") or os.getenv("DODO_PAYMENTS_WEBHOOK_KEY", "")
+    if not dodo_webhook_key:
+        raise HTTPException(status_code=503, detail="Webhook verification key is not configured")
+
     sig_header = request.headers.get("webhook-signature")
+    webhook_id = (request.headers.get("webhook-id") or "").strip()
+    webhook_timestamp = (request.headers.get("webhook-timestamp") or "").strip()
+    if not sig_header or not webhook_id or not webhook_timestamp:
+        raise HTTPException(status_code=400, detail="Missing required webhook signature headers")
+
+    try:
+        ts_int = int(webhook_timestamp)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid webhook-timestamp header") from exc
+
+    now_ts = time.time()
+    if abs(now_ts - ts_int) > 300:
+        raise HTTPException(status_code=400, detail="Webhook timestamp outside 300s tolerance window")
+
     raw_body = await request.body()
-    if dodo_webhook_key or settings.is_production:
-        if not dodo_webhook_key or not sig_header:
-            raise HTTPException(status_code=400, detail="Missing webhook signature header")
-        if not _verify_dodo_webhook_signature(
-            raw_body=raw_body,
-            secret=dodo_webhook_key,
-            webhook_signature=sig_header,
-            webhook_id=request.headers.get("webhook-id", ""),
-            webhook_timestamp=request.headers.get("webhook-timestamp", ""),
-        ):
-            raise HTTPException(status_code=400, detail="Invalid webhook signature")
+    if not _verify_dodo_webhook_signature(
+        raw_body=raw_body,
+        secret=dodo_webhook_key,
+        webhook_signature=sig_header,
+        webhook_id=webhook_id,
+        webhook_timestamp=webhook_timestamp,
+    ):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    if _record_and_check_webhook_replay(webhook_id, now_ts):
+        raise HTTPException(status_code=400, detail="Replayed webhook-id rejected")
 
     try:
         payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}

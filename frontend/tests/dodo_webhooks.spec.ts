@@ -8,6 +8,20 @@ import { POST } from '../src/app/api/webhook/route';
 import { getDodoWebhookKey } from '../src/lib/dodo-env';
 
 test.describe('Dodo Payments Webhook Event Handlers', () => {
+  const originalFetch = globalThis.fetch;
+
+  test.beforeEach(() => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ status: 'ok' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })) as typeof fetch;
+  });
+
+  test.afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   test('test case 1: processes payment.succeeded event and extracts customer & amount', async () => {
     const testPaymentId = `pay_test_${Date.now()}`;
     const payload = {

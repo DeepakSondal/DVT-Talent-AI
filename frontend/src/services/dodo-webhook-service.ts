@@ -20,7 +20,18 @@ function resolveBackendApiUrl(): string {
   if (internalUrl && /^https?:\/\//i.test(internalUrl)) return internalUrl.replace(/\/$/, "");
   const pubUrl = process.env.NEXT_PUBLIC_API_URL;
   if (pubUrl && /^https?:\/\//i.test(pubUrl)) return pubUrl.replace(/\/$/, "");
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("[Dodo Webhook] INTERNAL_API_URL or NEXT_PUBLIC_API_URL must be configured in production.");
+  }
   return "http://127.0.0.1:8000/api/v1";
+}
+
+function resolveInternalSecret(): string {
+  const secret = process.env.INTERNAL_SERVICE_SECRET || process.env.SECRET_KEY || "";
+  if (!secret && process.env.NODE_ENV === "production") {
+    throw new Error("[Dodo Webhook] INTERNAL_SERVICE_SECRET must be configured in production.");
+  }
+  return secret;
 }
 
 export interface PaymentSucceededEventData {
@@ -80,30 +91,27 @@ export async function handlePaymentSucceeded(payload: {
 
   // 3. Dispatch internal backend synchronization
   const backendApiUrl = resolveBackendApiUrl();
-  try {
-    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.SECRET_KEY || process.env.NEXTAUTH_SECRET || "";
-    await fetch(`${backendApiUrl}/billing/webhook-sync`, {
-      method: "POST",
-      signal: AbortSignal.timeout(3000),
-      headers: {
-        "Content-Type": "application/json",
-        "X-Internal-Secret": internalSecret,
-      },
-      body: JSON.stringify({
-        provider: "dodopayments",
-        event_type: "payment.succeeded",
-        payment_id: paymentId,
-        customer_id: customerId,
-        customer_email: customerEmail,
-        amount,
-        currency,
-        metadata: payment.metadata || {},
-      }),
-    }).catch(() => {
-      // Non-blocking in decoupled environment
-    });
-  } catch (err) {
-    console.error("[Dodo Webhook] Backend synchronization notice:", err);
+  const internalSecret = resolveInternalSecret();
+  const res = await fetch(`${backendApiUrl}/billing/webhook-sync`, {
+    method: "POST",
+    signal: AbortSignal.timeout(3000),
+    headers: {
+      "Content-Type": "application/json",
+      "X-Internal-Secret": internalSecret,
+    },
+    body: JSON.stringify({
+      provider: "dodopayments",
+      event_type: "payment.succeeded",
+      payment_id: paymentId,
+      customer_id: customerId,
+      customer_email: customerEmail,
+      amount,
+      currency,
+      metadata: payment.metadata || {},
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`[Dodo Webhook] Backend payment.succeeded sync failed (${res.status})`);
   }
 
   return { status: "processed", paymentId, customerEmail };
@@ -136,31 +144,28 @@ export async function handleSubscriptionActive(payload: {
 
   // 3. Dispatch internal backend synchronization
   const backendApiUrl = resolveBackendApiUrl();
-  try {
-    const internalSecret = process.env.INTERNAL_SERVICE_SECRET || process.env.SECRET_KEY || process.env.NEXTAUTH_SECRET || "";
-    await fetch(`${backendApiUrl}/billing/webhook-sync`, {
-      method: "POST",
-      signal: AbortSignal.timeout(3000),
-      headers: {
-        "Content-Type": "application/json",
-        "X-Internal-Secret": internalSecret,
-      },
-      body: JSON.stringify({
-        provider: "dodopayments",
-        event_type: "subscription.active",
-        payment_id: subscriptionId,
-        subscription_id: subscriptionId,
-        customer_id: customerId,
-        customer_email: customerEmail,
-        product_id: productId,
-        recurring_price: recurringPrice,
-        metadata: subscription.metadata || {},
-      }),
-    }).catch(() => {
-      // Non-blocking in decoupled environment
-    });
-  } catch (err) {
-    console.error("[Dodo Webhook] Backend synchronization notice:", err);
+  const internalSecret = resolveInternalSecret();
+  const res = await fetch(`${backendApiUrl}/billing/webhook-sync`, {
+    method: "POST",
+    signal: AbortSignal.timeout(3000),
+    headers: {
+      "Content-Type": "application/json",
+      "X-Internal-Secret": internalSecret,
+    },
+    body: JSON.stringify({
+      provider: "dodopayments",
+      event_type: "subscription.active",
+      payment_id: subscriptionId,
+      subscription_id: subscriptionId,
+      customer_id: customerId,
+      customer_email: customerEmail,
+      product_id: productId,
+      recurring_price: recurringPrice,
+      metadata: subscription.metadata || {},
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`[Dodo Webhook] Backend subscription.active sync failed (${res.status})`);
   }
 
   return { status: "processed", subscriptionId, customerEmail };

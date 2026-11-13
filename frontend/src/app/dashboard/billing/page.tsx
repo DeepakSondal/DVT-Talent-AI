@@ -23,7 +23,7 @@ const PLAN_ICONS: Record<string, any> = {
 
 const DEFAULT_PLANS: SubscriptionPlan[] = [
   {
-    id: "plan_starter",
+    id: "00000000-0000-5000-8000-000000000001",
     name: "Starter",
     product_id: "prod_starter",
     credits_per_month: 250,
@@ -38,7 +38,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
     ]
   },
   {
-    id: "plan_growth",
+    id: "00000000-0000-5000-8000-000000000002",
     name: "Growth",
     product_id: "prod_growth",
     credits_per_month: 1000,
@@ -54,7 +54,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
     ]
   },
   {
-    id: "plan_enterprise",
+    id: "00000000-0000-5000-8000-000000000003",
     name: "Enterprise",
     product_id: "prod_enterprise",
     credits_per_month: 5000,
@@ -83,8 +83,8 @@ export default function BillingPage() {
     const fetchData = async () => {
       try {
         const [plansData, statusData] = await Promise.all([
-          billingService.getPlans().catch(() => []),
-          billingService.getCredits().catch(() => null),
+          billingService.getPlans(),
+          billingService.getCredits(),
         ]);
         if (plansData && plansData.length > 0) {
           setPlans(plansData);
@@ -92,6 +92,7 @@ export default function BillingPage() {
         setStatus(statusData);
       } catch (err) {
         console.error("Billing fetch failed:", err);
+        toast.error("Failed to load billing details");
       } finally {
         setLoading(false);
       }
@@ -106,14 +107,14 @@ export default function BillingPage() {
       if (res?.checkout_url) {
         window.location.href = res.checkout_url;
       } else {
-        toast.info("Plan Selected", {
-          description: "Dodo Payments checkout session initialized."
+        toast.error("Checkout Error", {
+          description: "No checkout URL returned by billing service."
         });
         setCheckingOut(null);
       }
-    } catch (err) {
-      toast.info("Plan Selected", {
-        description: "Dodo Payments checkout is active. Redirecting..."
+    } catch (err: any) {
+      toast.error("Checkout Error", {
+        description: err?.response?.data?.detail || "Unable to initialize Dodo Payments checkout."
       });
       setCheckingOut(null);
     }
@@ -126,13 +127,13 @@ export default function BillingPage() {
       if (res?.portal_url) {
         window.location.href = res.portal_url;
       } else {
-        toast.info("Customer Portal", {
-          description: "Dodo Payments customer portal is loading..."
+        toast.error("Customer Portal Error", {
+          description: "No portal URL returned by billing service."
         });
       }
-    } catch (err) {
-      toast.info("Customer Portal", {
-        description: "Dodo Payments customer portal is loading..."
+    } catch (err: any) {
+      toast.error("Customer Portal Error", {
+        description: err?.response?.data?.detail || "Unable to open Dodo Payments customer portal."
       });
     } finally {
       setOpeningPortal(false);
@@ -142,7 +143,7 @@ export default function BillingPage() {
   const currentPlanObj = plans.find(p => p.name.toLowerCase() === status?.plan?.toLowerCase()) || plans[0];
   const creditsPercent = status && currentPlanObj
     ? Math.min(100, Math.round((status.credits_balance / (currentPlanObj.credits_per_month || 500)) * 100))
-    : 85;
+    : 0;
 
   return (
     <div className="space-y-10 pb-20 max-w-7xl mx-auto">
