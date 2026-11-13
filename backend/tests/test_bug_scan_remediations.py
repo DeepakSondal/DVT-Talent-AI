@@ -1029,3 +1029,112 @@ async def test_workers_and_swarm_memory_reject_default_or_missing_tenant():
         await fetch_candidates_from_merge_dev("default", "greenhouse")
     with pytest.raises(NotImplementedError):
         await fetch_candidates_from_merge_dev(str(uuid.uuid4()), "greenhouse")
+
+
+@pytest.mark.asyncio
+async def test_pii_masking_failure_fails_closed_in_resume_parser_and_waiver(monkeypatch):
+    """P0-8: PII masking failure aborts unredacted processing unless explicit waiver is enabled."""
+    from config import settings
+    from services.pii_service import pii_service
+    from services.resume_parser import ResumeParserService
+
+    monkeypatch.setattr(settings, "allow_unredacted_pii_waiver", False)
+    with patch.object(pii_service, "mask_pii", side_effect=RuntimeError("PII engine offline")):
+        with pytest.raises(RuntimeError, match="PII masking failed"):
+            ResumeParserService.extract_anonymized_text(b"Jane Doe jane@example.com Python engineer", "resume.txt")
+
+    monkeypatch.setattr(settings, "allow_unredacted_pii_waiver", True)
+    with patch.object(pii_service, "mask_pii", side_effect=RuntimeError("PII engine offline")):
+        text_out, meta = ResumeParserService.extract_anonymized_text(b"Jane Doe jane@example.com Python engineer", "resume.txt")
+        assert "Jane Doe" in text_out
+        assert meta["engine"] == "waiver_bypass"
+
+
+@pytest.mark.asyncio
+async def test_compliance_ledger_dynamic_sanitized_and_no_88_confidence_fallback(client):
+    """P0-8: Decision ledger does not fabricate 0.88 confidence or hardcode sanitized=True."""
+    import uuid
+
+    from db.models import AIDecisionLedger
+
+    email = f"ledger_p08_{uuid.uuid4().hex[:8]}@example.com"
+    await store_email_otp(email, "654321")
+    reg_resp = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": "LedgerPass123!",
+            "full_name": "Ledger Tester",
+            "role": "admin",
+            "company_name": f"Ledger Org {uuid.uuid4().hex[:6]}",
+            "otp": "654321",
+        },
+    )
+    assert reg_resp.status_code == 201
+    token = reg_resp.json()["access_token"]
+    tenant_id = uuid.UUID(reg_resp.json()["tenant_id"])
+
+    raw_id = uuid.uuid4()
+    erased_id = uuid.uuid4()
+    clean_id = uuid.uuid4()
+
+    async with AsyncSessionLocal() as session:
+        session.add(
+            AIDecisionLedger(
+                id=raw_id,
+                tenant_id=tenant_id,
+                decision_type="SOURCING_MATCH",
+                model_provider="groq",
+                model_name="llama3",
+                qualification_score=None,
+                confidence_level="LOW",
+                evidence_signals={"candidate_name": "Raw Name", "skills": ["Python"]},
+                input_data_hash="h1",
+                reasoning_summary="Pending score",
+            )
+        )
+        session.add(
+            AIDecisionLedger(
+                id=erased_id,
+                tenant_id=tenant_id,
+                decision_type="SOURCING_MATCH",
+                model_provider="groq",
+                model_name="llama3",
+                qualification_score=75.0,
+                confidence_level="MEDIUM",
+                evidence_signals={"candidate_name": "Scrubbed", "pii_erased": True},
+                input_data_hash="h2",
+                reasoning_summary="Erased",
+            )
+        )
+        session.add(
+            AIDecisionLedger(
+                id=clean_id,
+                tenant_id=tenant_id,
+                decision_type="SOURCING_MATCH",
+                model_provider="groq",
+                model_name="llama3",
+                qualification_score=80.0,
+                confidence_level="HIGH",
+                evidence_signals={"skills": ["Go"]},
+                input_data_hash="h3",
+                reasoning_summary="Clean",
+            )
+        )
+        await session.commit()
+
+    resp = await client.get(
+        "/api/v1/compliance/decision-ledger",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    by_id = {row["id"]: row for row in resp.json()}
+
+    assert by_id[str(raw_id)]["confidence_score"] is None
+    assert by_id[str(raw_id)]["sanitized"] is False
+
+    assert by_id[str(erased_id)]["confidence_score"] == 0.75
+    assert by_id[str(erased_id)]["sanitized"] is True
+
+    assert by_id[str(clean_id)]["confidence_score"] == 0.8
+    assert by_id[str(clean_id)]["sanitized"] is True

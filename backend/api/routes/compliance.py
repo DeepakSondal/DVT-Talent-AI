@@ -117,7 +117,7 @@ async def get_decision_ledger(
             "model_provider": r.model_provider,
             "model_name": r.model_name,
             "qualification_score": r.qualification_score,
-            "confidence_score": round((r.qualification_score or 88) / 100.0, 2),
+            "confidence_score": round(r.qualification_score / 100.0, 2) if r.qualification_score is not None else None,
             "confidence_level": r.confidence_level,
             "evidence_signals": {
                 k: v for k, v in (r.evidence_signals.items() if isinstance(r.evidence_signals, dict) else [])
@@ -129,7 +129,10 @@ async def get_decision_ledger(
             "human_action": r.human_action,
             "reviewer_override": "PENDING" if r.human_action == "PENDING_REVIEW" else r.human_action,
             "is_override": r.is_override,
-            "sanitized": True,
+            "sanitized": (
+                bool(r.evidence_signals.get("pii_erased"))
+                or not any(k in r.evidence_signals for k in ("candidate_name", "candidate_email"))
+            ) if isinstance(r.evidence_signals, dict) else True,
             "created_at": r.created_at.isoformat() if r.created_at else None
         }
         for r in records

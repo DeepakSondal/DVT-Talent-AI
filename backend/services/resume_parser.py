@@ -221,14 +221,19 @@ class ResumeParserService:
     def extract_anonymized_text(cls, content_bytes: bytes, filename: str) -> Tuple[str, Dict[str, Any]]:
         """
         Extracts resume text and strips candidate PII under GDPR Article 17 prior to LLM routing.
+        Fails closed unless settings.allow_unredacted_pii_waiver is explicitly enabled.
         """
         raw_clean = cls.extract_text(content_bytes, filename)
         try:
             from services.pii_service import pii_service
             return pii_service.mask_pii(raw_clean)
         except Exception as e:
-            logger.warning("pii_masking_fallback_error", error=str(e))
-            return raw_clean, {"redactions_count": 0, "entities_found": [], "engine": "error_fallback"}
+            from config import settings
+            if getattr(settings, "allow_unredacted_pii_waiver", False):
+                logger.warning("pii_masking_waiver_bypass_active", error=str(e), filename=filename)
+                return raw_clean, {"redactions_count": 0, "entities_found": [], "engine": "waiver_bypass"}
+            logger.error("pii_masking_failed_aborting", error=str(e), filename=filename)
+            raise RuntimeError("PII masking failed; aborting unredacted resume processing") from e
 
     @classmethod
     def _extract_from_pdf(cls, content_bytes: bytes) -> str:

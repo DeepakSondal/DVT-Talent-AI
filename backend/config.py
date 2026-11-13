@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     app_env: str = "production"
     is_production: bool = True
     allow_dev_otp_bypass: bool = False
+    allow_unredacted_pii_waiver: bool = False
     app_host: str = "0.0.0.0"  # noqa: S104
     app_port: int = 8000
     secret_key: str = "change-me-in-production"  # noqa: S105

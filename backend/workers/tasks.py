@@ -194,14 +194,20 @@ def analyze_resume_task(
             if cand_check and cand_check[0]:
                 log.info("analyze_resume_skipped_candidate_pii_erased", resume_id=resume_id)
                 return {"status": "candidate_erased", "resume_id": resume_id}
-            resolved_tenant_id = str(cand_check[1]) if (cand_check and len(cand_check) > 1 and cand_check[1]) else 'default'
+            if not cand_check or len(cand_check) <= 1 or not cand_check[1]:
+                raise ValueError("Valid tenant_id is required for analyze_resume_task")
+            resolved_tenant_id = _require_tenant_uuid(str(cand_check[1]))
 
         raw_text = ResumeParserService.extract_text(file_bytes, filename)
         if not raw_text.strip():
             raw_text = f"Resume document: {filename}"
         anonymized_text, _ = ResumeParserService.extract_anonymized_text(file_bytes, filename)
         if not anonymized_text.strip():
-            anonymized_text = raw_text
+            if getattr(settings, "allow_unredacted_pii_waiver", False):
+                log.warning("analyze_resume_pii_waiver_active", resume_id=resume_id)
+                anonymized_text = raw_text
+            else:
+                raise RuntimeError("PII-masked resume text is empty; aborting LLM prompt send")
         
         async def _run():
             import httpx
@@ -262,12 +268,16 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
                 if jd_row and jd_row[0]:
                     jd_text = jd_row[0]
 
-        redacted_resume_text = row[0]
         try:
             from services.pii_service import pii_service
             redacted_resume_text, _ = pii_service.mask_pii(row[0])
         except Exception as e:
-            log.warning("score_candidate_pii_mask_fallback", error=str(e))
+            if getattr(settings, "allow_unredacted_pii_waiver", False):
+                log.warning("score_candidate_pii_waiver_active", candidate_id=candidate_id, error=str(e))
+                redacted_resume_text = row[0]
+            else:
+                log.error("score_candidate_pii_mask_failed", candidate_id=candidate_id, error=str(e))
+                raise RuntimeError("PII masking failed; aborting candidate scoring prompt") from e
 
         async def _run():
             import httpx
