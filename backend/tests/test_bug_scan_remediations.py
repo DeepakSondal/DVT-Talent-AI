@@ -20,7 +20,7 @@ from agents.sourcing_pydantic import fast_hybrid_candidate_search
 from api.routes.auth import hash_password, verify_password
 from api.routes.auth_social import _select_verified_primary_email
 from api.routes.billing import _verify_dodo_webhook_signature
-from db.models import AsyncSessionLocal, CandidateStatus, EmailStatus, User, UserRole
+from db.models import AsyncSessionLocal, CandidateStatus, EmailStatus, LeadStatus, User, UserRole
 from services.redis_service import store_email_otp, verify_email_otp
 
 
@@ -105,14 +105,18 @@ def test_select_verified_primary_email():
 
 
 def test_enum_validation_and_stage_aliases():
-    """UserRole rejects unknown strings while CandidateStatus maps 'shortlisted'/'interviewed' and EmailStatus is case-insensitive."""
+    """UserRole, LeadStatus, CandidateStatus, and EmailStatus reject unknown strings while preserving aliases."""
     with pytest.raises(ValueError):
         UserRole("super_hacker_role")
+    with pytest.raises(ValueError):
+        LeadStatus("unknown_lead_status")
+    with pytest.raises(ValueError):
+        CandidateStatus("unknown_status_fallback")
 
     assert UserRole("ADMIN") == UserRole.ADMIN
+    assert LeadStatus("QUALIFIED") == LeadStatus.QUALIFIED
     assert CandidateStatus("shortlisted") == CandidateStatus.SCREENED
     assert CandidateStatus("interviewed") == CandidateStatus.INTERVIEWING
-    assert CandidateStatus("unknown_status_fallback") == CandidateStatus.SOURCED
     assert EmailStatus("SENT") == EmailStatus.SENT
     assert EmailStatus("failed") == EmailStatus.FAILED
 

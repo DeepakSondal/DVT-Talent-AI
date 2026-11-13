@@ -198,7 +198,7 @@ class LeadStatus(str, enum.Enum):
             for member in cls:
                 if member.value.lower() == val_lower or member.name.lower() == val_lower:
                     return member
-        return cls.NEW
+        return None
 
 
 class CandidateStatus(str, enum.Enum):
@@ -225,7 +225,7 @@ class CandidateStatus(str, enum.Enum):
             for member in cls:
                 if member.value.lower() == val_lower or member.name.lower() == val_lower:
                     return member
-        return cls.SOURCED
+        return None
 
 
 class EmailStatus(str, enum.Enum):
