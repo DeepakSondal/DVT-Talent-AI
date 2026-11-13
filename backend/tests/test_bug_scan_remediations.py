@@ -640,3 +640,68 @@ async def test_logout_with_expired_access_token_revokes_refresh_token(client):
         cookies={"dvt_refresh_token": refresh_token},
     )
     assert refresh_resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_active_mediations_does_not_close_shared_redis():
+    """Regression: get_active_mediations must not aclose() the shared Redis singleton."""
+    import uuid
+    from types import SimpleNamespace
+
+    from api.routes.monitoring import get_active_mediations
+
+    class StatefulFakeRedis:
+        def __init__(self):
+            self.closed = False
+
+        async def scan(self, cursor=0, match=None, count=100):
+            if self.closed:
+                raise RuntimeError("Shared Redis singleton was closed")
+            return (0, ["lock:test-1"] if match == "lock:*" else [])
+
+        async def lindex(self, key, idx):
+            if self.closed:
+                raise RuntimeError("Shared Redis singleton was closed")
+            return ""
+
+        async def aclose(self):
+            self.closed = True
+
+    fake_redis = StatefulFakeRedis()
+    admin = SimpleNamespace(id=uuid.uuid4(), tenant_id=uuid.uuid4(), role=UserRole.ADMIN)
+
+    with patch("api.routes.monitoring.get_redis_client", return_value=fake_redis):
+        res1 = await get_active_mediations(current_user=admin)
+        res2 = await get_active_mediations(current_user=admin)
+
+    assert fake_redis.closed is False
+    assert res1["active_locks"] == 1
+    assert res2["active_locks"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_recent_signals_filters_signals_with_missing_tenant_id():
+    """Regression: signals lacking tenant_id must never leak into any tenant's results."""
+    import json
+    import uuid
+    from types import SimpleNamespace
+
+    from api.routes.monitoring import get_recent_signals
+
+    tenant_x = uuid.uuid4()
+    other_tenant = uuid.uuid4()
+
+    class FakeSignalRedis:
+        async def lrange(self, key, start, end):
+            return [
+                json.dumps({"id": "sig-missing-tenant", "tenant_id": None, "msg": "leak"}),
+                json.dumps({"id": "sig-empty-tenant", "tenant_id": "", "msg": "leak2"}),
+                json.dumps({"id": "sig-other-tenant", "tenant_id": str(other_tenant), "msg": "other"}),
+                json.dumps({"id": "sig-tenant-x", "tenant_id": str(tenant_x), "msg": "ok"}),
+            ]
+
+    user_x = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_x, role=UserRole.RECRUITER)
+    with patch("api.routes.monitoring.get_redis_client", return_value=FakeSignalRedis()):
+        signals = await get_recent_signals(limit=50, current_user=user_x)
+
+    assert [s["id"] for s in signals] == ["sig-tenant-x"]
