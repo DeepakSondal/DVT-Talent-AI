@@ -27,9 +27,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
 
     const connect = () => {
       if (typeof window === "undefined") return;
-
-      const token = localStorage.getItem("dvt_token");
-      if (!token) return;
+      if (window.location.pathname.startsWith("/auth/")) return;
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const explicitWsUrl = process.env.NEXT_PUBLIC_WS_URL;
@@ -50,7 +48,8 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       } else {
         baseWs = `${protocol}//${host}/api/v1/ws`;
       }
-      const wsUrl = `${baseWs}/pipeline-events?token=${encodeURIComponent(token)}`;
+      // Authenticate via httpOnly dvt_token cookie sent on upgrade; never pass JWTs in URL query params.
+      const wsUrl = `${baseWs}/pipeline-events`;
       
       const ws = new WebSocket(wsUrl);
 

@@ -5,7 +5,7 @@ from typing import Dict, List, Set
 
 import redis.asyncio as redis
 import structlog
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from jose import JWTError, jwt
 
 from config import settings
@@ -96,21 +96,34 @@ class ConnectionManager:
                 except Exception:
                     self.disconnect(ws, uid)
 
-    async def broadcast(self, message: dict):
-        """Broadcast to ALL connected users across all tabs."""
-        payload = json.dumps(message)
-        for uid, sockets in list(self.active_connections.items()):
-            for ws in list(sockets):
-                try:
-                    await ws.send_text(payload)
-                except Exception:
-                    self.disconnect(ws, uid)
-
 
 manager = ConnectionManager()
 
 
-async def _verify_ws_token(token: str) -> tuple[str, str] | tuple[None, None]:
+def _extract_ws_token(websocket: WebSocket) -> str | None:
+    """Extract JWT from httpOnly cookie or Authorization header; never from URL query params."""
+    cookie_token = websocket.cookies.get("dvt_token")
+    if cookie_token:
+        return cookie_token
+    auth_header = websocket.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip() or None
+    return None
+
+
+def _is_allowed_ws_origin(websocket: WebSocket) -> bool:
+    """Validate WebSocket Origin header against configured CORS origins to prevent CSWSH."""
+    origin = (websocket.headers.get("origin") or "").strip().rstrip("/")
+    if not origin:
+        # Browsers always send Origin on WebSocket upgrades; reject missing Origin for cookie auth in prod.
+        return not (settings.is_production and websocket.cookies.get("dvt_token"))
+    allowed = {o.strip().rstrip("/") for o in settings.cors_origins if o.strip()}
+    if not settings.is_production and "*" in allowed:
+        return True
+    return origin in allowed
+
+
+async def _verify_ws_token(token: str | None) -> tuple[str, str] | tuple[None, None]:
     """Validate JWT and return (user_id, tenant_id), or (None, None) if invalid or revoked."""
     if not token:
         return None, None
@@ -118,9 +131,11 @@ async def _verify_ws_token(token: str) -> tuple[str, str] | tuple[None, None]:
         return None, None
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id: str = payload.get("sub")
+        user_id: str | None = payload.get("sub")
         tenant_id: str = payload.get("tenant_id", "")
         if not user_id or payload.get("type") != "access":
+            return None, None
+        if not tenant_id or tenant_id == "default":
             return None, None
         return user_id, tenant_id
     except JWTError:
@@ -128,20 +143,26 @@ async def _verify_ws_token(token: str) -> tuple[str, str] | tuple[None, None]:
 
 
 @router.websocket("/pipeline-events")
-async def pipeline_events_endpoint(
-    websocket: WebSocket,
-    token: str = Query(..., description="JWT access token"),
-):
+async def pipeline_events_endpoint(websocket: WebSocket):
     """
     Dedicated endpoint for real-time AI pipeline activity notifications.
-    Used by the dashboard 'Live Feed' component. Supports multi-tab concurrency.
+    Authenticates via httpOnly dvt_token cookie or Authorization header (no query-string tokens).
     """
+    if "token" in websocket.query_params:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Query token authentication is disabled")
+        return
+
+    if not _is_allowed_ws_origin(websocket):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Origin not allowed")
+        return
+
+    token = _extract_ws_token(websocket)
     user_id, tenant_id = await _verify_ws_token(token)
-    if not user_id:
+    if not user_id or not tenant_id:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    connected = await manager.connect(websocket, user_id, tenant_id or "")
+    connected = await manager.connect(websocket, user_id, tenant_id)
     if not connected:
         return
 

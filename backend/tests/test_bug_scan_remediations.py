@@ -1252,3 +1252,69 @@ async def test_billing_plans_match_subscription_plan_out_schema(client):
         validated = SubscriptionPlanOut.model_validate(item)
         assert validated.id
         assert validated.name
+
+
+@pytest.mark.asyncio
+async def test_websocket_rejects_query_token_and_bad_origin_and_accepts_cookie(monkeypatch):
+    """P0-11: WebSocket rejects ?token= query auth, disallowed Origins, and default/missing tenant_id; accepts dvt_token cookie."""
+    from fastapi import WebSocketDisconnect, status
+    from jose import jwt
+
+    from api.routes import websocket as ws_route
+
+    valid_jwt = jwt.encode(
+        {"sub": "user-123", "tenant_id": "tenant-abc", "type": "access"},
+        ws_route.settings.secret_key,
+        algorithm=ws_route.settings.algorithm,
+    )
+    bad_tenant_jwt = jwt.encode(
+        {"sub": "user-123", "tenant_id": "default", "type": "access"},
+        ws_route.settings.secret_key,
+        algorithm=ws_route.settings.algorithm,
+    )
+
+    def _make_ws(query_params=None, cookies=None, headers=None):
+        ws = MagicMock()
+        ws.query_params = query_params or {}
+        ws.cookies = cookies or {}
+        ws.headers = headers or {}
+        ws.close = AsyncMock()
+        ws.receive_text = AsyncMock(side_effect=WebSocketDisconnect(code=1000))
+        return ws
+
+    with patch("api.routes.websocket.is_token_revoked", AsyncMock(return_value=False)):
+        # 1. Reject ?token= in query string
+        ws_query = _make_ws(query_params={"token": valid_jwt}, headers={"origin": "http://localhost:3000"})
+        await ws_route.pipeline_events_endpoint(ws_query)
+        ws_query.close.assert_awaited_once_with(
+            code=status.WS_1008_POLICY_VIOLATION,
+            reason="Query token authentication is disabled",
+        )
+
+        # 2. Reject disallowed Origin header (CSWSH guard)
+        monkeypatch.setattr(ws_route.settings, "allowed_origins", "https://app.dvttalent.com")
+        ws_bad_origin = _make_ws(
+            cookies={"dvt_token": valid_jwt},
+            headers={"origin": "https://evil.example.com"},
+        )
+        await ws_route.pipeline_events_endpoint(ws_bad_origin)
+        ws_bad_origin.close.assert_awaited_once_with(
+            code=status.WS_1008_POLICY_VIOLATION,
+            reason="Origin not allowed",
+        )
+
+        # 3. Reject default/missing tenant_id in JWT
+        assert await ws_route._verify_ws_token(bad_tenant_jwt) == (None, None)
+
+        # 4. Accept valid dvt_token cookie with allowed Origin
+        ws_ok = _make_ws(
+            cookies={"dvt_token": valid_jwt},
+            headers={"origin": "https://app.dvttalent.com"},
+        )
+        with (
+            patch.object(ws_route.manager, "connect", AsyncMock(return_value=True)) as mock_connect,
+            patch.object(ws_route.manager, "disconnect") as mock_disconnect,
+        ):
+            await ws_route.pipeline_events_endpoint(ws_ok)
+            mock_connect.assert_awaited_once_with(ws_ok, "user-123", "tenant-abc")
+            mock_disconnect.assert_called_once_with(ws_ok, "user-123")
