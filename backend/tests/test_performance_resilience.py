@@ -72,7 +72,8 @@ def test_case_insensitive_enum_missing():
     assert CandidateStatus("SCREENED") == CandidateStatus.SCREENED
     assert CandidateStatus("Screened") == CandidateStatus.SCREENED
     assert CandidateStatus("sourced") == CandidateStatus.SOURCED
-    assert CandidateStatus("unknown_status_fallback") == CandidateStatus.SOURCED
+    with pytest.raises(ValueError):
+        CandidateStatus("unknown_status_fallback")
 
     # UserRole checks
     assert UserRole("admin") == UserRole.ADMIN
