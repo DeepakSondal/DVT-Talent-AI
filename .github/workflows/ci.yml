@@ -130,7 +130,7 @@ jobs:
           assert userroles == ["ADMIN", "MANAGER", "RECRUITER", "VIEWER", "CANDIDATE"], f"Unexpected userrole labels: {userroles}"
           cur.execute("SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid WHERE t.typname = '\''candidatestatus'\'' ORDER BY e.enumsortorder;")
           cand_statuses = [r[0] for r in cur.fetchall()]
-          assert cand_statuses == ["SOURCED", "SCREENED", "INTERVIEWING", "OFFERED", "HIRED", "REJECTED"], f"Unexpected candidatestatus labels: {cand_statuses}"
+          assert cand_statuses == ["SOURCED", "APPLIED", "SCREENED", "CONTACTED", "INTERESTED", "INTERVIEWING", "OFFERED", "PLACED", "REJECTED"], f"Unexpected candidatestatus labels: {cand_statuses}"
           cur.execute("SELECT is_nullable FROM information_schema.columns WHERE table_name = '\''users'\'' AND column_name = '\''hashed_password'\'';")
           assert cur.fetchone() == ("YES",), "users.hashed_password must be nullable at head"
           cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = '\''public'\'';")
