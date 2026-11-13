@@ -92,6 +92,11 @@ def _select_verified_primary_email(
         )
 
     if provider in ("google", "linkedin"):
+        # LinkedIn OIDC (/v2/userinfo) returns `email_verified` as a boolean when the
+        # member's primary email is verified — if absent or not True, treated as
+        # unverified and login is rejected with 400 (see P0-2b commit body). If product
+        # decides to allow unverified-LinkedIn signups with mandatory email-link
+        # confirmation, route to /auth/link-oauth instead of raising 400.
         if (
             isinstance(user_info, dict)
             and user_info.get("email_verified") is True
