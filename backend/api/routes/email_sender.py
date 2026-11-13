@@ -189,6 +189,128 @@ async def get_email_sender(
     )
 
 
+async def _exchange_and_verify_oauth_sender(
+    provider: str,
+    code: str,
+    redirect_uri: str,
+    fallback_email: str,
+    fallback_name: str,
+) -> tuple[str, Optional[str], str, str]:
+    """
+    Exchange authorization code for OAuth tokens and verify live send capability.
+    Fail closed: raises HTTPException(400) if credentials are missing, token exchange
+    fails, or live mailbox capability verification fails.
+    """
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    sender_email = fallback_email
+    sender_name = fallback_name
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            if provider == "google":
+                client_id = getattr(settings, "google_client_id", "") or getattr(settings, "gmail_client_id", "")
+                client_secret = getattr(settings, "google_client_secret", "") or getattr(settings, "gmail_client_secret", "")
+                if not client_id or not client_secret:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Google OAuth client credentials are not configured.",
+                    )
+                resp = await client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "code": code,
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "redirect_uri": redirect_uri,
+                        "grant_type": "authorization_code",
+                    },
+                )
+                if resp.status_code != 200:
+                    raise HTTPException(status_code=400, detail="OAuth token exchange with provider failed")
+                tok = resp.json()
+                access_token = tok.get("access_token")
+                refresh_token = tok.get("refresh_token")
+                if not access_token:
+                    raise HTTPException(status_code=400, detail="OAuth token exchange with provider failed")
+
+                # Live send capability check: confirm Gmail API mailbox access & scope (when returned)
+                granted_scope = str(tok.get("scope") or "")
+                if granted_scope and not any(
+                    s in granted_scope
+                    for s in ("gmail.send", "mail.google.com", "gmail.modify", "gmail.compose")
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Google OAuth did not grant Gmail send capability.",
+                    )
+                profile_resp = await client.get(
+                    "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                if profile_resp.status_code != 200:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Gmail live send capability check failed.",
+                    )
+                profile_data = profile_resp.json()
+                sender_email = profile_data.get("emailAddress") or sender_email
+
+            elif provider == "microsoft":
+                client_id = getattr(settings, "microsoft_client_id", "") or os.getenv("MICROSOFT_CLIENT_ID", "")
+                client_secret = getattr(settings, "microsoft_client_secret", "") or os.getenv("MICROSOFT_CLIENT_SECRET", "")
+                if not client_id or not client_secret:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Microsoft OAuth client credentials are not configured.",
+                    )
+                resp = await client.post(
+                    "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+                    data={
+                        "code": code,
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "redirect_uri": redirect_uri,
+                        "grant_type": "authorization_code",
+                    },
+                )
+                if resp.status_code != 200:
+                    raise HTTPException(status_code=400, detail="OAuth token exchange with provider failed")
+                tok = resp.json()
+                access_token = tok.get("access_token")
+                refresh_token = tok.get("refresh_token")
+                if not access_token:
+                    raise HTTPException(status_code=400, detail="OAuth token exchange with provider failed")
+
+                # Live send capability check: confirm Graph Mail access
+                mail_resp = await client.get(
+                    "https://graph.microsoft.com/v1.0/me/mailFolders/sentitems",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                if mail_resp.status_code != 200:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Microsoft 365 live send capability check failed.",
+                    )
+                me_resp = await client.get(
+                    "https://graph.microsoft.com/v1.0/me",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                if me_resp.status_code == 200:
+                    m_data = me_resp.json()
+                    sender_email = m_data.get("mail") or m_data.get("userPrincipalName") or sender_email
+                    sender_name = m_data.get("displayName") or sender_name
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported OAuth provider.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.error("oauth_code_exchange_failed", provider=provider, error=str(exc))
+        raise HTTPException(status_code=400, detail="OAuth token exchange with provider failed") from exc
+
+    return access_token, refresh_token, sender_email, sender_name
+
+
 @router.post("/oauth/{provider}/connect", summary="One-Click OAuth 2.0 mailbox connection")
 async def connect_oauth_sender(
     provider: str,
@@ -199,10 +321,8 @@ async def connect_oauth_sender(
 ):
     """
     Initiates or completes a One-Click OAuth 2.0 connection for Google Workspace / Gmail
-    or Microsoft 365 / Outlook.
-    - If OAuth client credentials are set in `.env` and no `code` is provided yet,
-      returns `authorization_url` for popup/redirect consent.
-    - Otherwise links the recruiter's verified identity immediately using encrypted OAuth session tokens.
+    or Microsoft 365 / Outlook. Never persists synthetic tokens or marks sender_verified=True
+    without a real provider token exchange and live send capability check.
     """
     if current_user.role.value not in ("admin", "recruiter", "manager"):
         raise HTTPException(403, "Workspace permissions required to connect an email sender")
@@ -239,8 +359,41 @@ async def connect_oauth_sender(
         algorithm=settings.algorithm,
     )
 
+    if payload and payload.code:
+        redirect_uri = f"{settings.app_base_url}/api/v1/email-sender/oauth/{provider_clean}/callback"
+        access_token, refresh_token, verified_email, verified_name = await _exchange_and_verify_oauth_sender(
+            provider=provider_clean,
+            code=payload.code,
+            redirect_uri=redirect_uri,
+            fallback_email=sender_email,
+            fallback_name=sender_name,
+        )
+        _store_tenant_oauth(
+            tenant=tenant,
+            provider=provider_clean,
+            sender_name=verified_name,
+            sender_email=verified_email,
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
+        await db.commit()
+        log.info(
+            "oauth_email_sender_connected",
+            tenant_id=str(tenant.id),
+            provider=provider_clean,
+            sender=verified_email,
+        )
+        return {
+            "status": "connected",
+            "oauth_provider": provider_clean,
+            "sender_email": verified_email,
+            "sender_name": verified_name,
+            "sender_verified": True,
+            "message": f"Connected {verified_email} via {provider_clean.title()} OAuth 2.0.",
+        }
+
     auth_url = _build_oauth_authorize_url(provider_clean, state_token)
-    if auth_url and not (payload and payload.code):
+    if auth_url:
         return {
             "status": "pending_authorization",
             "oauth_provider": provider_clean,
@@ -251,36 +404,10 @@ async def connect_oauth_sender(
             "message": f"Redirecting to {provider_clean.title()} OAuth 2.0 consent.",
         }
 
-    if settings.is_production and not (payload and payload.code):
-        raise HTTPException(
-            status_code=400,
-            detail=f"{provider_clean.title()} OAuth client credentials are not configured.",
-        )
-
-    # Local dev / test simulation binding when OAuth client IDs are not configured
-    _store_tenant_oauth(
-        tenant=tenant,
-        provider=provider_clean,
-        sender_name=sender_name,
-        sender_email=sender_email,
-        access_token=f"dvt_oauth_{provider_clean}_{secrets.token_urlsafe(16)}",
+    raise HTTPException(
+        status_code=400,
+        detail=f"{provider_clean.title()} OAuth client credentials are not configured.",
     )
-    await db.commit()
-
-    log.info(
-        "oauth_email_sender_connected",
-        tenant_id=str(tenant.id),
-        provider=provider_clean,
-        sender=sender_email,
-    )
-    return {
-        "status": "connected",
-        "oauth_provider": provider_clean,
-        "sender_email": sender_email,
-        "sender_name": sender_name,
-        "sender_verified": True,
-        "message": f"Connected {sender_email} via {provider_clean.title()} OAuth 2.0.",
-    }
 
 
 @router.get("/oauth/{provider}/callback", summary="OAuth 2.0 callback for Google / Microsoft mailbox")
@@ -290,7 +417,7 @@ async def oauth_sender_callback(
     state: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Exchanges the OAuth 2.0 authorization code for access + refresh tokens and stores them encrypted."""
+    """Exchanges the OAuth 2.0 authorization code, verifies send capability, and persists encrypted tokens."""
     provider_clean = provider.strip().lower()
     try:
         claims = jwt.decode(state, settings.secret_key, algorithms=[settings.algorithm])
@@ -303,75 +430,13 @@ async def oauth_sender_callback(
     tenant = await _get_tenant(tenant_uuid, db)
     redirect_uri = f"{settings.app_base_url}/api/v1/email-sender/oauth/{provider_clean}/callback"
 
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    sender_email = claims.get("sender_email") or tenant.sender_email or ""
-    sender_name = claims.get("sender_name") or tenant.sender_name or tenant.name
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            if provider_clean == "google":
-                client_id = getattr(settings, "google_client_id", "") or getattr(settings, "gmail_client_id", "")
-                client_secret = getattr(settings, "google_client_secret", "") or getattr(settings, "gmail_client_secret", "")
-                if client_id and client_secret:
-                    resp = await client.post(
-                        "https://oauth2.googleapis.com/token",
-                        data={
-                            "code": code,
-                            "client_id": client_id,
-                            "client_secret": client_secret,
-                            "redirect_uri": redirect_uri,
-                            "grant_type": "authorization_code",
-                        },
-                    )
-                    if resp.status_code == 200:
-                        tok = resp.json()
-                        access_token = tok.get("access_token")
-                        refresh_token = tok.get("refresh_token")
-                        if access_token:
-                            userinfo = await client.get(
-                                "https://www.googleapis.com/oauth2/v2/userinfo",
-                                headers={"Authorization": f"Bearer {access_token}"},
-                            )
-                            if userinfo.status_code == 200:
-                                u_data = userinfo.json()
-                                sender_email = u_data.get("email") or sender_email
-                                sender_name = u_data.get("name") or sender_name
-
-            elif provider_clean == "microsoft":
-                client_id = getattr(settings, "microsoft_client_id", "") or os.getenv("MICROSOFT_CLIENT_ID", "")
-                client_secret = getattr(settings, "microsoft_client_secret", "") or os.getenv("MICROSOFT_CLIENT_SECRET", "")
-                if client_id and client_secret:
-                    resp = await client.post(
-                        "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-                        data={
-                            "code": code,
-                            "client_id": client_id,
-                            "client_secret": client_secret,
-                            "redirect_uri": redirect_uri,
-                            "grant_type": "authorization_code",
-                        },
-                    )
-                    if resp.status_code == 200:
-                        tok = resp.json()
-                        access_token = tok.get("access_token")
-                        refresh_token = tok.get("refresh_token")
-                        if access_token:
-                            me_resp = await client.get(
-                                "https://graph.microsoft.com/v1.0/me",
-                                headers={"Authorization": f"Bearer {access_token}"},
-                            )
-                            if me_resp.status_code == 200:
-                                m_data = me_resp.json()
-                                sender_email = m_data.get("mail") or m_data.get("userPrincipalName") or sender_email
-                                sender_name = m_data.get("displayName") or sender_name
-    except Exception as e:
-        log.warning("oauth_code_exchange_fallback", provider=provider_clean, error=str(e))
-
-    if not access_token:
-        if settings.is_production:
-            raise HTTPException(status_code=400, detail="OAuth token exchange with provider failed")
-        access_token = f"dvt_oauth_{provider_clean}_{secrets.token_urlsafe(16)}"
+    access_token, refresh_token, sender_email, sender_name = await _exchange_and_verify_oauth_sender(
+        provider=provider_clean,
+        code=code,
+        redirect_uri=redirect_uri,
+        fallback_email=claims.get("sender_email") or tenant.sender_email or "",
+        fallback_name=claims.get("sender_name") or tenant.sender_name or tenant.name,
+    )
 
     _store_tenant_oauth(
         tenant=tenant,
@@ -383,7 +448,7 @@ async def oauth_sender_callback(
     )
     await db.commit()
 
-    return RedirectResponse(url=f"{settings.frontend_url}/dashboard/settings?oauth={provider_clean}")
+    return RedirectResponse(url=f"{settings.frontend_url}/dashboard/settings?oauth={provider_clean}&status=connected")
 
 
 @router.post("", summary="Deprecated legacy sender endpoint (enforces SSRF checks)")

@@ -705,3 +705,210 @@ async def test_get_recent_signals_filters_signals_with_missing_tenant_id():
         signals = await get_recent_signals(limit=50, current_user=user_x)
 
     assert [s["id"] for s in signals] == ["sig-tenant-x"]
+
+
+@pytest.mark.asyncio
+async def test_email_sender_connect_without_credentials_fails_closed(client, monkeypatch):
+    """P0-6: Missing OAuth credentials must fail closed (400) without persisting tokens or sender_verified."""
+    import uuid
+
+    from sqlalchemy import select
+
+    from api.routes import email_sender as email_sender_mod
+    from db.models import Tenant
+
+    email = f"sender_nocred_{uuid.uuid4().hex[:8]}@example.com"
+    await store_email_otp(email, "654321")
+    reg_resp = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": "SenderPass123!",
+            "full_name": "Sender Tester",
+            "role": "recruiter",
+            "company_name": "NoCred Org",
+            "otp": "654321",
+        },
+    )
+    assert reg_resp.status_code == 201
+    token = reg_resp.json()["access_token"]
+    tenant_id = uuid.UUID(reg_resp.json()["tenant_id"])
+
+    monkeypatch.setattr(email_sender_mod.settings, "google_client_id", "")
+    monkeypatch.setattr(email_sender_mod.settings, "gmail_client_id", "")
+    monkeypatch.setattr(email_sender_mod.settings, "google_client_secret", "")
+    monkeypatch.setattr(email_sender_mod.settings, "gmail_client_secret", "")
+
+    resp = await client.post(
+        "/api/v1/email-sender/oauth/google/connect",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"sender_name": "Sender Tester", "sender_email": email},
+    )
+    assert resp.status_code == 400
+
+    async with AsyncSessionLocal() as session:
+        tenant = (await session.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one()
+        assert tenant.sender_verified is False
+        assert "email_oauth" not in (tenant.settings or {})
+
+
+@pytest.mark.asyncio
+async def test_email_sender_callback_exchange_and_capability_failures_leave_unverified(client, monkeypatch):
+    """P0-6: Token exchange failure and live send capability failure both return 400 and leave sender_verified=False."""
+    import uuid
+    from urllib.parse import parse_qs, urlparse
+
+    from sqlalchemy import select
+
+    from api.routes import email_sender as email_sender_mod
+    from db.models import Tenant
+
+    email = f"sender_fail_{uuid.uuid4().hex[:8]}@example.com"
+    await store_email_otp(email, "654321")
+    reg_resp = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": "SenderPass123!",
+            "full_name": "Fail Tester",
+            "role": "recruiter",
+            "company_name": "Fail Org",
+            "otp": "654321",
+        },
+    )
+    assert reg_resp.status_code == 201
+    token = reg_resp.json()["access_token"]
+    tenant_id = uuid.UUID(reg_resp.json()["tenant_id"])
+
+    monkeypatch.setattr(email_sender_mod.settings, "google_client_id", "test-google-client-id")
+    monkeypatch.setattr(email_sender_mod.settings, "google_client_secret", "test-google-client-secret")
+
+    init_resp = await client.post(
+        "/api/v1/email-sender/oauth/google/connect",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"sender_name": "Fail Tester", "sender_email": email},
+    )
+    assert init_resp.status_code == 200
+    body = init_resp.json()
+    assert body["sender_verified"] is False
+    state = parse_qs(urlparse(body["authorization_url"]).query)["state"][0]
+
+    # Case 1: OAuth token exchange fails with 400
+    fail_exchange_client = AsyncMock()
+    fail_exchange_client.post = AsyncMock(return_value=MagicMock(status_code=400))
+    fail_exchange_cm = AsyncMock()
+    fail_exchange_cm.__aenter__.return_value = fail_exchange_client
+
+    with patch("api.routes.email_sender.httpx.AsyncClient", return_value=fail_exchange_cm):
+        cb_resp = await client.get(
+            f"/api/v1/email-sender/oauth/google/callback?code=bad-code&state={state}",
+            follow_redirects=False,
+        )
+    assert cb_resp.status_code == 400
+
+    async with AsyncSessionLocal() as session:
+        tenant = (await session.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one()
+        assert tenant.sender_verified is False
+        assert "email_oauth" not in (tenant.settings or {})
+
+    # Case 2: Token exchange succeeds, but live Gmail send capability check returns 403
+    fail_cap_client = AsyncMock()
+    fail_cap_client.post = AsyncMock(
+        return_value=MagicMock(
+            status_code=200,
+            json=lambda: {
+                "access_token": "tok-no-cap",
+                "refresh_token": "ref-no-cap",
+                "scope": "https://www.googleapis.com/auth/gmail.send",
+            },
+        )
+    )
+    fail_cap_client.get = AsyncMock(return_value=MagicMock(status_code=403))
+    fail_cap_cm = AsyncMock()
+    fail_cap_cm.__aenter__.return_value = fail_cap_client
+
+    with patch("api.routes.email_sender.httpx.AsyncClient", return_value=fail_cap_cm):
+        cap_resp = await client.get(
+            f"/api/v1/email-sender/oauth/google/callback?code=ok-code&state={state}",
+            follow_redirects=False,
+        )
+    assert cap_resp.status_code == 400
+
+    async with AsyncSessionLocal() as session:
+        tenant = (await session.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one()
+        assert tenant.sender_verified is False
+        assert "email_oauth" not in (tenant.settings or {})
+
+
+@pytest.mark.asyncio
+async def test_email_sender_callback_success_verifies_live_capability_and_persists(client, monkeypatch):
+    """P0-6: Successful token exchange + live send capability check marks sender_verified=True and persists encrypted token."""
+    import uuid
+    from urllib.parse import parse_qs, urlparse
+
+    from sqlalchemy import select
+
+    from api.routes import email_sender as email_sender_mod
+    from db.models import Tenant
+
+    email = f"sender_ok_{uuid.uuid4().hex[:8]}@example.com"
+    await store_email_otp(email, "654321")
+    reg_resp = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": "SenderPass123!",
+            "full_name": "Verified Tester",
+            "role": "recruiter",
+            "company_name": "Verified Org",
+            "otp": "654321",
+        },
+    )
+    assert reg_resp.status_code == 201
+    token = reg_resp.json()["access_token"]
+    tenant_id = uuid.UUID(reg_resp.json()["tenant_id"])
+
+    monkeypatch.setattr(email_sender_mod.settings, "google_client_id", "test-google-client-id")
+    monkeypatch.setattr(email_sender_mod.settings, "google_client_secret", "test-google-client-secret")
+
+    init_resp = await client.post(
+        "/api/v1/email-sender/oauth/google/connect",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"sender_name": "Verified Tester", "sender_email": email},
+    )
+    assert init_resp.status_code == 200
+    state = parse_qs(urlparse(init_resp.json()["authorization_url"]).query)["state"][0]
+
+    ok_client = AsyncMock()
+    ok_client.post = AsyncMock(
+        return_value=MagicMock(
+            status_code=200,
+            json=lambda: {
+                "access_token": "real-access-tok",
+                "refresh_token": "real-refresh-tok",
+                "scope": "https://www.googleapis.com/auth/gmail.send",
+            },
+        )
+    )
+    ok_client.get = AsyncMock(
+        return_value=MagicMock(
+            status_code=200,
+            json=lambda: {"emailAddress": "verified@acme.com"},
+        )
+    )
+    ok_cm = AsyncMock()
+    ok_cm.__aenter__.return_value = ok_client
+
+    with patch("api.routes.email_sender.httpx.AsyncClient", return_value=ok_cm):
+        cb_resp = await client.get(
+            f"/api/v1/email-sender/oauth/google/callback?code=good-code&state={state}",
+            follow_redirects=False,
+        )
+    assert cb_resp.status_code in (302, 307)
+    assert "oauth=google&status=connected" in cb_resp.headers["location"]
+
+    async with AsyncSessionLocal() as session:
+        tenant = (await session.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one()
+        assert tenant.sender_verified is True
+        assert tenant.sender_email == "verified@acme.com"
+        assert "email_oauth" in (tenant.settings or {})

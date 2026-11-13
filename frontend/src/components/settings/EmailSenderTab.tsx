@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 
 function SenderStatusBanner({ config }: { config: EmailSenderOut }) {
-  if (!config.configured) {
+  if (!config.configured || !config.sender_verified) {
     return (
       <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-700">
         <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
@@ -45,29 +45,87 @@ export function EmailSenderSettings() {
   const [config, setConfig] = useState<EmailSenderOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectingProvider, setConnectingProvider] = useState<"google" | "microsoft" | null>(null);
+  const [pendingProvider, setPendingProvider] = useState<"google" | "microsoft" | null>(null);
   const [testing, setTesting] = useState(false);
   const [removing, setRemoving] = useState(false);
 
   const [senderName, setSenderName] = useState("");
   const [senderEmail, setSenderEmail] = useState("");
 
-  const loadConfig = useCallback(async () => {
+  const loadConfig = useCallback(async (): Promise<EmailSenderOut | null> => {
     setLoading(true);
     try {
       const data = await emailSenderApi.getConfig();
       setConfig(data);
       setSenderName(data.sender_name || "");
       setSenderEmail(data.sender_email || "");
+      return data;
     } catch {
       toast.error("Failed to load sender config");
+      return null;
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const oauthStatus = params?.get("status");
+    const oauthProvider = params?.get("oauth");
+    const oauthError = params?.get("oauth_error");
+
+    if (oauthError) {
+      toast.error("OAuth Connection Error", { description: oauthError });
+      window.history.replaceState({}, "", window.location.pathname);
+      loadConfig();
+      return;
+    }
+
+    if (oauthStatus === "connected" && (oauthProvider === "google" || oauthProvider === "microsoft")) {
+      window.history.replaceState({}, "", window.location.pathname);
+      loadConfig().then((data) => {
+        if (data?.configured && data?.sender_verified) {
+          toast.success("Mailbox connected!", {
+            description: `Verified ${data.sender_email || oauthProvider} mailbox.`,
+          });
+        } else {
+          toast.error("OAuth Connection Error", {
+            description: "Mailbox authorization did not complete verification.",
+          });
+        }
+      });
+      return;
+    }
+
     loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    if (!pendingProvider) return;
+    let cancelled = false;
+    const checkVerification = async () => {
+      try {
+        const data = await emailSenderApi.getConfig();
+        if (cancelled) return;
+        if (data.configured && data.sender_verified) {
+          setConfig(data);
+          setSenderName(data.sender_name || "");
+          setSenderEmail(data.sender_email || "");
+          setPendingProvider(null);
+          toast.success("Mailbox connected!", {
+            description: `Verified ${data.sender_email || pendingProvider} mailbox.`,
+          });
+        }
+      } catch {
+        // Keep waiting until callback completes or user cancels
+      }
+    };
+    window.addEventListener("focus", checkVerification);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", checkVerification);
+    };
+  }, [pendingProvider]);
 
   const handleConnectOAuth = async (provider: "google" | "microsoft") => {
     setConnectingProvider(provider);
@@ -77,15 +135,23 @@ export function EmailSenderSettings() {
         sender_email: senderEmail || undefined,
       });
       if (res.authorization_url) {
-        toast.info("Redirecting to OAuth Consent", {
+        setPendingProvider(provider);
+        toast.info("Pending OAuth Authorization", {
           description: "Complete mailbox authorization in the newly opened window.",
         });
         window.open(res.authorization_url, "_blank", "noopener,noreferrer");
-      } else {
+      } else if (res.status === "connected" && res.sender_verified === true) {
+        setPendingProvider(null);
         toast.success("Mailbox connected!", { description: res.message });
         await loadConfig();
+      } else {
+        setPendingProvider(null);
+        toast.error("OAuth Connection Error", {
+          description: res.message || "Mailbox verification failed.",
+        });
       }
     } catch (err: any) {
+      setPendingProvider(null);
       const detail = err?.response?.data?.detail || "Failed to connect mailbox via OAuth 2.0.";
       toast.error("OAuth Connection Error", { description: detail });
     } finally {
@@ -130,6 +196,23 @@ export function EmailSenderSettings() {
 
   return (
     <div className="space-y-6">
+      {pendingProvider && (
+        <div
+          data-testid="oauth-pending-banner"
+          className="flex items-start gap-3 p-4 rounded-xl bg-blue-50 border border-blue-200 dark:bg-blue-900/20 dark:border-blue-700"
+        >
+          <Loader2 className="w-5 h-5 text-blue-500 animate-spin flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+              Pending {pendingProvider === "microsoft" ? "Microsoft 365" : "Google Workspace"} authorization
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-400 mt-0.5">
+              Finish signing in and granting send permission in the OAuth window to verify your mailbox.
+            </p>
+          </div>
+        </div>
+      )}
+
       {config && <SenderStatusBanner config={config} />}
 
       <Card className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-950/30 border-blue-100 dark:border-blue-800 rounded-xl">
@@ -232,7 +315,7 @@ export function EmailSenderSettings() {
             </Button>
           </div>
 
-          {config?.configured && (
+          {config?.configured && config?.sender_verified && (
             <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-border">
               <Button
                 id="test-sender-btn"

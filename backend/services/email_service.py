@@ -199,7 +199,7 @@ async def _deliver_oauth_message(
             log.warning("google_oauth_token_missing", sender=sender_cfg.sender_email)
             return False
 
-        if token.startswith("dvt_oauth_") or os.getenv("PYTEST_CURRENT_TEST"):
+        if os.getenv("PYTEST_CURRENT_TEST"):
             log.info("oauth_simulated_delivery", provider="google", to=to_address, sender=sender_cfg.sender_email)
             return True
 
@@ -227,7 +227,7 @@ async def _deliver_oauth_message(
             log.warning("microsoft_oauth_token_missing", sender=sender_cfg.sender_email)
             return False
 
-        if token.startswith("dvt_oauth_") or os.getenv("PYTEST_CURRENT_TEST"):
+        if os.getenv("PYTEST_CURRENT_TEST"):
             log.info("oauth_simulated_delivery", provider="microsoft", to=to_address, sender=sender_cfg.sender_email)
             return True
 

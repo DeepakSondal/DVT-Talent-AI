@@ -80,6 +80,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         sender_name: "",
         sender_email: "",
     });
+    const [pendingOAuth, setPendingOAuth] = useState<"google" | "microsoft" | null>(null);
 
     useEffect(() => {
         tenantsApi.getMe().then(data => {
@@ -157,17 +158,56 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     };
 
     // Step 2: Email outreach configuration
-    const handleSaveEmail = async () => {
+    useEffect(() => {
+        if (!pendingOAuth) return;
+        let cancelled = false;
+        const checkVerification = async () => {
+            try {
+                const cfg = await emailSenderApi.getConfig();
+                if (!cancelled && cfg?.configured && cfg?.sender_verified) {
+                    setPendingOAuth(null);
+                    toast.success("Outreach email configured");
+                    nextStep();
+                }
+            } catch {
+                // Keep waiting until callback completes or user skips
+            }
+        };
+        window.addEventListener("focus", checkVerification);
+        return () => {
+            cancelled = true;
+            window.removeEventListener("focus", checkVerification);
+        };
+    }, [pendingOAuth]);
+
+    const handleSaveEmail = async (providerOverride?: "google" | "microsoft") => {
+        const provider = providerOverride ?? emailConfig.provider;
         setLoading(true);
         try {
-            await emailSenderApi.connectOAuth(emailConfig.provider, { sender_name: emailConfig.sender_name || undefined, sender_email: emailConfig.sender_email || undefined });
-            toast.success("Outreach email configured");
-            nextStep();
-        } catch (err: any) {
-            toast.info("Outreach Mailbox Note", { 
-                description: "Saved settings. You can test your connection anytime in Settings." 
+            const res = await emailSenderApi.connectOAuth(provider, {
+                sender_name: emailConfig.sender_name || undefined,
+                sender_email: emailConfig.sender_email || undefined,
             });
-            nextStep();
+            if (res.authorization_url) {
+                setPendingOAuth(provider);
+                toast.info("Pending OAuth Authorization", {
+                    description: "Complete mailbox authorization in the newly opened window.",
+                });
+                window.open(res.authorization_url, "_blank", "noopener,noreferrer");
+            } else if (res.status === "connected" && res.sender_verified === true) {
+                setPendingOAuth(null);
+                toast.success("Outreach email configured");
+                nextStep();
+            } else {
+                setPendingOAuth(null);
+                toast.error("OAuth Connection Error", {
+                    description: res.message || "Mailbox verification failed.",
+                });
+            }
+        } catch (err: any) {
+            setPendingOAuth(null);
+            const detail = err?.response?.data?.detail || "Failed to connect outreach mailbox.";
+            toast.error("OAuth Connection Error", { description: detail });
         } finally {
             setLoading(false);
         }
@@ -510,7 +550,16 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2"><Button type="button" onClick={() => { setEmailConfig({ ...emailConfig, provider: "google" }); handleSaveEmail(); }} disabled={loading} className="h-12 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-semibold"><Mail className="w-4 h-4 mr-2 text-blue-400" />Connect Google Workspace / Gmail</Button><Button type="button" onClick={() => { setEmailConfig({ ...emailConfig, provider: "microsoft" }); handleSaveEmail(); }} disabled={loading} className="h-12 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-semibold"><Mail className="w-4 h-4 mr-2 text-indigo-400" />Connect Microsoft 365 / Outlook</Button></div>
+                                        {pendingOAuth && (
+                                            <div className="flex items-start gap-3 p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-200 text-xs">
+                                                <Loader2 className="w-4 h-4 animate-spin flex-shrink-0 mt-0.5 text-blue-400" />
+                                                <span>
+                                                    Pending {pendingOAuth === "microsoft" ? "Microsoft 365" : "Google Workspace"} authorization. Complete sign-in in the opened window to verify your mailbox.
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2"><Button type="button" onClick={() => { setEmailConfig({ ...emailConfig, provider: "google" }); handleSaveEmail("google"); }} disabled={loading} className="h-12 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-semibold"><Mail className="w-4 h-4 mr-2 text-blue-400" />Connect Google Workspace / Gmail</Button><Button type="button" onClick={() => { setEmailConfig({ ...emailConfig, provider: "microsoft" }); handleSaveEmail("microsoft"); }} disabled={loading} className="h-12 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-semibold"><Mail className="w-4 h-4 mr-2 text-indigo-400" />Connect Microsoft 365 / Outlook</Button></div>
                                     </div>
 
                                     <div className="pt-4 flex items-center justify-between gap-3 border-t border-slate-800/60">
@@ -530,7 +579,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                 Skip for Now
                                             </Button>
                                             <Button 
-                                                onClick={handleSaveEmail} 
+                                                onClick={() => handleSaveEmail()} 
                                                 disabled={loading} 
                                                 className="h-11 px-5 text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-600/20"
                                             >
