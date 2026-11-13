@@ -20,6 +20,7 @@ import { CommandPalette } from "@/components/ui/CommandPalette";
 import { TopOmnibar } from "@/components/layout/TopOmnibar";
 
 import { usersApi, UserOut } from "@/lib/api";
+import authService from "@/services/auth.service";
 import { useWebSocket } from "@/providers/websocket-provider";
 import api from "@/lib/api";
 
@@ -56,18 +57,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     setMobileOpen(false);
   }, [pathname]);
 
-  const handleLogout = () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
-    const token = localStorage.getItem("dvt_token");
-    fetch(`${apiBase}/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-      headers: token ? { Authorization: token.startsWith("Bearer ") ? token : `Bearer ${token}` } : {},
-    }).catch(() => {});
-    localStorage.removeItem("dvt_token");
-    localStorage.removeItem("tenant_id");
-    document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Lax";
-    document.cookie = "dvt_refresh_token=; path=/; max-age=0; SameSite=Lax";
+  const handleLogout = async () => {
+    await authService.logout();
     router.push("/auth/login");
   };
 

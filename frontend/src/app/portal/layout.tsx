@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { candidatePortalApi, type CandidateProfile } from "@/lib/api";
+import authService from "@/services/auth.service";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "sonner";
@@ -63,9 +64,8 @@ export default function CandidatePortalLayout({
       });
   }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("dvt_token");
-    document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Lax";
+  const handleLogout = async () => {
+    await authService.logout();
     toast.info("Logged out successfully");
     router.push("/auth/login?portal=candidate");
   };

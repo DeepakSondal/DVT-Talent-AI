@@ -5,7 +5,7 @@
  */
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 const http: AxiosInstance = axios.create({
   baseURL: API_BASE,
@@ -77,6 +77,7 @@ http.interceptors.response.use(
         localStorage.removeItem("dvt_token");
         localStorage.removeItem("tenant_id");
         document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Lax";
+        document.cookie = "dvt_refresh_token=; path=/; max-age=0; SameSite=Lax";
         if (!window.location.pathname.startsWith("/auth/")) {
           window.location.href = "/auth/login";
         }

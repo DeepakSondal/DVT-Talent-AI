@@ -46,12 +46,18 @@ export const authService = {
 
   me: (): Promise<UserOut> => http.get("/auth/me").then((r) => r.data),
 
-  logout: (): void => {
-    http.post("/auth/logout").catch(() => {});
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("dvt_token");
-      localStorage.removeItem("tenant_id");
-      document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Strict";
+  logout: async (): Promise<void> => {
+    try {
+      await http.post("/auth/logout");
+    } catch (err) {
+      console.error("Logout request failed:", err);
+    } finally {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("dvt_token");
+        localStorage.removeItem("tenant_id");
+        document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Lax";
+        document.cookie = "dvt_refresh_token=; path=/; max-age=0; SameSite=Lax";
+      }
     }
   },
 };

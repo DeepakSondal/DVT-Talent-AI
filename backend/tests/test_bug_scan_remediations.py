@@ -536,3 +536,53 @@ async def test_oauth_callback_sets_cookies_with_root_path(client):
     assert len(dvt_refresh_headers) == 1
     assert "path=/" in dvt_token_headers[0].lower()
     assert "path=/" in dvt_refresh_headers[0].lower()
+
+
+@pytest.mark.asyncio
+async def test_logout_receives_refresh_cookie_and_revokes_it(client):
+    """POST /auth/logout must receive dvt_refresh_token (path=/), revoke both tokens, and block subsequent silent refresh."""
+    import uuid
+
+    from services.redis_service import is_token_revoked
+
+    email = f"logout_revoke_{uuid.uuid4().hex[:8]}@example.com"
+    await store_email_otp(email, "654321")
+    reg_resp = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": "LogoutPass123!",
+            "full_name": "Logout Tester",
+            "role": "recruiter",
+            "company_name": "Logout Test Org",
+            "otp": "654321",
+        },
+    )
+    assert reg_resp.status_code == 201
+    access_token = reg_resp.json()["access_token"]
+    refresh_token = reg_resp.cookies.get("dvt_refresh_token")
+    assert refresh_token
+
+    set_cookies = reg_resp.headers.get_list("set-cookie")
+    refresh_hdr = next(c for c in set_cookies if c.startswith("dvt_refresh_token="))
+    assert "path=/" in refresh_hdr.lower()
+
+    # Logout with cookies attached (as browser sends when path="/")
+    logout_resp = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {access_token}"},
+        cookies={
+            "dvt_token": f"Bearer {access_token}",
+            "dvt_refresh_token": refresh_token,
+        },
+    )
+    assert logout_resp.status_code == 200
+    assert await is_token_revoked(access_token) is True
+    assert await is_token_revoked(refresh_token) is True
+
+    # Subsequent silent refresh using the revoked refresh token must fail closed with 401
+    refresh_resp = await client.post(
+        "/api/v1/auth/refresh",
+        cookies={"dvt_refresh_token": refresh_token},
+    )
+    assert refresh_resp.status_code == 401
