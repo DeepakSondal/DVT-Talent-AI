@@ -382,34 +382,53 @@ class AgentOrchestrator:
                         role_title=role_desc,
                     )
 
-                # 4, 5 & 6. Concurrent Post-Sourcing Execution (Outreach + Analytics + Optional Screening)
+                # 4, 5 & 6. Concurrent Post-Sourcing Execution (Outreach gated by critic + Analytics + Optional Screening)
                 candidate_names = [
                     c.get("full_name") or c.get("name") if isinstance(c, dict) else getattr(c, "full_name", str(c))
                     for c in candidates[:5]
                 ]
 
-                broadcast_signal("Agent 'outreach' drafting personalized sequences in bulk...", "agent_start", self.tenant_id)
-                broadcast_signal("Agent 'analytics' generating run report...", "agent_start", self.tenant_id)
+                post_keys: List[str] = []
+                post_tasks: List[Any] = []
 
-                post_tasks = [
-                    self._run_agent_with_retry(
-                        outreach_agent,
-                        f"Draft personalized outreach for these candidates: {candidate_names} for role {role_desc}",
-                        deps=deps,
-                        model=dynamic_model,
-                        model_settings={"max_tokens": 1200},
-                    ),
+                if audit_passed:
+                    broadcast_signal("Agent 'outreach' drafting personalized sequences in bulk...", "agent_start", self.tenant_id)
+                    post_keys.append("outreach")
+                    post_tasks.append(
+                        self._run_agent_with_retry(
+                            outreach_agent,
+                            f"Draft personalized outreach for these candidates: {candidate_names} for role {role_desc}",
+                            deps=deps,
+                            model=dynamic_model,
+                            model_settings={"max_tokens": 1200},
+                        )
+                    )
+                else:
+                    results["stages"]["outreach"] = {
+                        "gated": True,
+                        "reason": "Blocked pending human review: critic audit flagged issues.",
+                    }
+                    broadcast_signal(
+                        "Agent 'outreach' paused: critic audit flagged issues for human review.",
+                        "agent_warning",
+                        self.tenant_id,
+                    )
+
+                broadcast_signal("Agent 'analytics' generating run report...", "agent_start", self.tenant_id)
+                post_keys.append("analytics")
+                post_tasks.append(
                     self._run_agent_with_retry(
                         analytics_agent,
                         f"Generate report for this run: role={role_desc}, sourced_candidates={len(candidates)}, audit={_serialize(c_data)}",
                         deps=deps,
                         model=dynamic_model,
                         model_settings={"max_tokens": 1200},
-                    ),
-                ]
+                    )
+                )
 
                 if enable_screening:
                     broadcast_signal("Agent 'screening' generating interview guide...", "agent_start", self.tenant_id)
+                    post_keys.append("screening_guide")
                     post_tasks.append(
                         self._run_agent_with_retry(
                             screening_agent,
@@ -421,17 +440,19 @@ class AgentOrchestrator:
                     )
 
                 post_results = await asyncio.gather(*post_tasks)
+                post_map = dict(zip(post_keys, post_results, strict=True))
 
-                out_data = _get_agent_data(post_results[0])
-                results["stages"]["outreach"] = _serialize(out_data)
-                broadcast_signal("Agent 'outreach' sequence drafting complete.", "agent_success", self.tenant_id)
+                if "outreach" in post_map:
+                    out_data = _get_agent_data(post_map["outreach"])
+                    results["stages"]["outreach"] = _serialize(out_data)
+                    broadcast_signal("Agent 'outreach' sequence drafting complete.", "agent_success", self.tenant_id)
 
-                a_data = _get_agent_data(post_results[1])
+                a_data = _get_agent_data(post_map["analytics"])
                 results["stages"]["analytics"] = _serialize(a_data)
                 broadcast_signal("Agent 'analytics' report generated.", "agent_success", self.tenant_id)
 
-                if enable_screening and len(post_results) > 2:
-                    s_item = _get_agent_data(post_results[2])
+                if "screening_guide" in post_map:
+                    s_item = _get_agent_data(post_map["screening_guide"])
                     results["stages"]["screening_guide"] = _serialize(s_item)
                     broadcast_signal("Agent 'screening' completed interview guide.", "agent_success", self.tenant_id)
 

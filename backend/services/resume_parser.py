@@ -12,12 +12,19 @@ elif __name__.startswith("services."):
 import io
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+
+class UnsupportedResumeFormatError(ValueError):
+    """Raised when a binary resume format (e.g. legacy OLE2 .doc) cannot be extracted."""
 
 def get_upload_dir() -> Path:
     try:
@@ -197,9 +204,11 @@ class ResumeParserService:
         elif ext == ".pdf":
             text = cls._extract_from_pdf(content_bytes)
             
-        # 2. Word (DOCX) Extraction — exclude legacy binary OLE2 .doc
+        # 2. Word (DOCX) Extraction — handle OOXML .docx and legacy binary OLE2 .doc
         elif ext == ".docx" or (ext == ".doc" and content_bytes.startswith(b"PK\x03\x04")):
             text = cls._extract_from_docx(content_bytes)
+        elif ext == ".doc" and content_bytes.startswith(b"\xd0\xcf\x11\xe0"):
+            text = cls._extract_from_legacy_doc(content_bytes)
             
         # 3. Plain Text / Fallback (only if not a failed binary container like %PDF, PK zip, or OLE2 .doc)
         if not text.strip() and not content_bytes.startswith((b"%PDF", b"PK\x03\x04", b"\xd0\xcf\x11\xe0")):
@@ -257,6 +266,49 @@ class ResumeParserService:
         except Exception as e:
             logger.warning("pypdf_extraction_failed", error=str(e))
         return ""
+
+    @classmethod
+    def _extract_from_legacy_doc(cls, content_bytes: bytes) -> str:
+        """Extract text from legacy OLE2 .doc using LibreOffice (soffice) or antiword, else fail explicitly."""
+        soffice_bin = shutil.which("soffice") or shutil.which("libreoffice")
+        antiword_bin = shutil.which("antiword")
+        if not soffice_bin and not antiword_bin:
+            raise UnsupportedResumeFormatError(
+                "Legacy binary .doc format requires LibreOffice (soffice) or antiword; please convert to .docx or .pdf."
+            )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            doc_path = Path(tmpdir) / "resume.doc"
+            doc_path.write_bytes(content_bytes)
+
+            if soffice_bin:
+                proc = subprocess.run(  # noqa: S603
+                    [soffice_bin, "--headless", "--convert-to", "txt:Text", "--outdir", tmpdir, str(doc_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                    check=False,
+                )
+                txt_path = Path(tmpdir) / "resume.txt"
+                if proc.returncode == 0 and txt_path.exists():
+                    extracted = txt_path.read_text(encoding="utf-8", errors="replace")
+                    if extracted.strip():
+                        return extracted
+
+            if antiword_bin:
+                proc = subprocess.run(  # noqa: S603
+                    [antiword_bin, str(doc_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    check=False,
+                )
+                if proc.returncode == 0 and proc.stdout.strip():
+                    return proc.stdout
+
+        raise UnsupportedResumeFormatError(
+            "Unable to extract text from legacy binary .doc file; please convert to .docx or .pdf."
+        )
 
     @classmethod
     def _extract_from_docx(cls, content_bytes: bytes) -> str:

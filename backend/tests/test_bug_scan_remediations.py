@@ -1395,3 +1395,52 @@ async def test_team_quota_persists_monthly_credit_limit_and_rejects_negative(mon
         "active_recruiters": 2,
         "credit_usage_total": 42,
     }
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_gates_outreach_when_critic_fails(monkeypatch):
+    """P1-5: When critic audit returns passed=False, orchestrator gates outreach and still runs analytics."""
+    import uuid
+    from types import SimpleNamespace
+
+    from agents import orchestrator as orch_mod
+
+    orch = orch_mod.AgentOrchestrator(tenant_id=str(uuid.uuid4()))
+
+    async def _fake_run(agent, prompt, deps=None, model=None, model_settings=None):
+        if agent is orch_mod.discovery_agent:
+            return SimpleNamespace(output={"roles": ["Backend Engineer"]})
+        if agent is orch_mod.sourcing_agent:
+            return SimpleNamespace(output={"candidates": [{"full_name": "Alice Smith"}]})
+        if agent is orch_mod.critic_agent:
+            return SimpleNamespace(output={"passed": False, "recommendation": "Bias check required"})
+        if agent is orch_mod.analytics_agent:
+            return SimpleNamespace(output={"summary": "ok"})
+        if agent is orch_mod.outreach_agent:
+            raise AssertionError("outreach_agent must not run when critic_agent fails")
+        return SimpleNamespace(output={})
+
+    monkeypatch.setattr(orch, "_run_agent_with_retry", _fake_run)
+    monkeypatch.setattr(orch, "_persist_sourcing_and_ledger", AsyncMock())
+    monkeypatch.setattr(orch_mod, "broadcast_signal", MagicMock())
+
+    res = await orch.run_full_pipeline(industry="SaaS", location="Remote", enable_screening=False, mock_mode=True)
+    assert res["stages"]["outreach"]["gated"] is True
+    assert res["stages"]["analytics"] == {"summary": "ok"}
+
+
+def test_legacy_doc_raises_unsupported_format_without_converter_and_uses_antiword(monkeypatch):
+    """P1-5: Legacy OLE2 .doc fails explicitly without converter and extracts when antiword is available."""
+    from services.resume_parser import ResumeParserService, UnsupportedResumeFormatError
+
+    ole2_bytes = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64
+
+    monkeypatch.setattr("services.resume_parser.shutil.which", lambda _name: None)
+    with pytest.raises(UnsupportedResumeFormatError):
+        ResumeParserService.extract_text(ole2_bytes, "legacy_cv.doc")
+
+    monkeypatch.setattr("services.resume_parser.shutil.which", lambda name: "/usr/bin/antiword" if name == "antiword" else None)
+    fake_proc = MagicMock(returncode=0, stdout="Jane Doe\nSenior Python Engineer\n")
+    monkeypatch.setattr("services.resume_parser.subprocess.run", lambda *a, **kw: fake_proc)
+    extracted = ResumeParserService.extract_text(ole2_bytes, "legacy_cv.doc")
+    assert "Senior Python Engineer" in extracted
