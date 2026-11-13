@@ -40,22 +40,31 @@ def _get_redis():
     return redis.Redis(connection_pool=_redis_pool)
 
 
-def _get_cache(query_hash: str, tenant_id: str = "default") -> Optional[str]:
+def _require_tenant_id(tenant_id: Optional[str]) -> str:
+    safe_tenant = str(tenant_id or "").strip()
+    if not safe_tenant or safe_tenant.lower() == "default":
+        raise ValueError("A non-empty, non-default tenant_id is required for swarm_memory operations")
+    return safe_tenant
+
+
+def _get_cache(query_hash: str, tenant_id: str) -> Optional[str]:
+    safe_tenant = _require_tenant_id(tenant_id)
     try:
         r = _get_redis()
-        val = r.get(f"swarm_cache:{tenant_id}:{query_hash}")
+        val = r.get(f"swarm_cache:{safe_tenant}:{query_hash}")
         return val.decode("utf-8") if val else None
     except Exception:
         return None
 
 
-def _set_cache(query: str, result: str, tenant_id: str = "default", ttl_seconds: int = 86400):
+def _set_cache(query: str, result: str, tenant_id: str, ttl_seconds: int = 86400):
+    safe_tenant = _require_tenant_id(tenant_id)
     try:
         query_hash = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
         r = _get_redis()
-        r.setex(f"swarm_cache:{tenant_id}:{query_hash}", ttl_seconds, result)
+        r.setex(f"swarm_cache:{safe_tenant}:{query_hash}", ttl_seconds, result)
     except Exception as exc:
-        log.debug("swarm_cache_set_skipped", error=str(exc), tenant_id=tenant_id)
+        log.debug("swarm_cache_set_skipped", error=str(exc), tenant_id=safe_tenant)
 
 
 def _has_external_pinecone() -> bool:
@@ -66,12 +75,12 @@ def _has_external_pinecone() -> bool:
     )
 
 
-async def add_negative_vector(category: str, reason: str, tenant_id: str = "default"):
+async def add_negative_vector(category: str, reason: str, tenant_id: str):
     """
     Records a recruiter rejection calibration rule scoped strictly to tenant_id.
     Always persists locally in memory + Redis, and syncs to Pinecone if configured.
     """
-    safe_tenant = str(tenant_id or "default")
+    safe_tenant = _require_tenant_id(tenant_id)
     clean_reason = (reason or "").strip()
     if not clean_reason:
         return
@@ -161,12 +170,12 @@ async def _get_local_calibration_reasons(tenant_id: str) -> List[str]:
     return reasons[:5]
 
 
-async def query_memory_tree(query: str, tenant_id: str = "default") -> str:
+async def query_memory_tree(query: str, tenant_id: str) -> str:
     """
     Queries historical rejection calibration rules scoped strictly to tenant_id.
     Uses Redis cache -> local PostgreSQL AIDecisionLedger / Redis store -> Pinecone fallback.
     """
-    safe_tenant = str(tenant_id or "default")
+    safe_tenant = _require_tenant_id(tenant_id)
     query_hash = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
     cached_result = _get_cache(query_hash, tenant_id=safe_tenant)
     if cached_result:
@@ -206,7 +215,7 @@ async def query_memory_tree(query: str, tenant_id: str = "default") -> str:
             reasons = [
                 m["metadata"]["reason"]
                 for m in matches
-                if m.get("metadata", {}).get("tenant_id") in (safe_tenant, None)
+                if m.get("metadata", {}).get("tenant_id") == safe_tenant
             ]
             if not reasons:
                 return "NO_CONFLICT"
@@ -217,6 +226,6 @@ async def query_memory_tree(query: str, tenant_id: str = "default") -> str:
         return "NO_CONFLICT"
 
 
-def get_negative_vectors(tenant_id: str = "default"):
+def get_negative_vectors(tenant_id: str):
     """Return local calibration vectors for tenant"""
-    return list(_local_memory_store.get(str(tenant_id or "default"), []))
+    return list(_local_memory_store.get(_require_tenant_id(tenant_id), []))

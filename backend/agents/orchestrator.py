@@ -108,13 +108,15 @@ def _trim_candidates_for_critic(candidates: List[Any]) -> List[Dict[str, Any]]:
     return sanitized
 
 
-def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: Optional[str] = "default", payload: Any = None):
-    """Bridges telemetry to Celery & WebSocket bus (fast-skips if Redis broker is offline)."""
+def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: Optional[str] = None, payload: Any = None):
+    """Bridges telemetry to Celery & WebSocket bus (fast-skips if Redis broker is offline or tenant_id missing)."""
+    if not tenant_id or str(tenant_id).strip().lower() == "default":
+        return
     from workers.tasks import broadcast_signal as relay
     from workers.tasks import is_celery_broker_available
     if not is_celery_broker_available():
         return
-    relay(message, signal_type, tenant_id or "default", payload=payload)
+    relay(message, signal_type, str(tenant_id), payload=payload)
 
 
 class AgentOrchestrator:
@@ -198,7 +200,9 @@ class AgentOrchestrator:
         max_attempts: int = 3,
     ) -> Any:
         """Executes agent with token-bucket guardrail check and exponential backoff on 429 errors."""
-        tenant_key = str(self.tenant_id or getattr(deps, "tenant_id", "default") or "default")
+        tenant_key = str(self.tenant_id or getattr(deps, "tenant_id", "") or "").strip()
+        if not tenant_key or tenant_key.lower() == "default":
+            raise ValueError("A valid tenant_id is required for agent execution")
         allowed, rl_reason = await guardrail_service.check_rate_limit(tenant_id=tenant_key, provider="groq")
         if not allowed:
             log.warning("llm_guardrail_throttled", tenant_id=tenant_key, reason=rl_reason)
@@ -255,11 +259,14 @@ class AgentOrchestrator:
         log.info("unified_pipeline_started", industry=industry, location=location)
         results: Dict[str, Any] = {"stages": {}}
 
+        if not self.tenant_id or str(self.tenant_id).strip().lower() == "default":
+            raise ValueError("A valid tenant_id is required for AgentOrchestrator.run_full_pipeline")
+
         async with httpx.AsyncClient() as client:
             t_keys = {} if mock_mode else await self._resolve_tenant_keys()
             deps = AgentDeps(
                 http_client=client,
-                tenant_id=self.tenant_id or "default",
+                tenant_id=str(self.tenant_id),
                 serper_key=t_keys.get("serper_key") or settings.serper_api_key,
                 openai_key=t_keys.get("openai_key"),
                 anthropic_key=t_keys.get("anthropic_key"),
@@ -441,11 +448,14 @@ class AgentOrchestrator:
         log.info("swarm_phase_initiated", phase=phase, mode=mode, tenant_id=self.tenant_id)
         mock_mode = kwargs.get("mock_mode", False)
 
+        if not self.tenant_id or str(self.tenant_id).strip().lower() == "default":
+            raise ValueError("A valid tenant_id is required for AgentOrchestrator.run_full_pipeline")
+
         async with httpx.AsyncClient() as client:
             t_keys = {} if mock_mode else await self._resolve_tenant_keys()
             deps = AgentDeps(
                 http_client=client,
-                tenant_id=self.tenant_id or "default",
+                tenant_id=str(self.tenant_id),
                 serper_key=t_keys.get("serper_key") or settings.serper_api_key,
                 openai_key=t_keys.get("openai_key"),
                 anthropic_key=t_keys.get("anthropic_key"),

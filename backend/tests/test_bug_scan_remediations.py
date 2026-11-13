@@ -912,3 +912,120 @@ async def test_email_sender_callback_success_verifies_live_capability_and_persis
         assert tenant.sender_verified is True
         assert tenant.sender_email == "verified@acme.com"
         assert "email_oauth" in (tenant.settings or {})
+
+
+@pytest.mark.asyncio
+async def test_byok_model_cache_isolates_same_key_across_tenants(monkeypatch):
+    """P0-7: BYOK cache isolates identical keys across tenants and never mutates os.environ."""
+    import os
+    from types import SimpleNamespace
+
+    from agents import pydantic_config as pc
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+
+    shared_key = "sk-proj-identical-key"
+    assert pc._hash_key_id(shared_key, "tenant-a", "openai") != pc._hash_key_id(shared_key, "tenant-b", "openai")
+    assert len(pc._hash_key_id(shared_key, "tenant-a", "openai")) == 64
+
+    deps_a = SimpleNamespace(tenant_id="tenant-a", openai_key=shared_key, anthropic_key=None)
+    deps_b = SimpleNamespace(tenant_id="tenant-b", openai_key=shared_key, anthropic_key=None)
+    model_a = pc.get_pydantic_model(deps=deps_a)
+    model_b = pc.get_pydantic_model(deps=deps_b)
+    assert model_a is not model_b
+
+    deps_anth = SimpleNamespace(tenant_id="tenant-c", openai_key=None, anthropic_key="sk-ant-isolated")
+    _ = pc.get_pydantic_model(deps=deps_anth)
+    assert "ANTHROPIC_API_KEY" not in os.environ
+    assert "GROQ_API_KEY" not in os.environ
+
+
+@pytest.mark.asyncio
+async def test_fast_hybrid_vector_search_enforces_hide_from_companies():
+    """P0-7: Vector search hits must still honor Candidate.hide_from_companies for the querying tenant."""
+    import uuid
+
+    from db.models import Candidate, CandidateStatus, Tenant
+
+    tenant_id = uuid.uuid4()
+    hidden_cid = uuid.uuid4()
+    visible_cid = uuid.uuid4()
+
+    tenant_domain = f"acme-{tenant_id.hex[:8]}.com"
+    async with AsyncSessionLocal() as session:
+        session.add(Tenant(id=tenant_id, name=f"Acme {tenant_id.hex[:6]}", domain=tenant_domain))
+        await session.flush()
+        session.add(
+            Candidate(
+                id=hidden_cid,
+                tenant_id=tenant_id,
+                first_name="Hidden",
+                last_name="Person",
+                email=f"hidden_{hidden_cid.hex[:6]}@example.com",
+                title="Python Engineer",
+                status=CandidateStatus.SOURCED,
+                score=95.0,
+                hide_from_companies=[tenant_domain],
+            )
+        )
+        session.add(
+            Candidate(
+                id=visible_cid,
+                tenant_id=tenant_id,
+                first_name="Visible",
+                last_name="Person",
+                email=f"visible_{visible_cid.hex[:6]}@example.com",
+                title="Python Engineer",
+                status=CandidateStatus.SOURCED,
+                score=90.0,
+                hide_from_companies=[],
+            )
+        )
+        await session.commit()
+
+    fake_hits = [
+        {"id": str(hidden_cid), "candidate_id": str(hidden_cid), "score": 0.99, "metadata": {"name": "Hidden Person"}},
+        {"id": str(visible_cid), "candidate_id": str(visible_cid), "score": 0.91, "metadata": {"name": "Visible Person"}},
+    ]
+    from db import vector_store as vector_store_mod
+
+    with patch.object(vector_store_mod.vector_store, "hybrid_search_resumes", return_value=fake_hits):
+        results = await fast_hybrid_candidate_search(keywords="Python", tenant_id=str(tenant_id), limit=10)
+
+    returned_ids = {r["id"] for r in results}
+    assert str(hidden_cid) not in returned_ids
+    assert str(visible_cid) in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_workers_and_swarm_memory_reject_default_or_missing_tenant():
+    """P0-7: swarm_memory, Celery tasks, and ats_sync reject 'default'/missing tenant_id and never return mock ATS data."""
+    import uuid
+
+    from agents import swarm_memory as sm
+    from services.ats_sync import fetch_candidates_from_merge_dev
+    from workers import tasks as worker_tasks
+
+    with pytest.raises(ValueError):
+        await sm.add_negative_vector("cat", "reason", tenant_id="default")
+    with pytest.raises(ValueError):
+        await sm.query_memory_tree("query", tenant_id="")
+    with pytest.raises(ValueError):
+        sm.get_negative_vectors(tenant_id="default")
+
+    with pytest.raises(ValueError):
+        worker_tasks._require_tenant_uuid("default")
+    with pytest.raises(ValueError):
+        worker_tasks._require_tenant_uuid(None)
+    with pytest.raises(ValueError):
+        worker_tasks.run_agent_task("sourcing", {}, tenant_id="default")
+    with pytest.raises(ValueError):
+        worker_tasks.source_candidates_for_job(str(uuid.uuid4()), ["Python"], tenant_id="default")
+    with pytest.raises(ValueError):
+        worker_tasks.send_campaign_emails(str(uuid.uuid4()), tenant_id="default")
+
+    with pytest.raises(ValueError):
+        await fetch_candidates_from_merge_dev("default", "greenhouse")
+    with pytest.raises(NotImplementedError):
+        await fetch_candidates_from_merge_dev(str(uuid.uuid4()), "greenhouse")

@@ -70,8 +70,17 @@ def _get_signal_redis():
         _signal_redis_pool = redis.ConnectionPool.from_url(settings.redis_url, socket_connect_timeout=0.2, socket_timeout=0.2)
     return redis.Redis(connection_pool=_signal_redis_pool)
 
-def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: str = "default", payload: Any = None):
+def _require_tenant_uuid(tenant_id: Optional[str]) -> str:
+    safe = str(tenant_id or "").strip()
+    if not safe or safe.lower() == "default":
+        raise ValueError("A valid UUID tenant_id is required")
+    return str(uuid.UUID(safe))
+
+
+def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: Optional[str] = None, payload: Any = None):
     """Publish a signal to Redis for the WebSocket relay to pick up"""
+    if not tenant_id or str(tenant_id).strip().lower() == "default":
+        return
     try:
         r = _get_signal_redis()
         # Publish to tenant-specific channel so WebSocket relay can route it
@@ -89,11 +98,12 @@ def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: s
 # ── Unified Runner ──────────────────────────────────────────────────────────
 
 @celery_app.task(bind=True, name="workers.tasks.run_agent_task", max_retries=3)
-def run_agent_task(self, agent_name: str, params: Dict[str, Any] = None, tenant_id: str = "default") -> Dict[str, Any]:
+def run_agent_task(self, agent_name: str, params: Dict[str, Any] = None, tenant_id: Optional[str] = None) -> Dict[str, Any]:
     """Run any single agent by name (Discovery, Sourcing, Outreach, Analytics, Screening)"""
-    log.info("celery_task_started", task="run_agent_task", agent=agent_name, tenant_id=tenant_id)
+    safe_tenant_id = _require_tenant_uuid(tenant_id)
+    log.info("celery_task_started", task="run_agent_task", agent=agent_name, tenant_id=safe_tenant_id)
     try:
-        broadcast_signal(f"Agent '{agent_name}' initiated sequence...", "agent_start", tenant_id=tenant_id)
+        broadcast_signal(f"Agent '{agent_name}' initiated sequence...", "agent_start", tenant_id=safe_tenant_id)
         
         agents_map = {
             "discovery": discovery_agent,
@@ -133,13 +143,14 @@ def run_full_autonomous_pipeline(
     location: str = "United States",
     send_emails: bool = False,
     mock_mode: bool = False,
-    tenant_id: str = "default",
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the complete end-to-end 5-agent pipeline"""
-    log.info("celery_task_started", task="full_pipeline", industry=industry, tenant_id=tenant_id)
+    safe_tenant_id = _require_tenant_uuid(tenant_id)
+    log.info("celery_task_started", task="full_pipeline", industry=industry, tenant_id=safe_tenant_id)
     try:
-        orchestrator = AgentOrchestrator(tenant_id=tenant_id)
-        broadcast_signal(f"Initiating full swarm for {industry} in {location}...", "swarm_start", tenant_id=tenant_id)
+        orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
+        broadcast_signal(f"Initiating full swarm for {industry} in {location}...", "swarm_start", tenant_id=safe_tenant_id)
         result = asyncio.run(orchestrator.run_full_pipeline(
             industry=industry,
             location=location,
@@ -228,7 +239,9 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
             if cand_check[0]:
                 log.info("score_candidate_skipped_candidate_pii_erased", candidate_id=candidate_id)
                 return {"candidate_id": candidate_id, "status": "candidate_erased"}
-            resolved_tenant_id = str(cand_check[1]) if (len(cand_check) > 1 and cand_check[1]) else 'default'
+            if len(cand_check) <= 1 or not cand_check[1]:
+                return {"candidate_id": candidate_id, "status": "missing_tenant"}
+            resolved_tenant_id = _require_tenant_uuid(str(cand_check[1]))
 
             row = conn.execute(
                 text("SELECT raw_text FROM resumes WHERE (candidate_id = :cid OR candidate_id = :hcid) AND is_current = TRUE LIMIT 1"),
@@ -240,18 +253,12 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
             
             jd_text = "Software Engineer"
             if job_id:
-                if resolved_tenant_id and resolved_tenant_id != "default":
-                    clean_tid = resolved_tenant_id.replace("-", "")
-                    hyphen_tid = str(uuid.UUID(clean_tid)) if len(clean_tid) == 32 else resolved_tenant_id
-                    jd_row = conn.execute(
-                        text("SELECT description FROM jobs WHERE id = :jid AND (tenant_id = :tid OR tenant_id = :htid)"),
-                        {"jid": job_id, "tid": clean_tid, "htid": hyphen_tid}
-                    ).fetchone()
-                else:
-                    jd_row = conn.execute(
-                        text("SELECT description FROM jobs WHERE id = :jid"),
-                        {"jid": job_id}
-                    ).fetchone()
+                clean_tid = resolved_tenant_id.replace("-", "")
+                hyphen_tid = str(uuid.UUID(clean_tid))
+                jd_row = conn.execute(
+                    text("SELECT description FROM jobs WHERE id = :jid AND (tenant_id = :tid OR tenant_id = :htid)"),
+                    {"jid": job_id, "tid": clean_tid, "htid": hyphen_tid}
+                ).fetchone()
                 if jd_row and jd_row[0]:
                     jd_text = jd_row[0]
 
@@ -298,14 +305,15 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
         raise self.retry(exc=exc, countdown=300) from exc
 
 @celery_app.task(bind=True, name="workers.tasks.source_candidates_for_job", max_retries=3)
-def source_candidates_for_job(self, job_id: str, skills: list, location: Optional[str] = None, tenant_id: str = "default") -> Dict[str, Any]:
+def source_candidates_for_job(self, job_id: str, skills: list, location: Optional[str] = None, tenant_id: Optional[str] = None) -> Dict[str, Any]:
     """Automated candidate sourcing for a newly requisitioned job"""
-    log.info("celery_task_started", task="source_candidates_for_job", job_id=job_id)
+    safe_tenant_id = _require_tenant_uuid(tenant_id)
+    log.info("celery_task_started", task="source_candidates_for_job", job_id=job_id, tenant_id=safe_tenant_id)
     try:
         async def _run():
             import httpx
             async with httpx.AsyncClient() as client:
-                deps = AgentDeps(http_client=client, tenant_id=tenant_id)
+                deps = AgentDeps(http_client=client, tenant_id=safe_tenant_id)
                 prompt = f"Source qualified talent for Job ID {job_id}. Required skills: {', '.join(skills or [])}. Location: {location or 'Remote'}."
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
@@ -321,9 +329,10 @@ def source_candidates_for_job(self, job_id: str, skills: list, location: Optiona
             return {"job_id": job_id, "status": "failed", "error": str(exc)}
 
 @celery_app.task(bind=True, name="workers.tasks.send_campaign_emails", max_retries=3)
-def send_campaign_emails(self, campaign_id: str, tenant_id: str = "default") -> Dict[str, Any]:
+def send_campaign_emails(self, campaign_id: str, tenant_id: Optional[str] = None) -> Dict[str, Any]:
     """Execute queued outbound campaign email outreach"""
-    log.info("celery_task_started", task="send_campaign_emails", campaign_id=campaign_id)
+    safe_tenant_id = _require_tenant_uuid(tenant_id)
+    log.info("celery_task_started", task="send_campaign_emails", campaign_id=campaign_id, tenant_id=safe_tenant_id)
     try:
         from services.email_service import EmailService
         email_service = EmailService()

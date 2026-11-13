@@ -8,7 +8,7 @@ from agents.swarm_memory import get_negative_vectors, query_memory_tree
 
 @pytest.mark.asyncio
 async def test_shared_memory_persistence():
-    vectors = get_negative_vectors()
+    vectors = get_negative_vectors(tenant_id="test_tenant")
     assert isinstance(vectors, list)
 
 @pytest.mark.asyncio

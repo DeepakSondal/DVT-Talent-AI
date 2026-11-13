@@ -28,6 +28,10 @@ try:
 except ImportError:
     AnthropicProvider = None  # type: ignore
 try:
+    from pydantic_ai.providers.groq import GroqProvider
+except ImportError:
+    GroqProvider = None  # type: ignore
+try:
     from backend.config import settings
 except ImportError:
     from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
@@ -44,16 +48,15 @@ def _build_openai_model(model_name: str, api_key: Optional[str] = None, base_url
 
 def _build_anthropic_model(model_name: str, api_key: str):
     from pydantic_ai.models.anthropic import AnthropicModel
-    if AnthropicProvider is not None:
-        return AnthropicModel(model_name, provider=AnthropicProvider(api_key=api_key))
-    import os
-    os.environ["ANTHROPIC_API_KEY"] = api_key
-    return AnthropicModel(model_name)
+    if AnthropicProvider is None:
+        raise RuntimeError("AnthropicProvider is required for isolated per-tenant Anthropic keys")
+    return AnthropicModel(model_name, provider=AnthropicProvider(api_key=api_key))
 
 
-def _hash_key_id(key: str) -> str:
+def _hash_key_id(key: str, tenant_id: Optional[str] = None, provider: Optional[str] = None) -> str:
     import hashlib
-    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+    payload = f"{tenant_id or ''}:{provider or ''}:{key}" if (tenant_id or provider) else key
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 # 2. Unified Model Routing
@@ -64,9 +67,10 @@ def get_pydantic_model(dynamic_api_key: str = None, deps: Optional['AgentDeps'] 
     Caches model instances to avoid repeated SSL context initialization overhead.
     Priority: Dynamic Key > AgentDeps override > Anthropic > Groq > OpenAI > Kimi > DeepSeek
     """
+    tenant_scope = str(getattr(deps, "tenant_id", "") or "")
     # 1. Direct key override
     if dynamic_api_key:
-        cache_k = f"openai_dyn:{settings.openai_model}:{_hash_key_id(dynamic_api_key)}"
+        cache_k = f"openai_dyn:{settings.openai_model}:{_hash_key_id(dynamic_api_key, tenant_scope, 'openai')}"
         if cache_k not in _MODEL_CACHE:
             _MODEL_CACHE[cache_k] = _build_openai_model(settings.openai_model, api_key=dynamic_api_key)
         return _MODEL_CACHE[cache_k]
@@ -74,12 +78,12 @@ def get_pydantic_model(dynamic_api_key: str = None, deps: Optional['AgentDeps'] 
     # 2. AgentDeps override (Tenant/Team Keys)
     if deps:
         if deps.anthropic_key:
-            cache_k = f"anthropic:{settings.anthropic_model}:{_hash_key_id(deps.anthropic_key)}"
+            cache_k = f"anthropic:{settings.anthropic_model}:{_hash_key_id(deps.anthropic_key, tenant_scope, 'anthropic')}"
             if cache_k not in _MODEL_CACHE:
                 _MODEL_CACHE[cache_k] = _build_anthropic_model(settings.anthropic_model, deps.anthropic_key)
             return _MODEL_CACHE[cache_k]
         if deps.openai_key:
-            cache_k = f"openai_deps:{settings.openai_model}:{_hash_key_id(deps.openai_key)}"
+            cache_k = f"openai_deps:{settings.openai_model}:{_hash_key_id(deps.openai_key, tenant_scope, 'openai')}"
             if cache_k not in _MODEL_CACHE:
                 _MODEL_CACHE[cache_k] = _build_openai_model(settings.openai_model, api_key=deps.openai_key)
             return _MODEL_CACHE[cache_k]
@@ -94,9 +98,13 @@ def get_pydantic_model(dynamic_api_key: str = None, deps: Optional['AgentDeps'] 
     if settings.groq_api_key:
         cache_k = f"groq_default:{settings.groq_model}"
         if cache_k not in _MODEL_CACHE:
-            import os
-            os.environ["GROQ_API_KEY"] = settings.groq_api_key
-            _MODEL_CACHE[cache_k] = GroqModel(model_name=settings.groq_model)
+            if GroqProvider is not None:
+                _MODEL_CACHE[cache_k] = GroqModel(
+                    model_name=settings.groq_model,
+                    provider=GroqProvider(api_key=settings.groq_api_key),
+                )
+            else:
+                _MODEL_CACHE[cache_k] = GroqModel(model_name=settings.groq_model)
         return _MODEL_CACHE[cache_k]
 
     if settings.openai_api_key:

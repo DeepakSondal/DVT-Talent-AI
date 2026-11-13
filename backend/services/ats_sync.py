@@ -20,35 +20,18 @@ PINECONE_HOST = getattr(settings, 'pinecone_host', 'https://dvt-memory-tree.pine
 async def fetch_candidates_from_merge_dev(tenant_id: str, ats_provider: str) -> List[Dict[str, Any]]:
     """
     Integration to Merge.dev to pull candidates from Greenhouse/Lever.
-    Returns normalized candidate data.
+    Requires a valid tenant_id and configured Merge.dev integration (no synthetic mock candidates).
     """
-    log.info(f"Connecting to Merge.dev for tenant {tenant_id} (Provider: {ats_provider})")
-    if getattr(settings, "is_production", False):
-        return []
+    import uuid
+    if not tenant_id or str(tenant_id).strip().lower() == "default":
+        raise ValueError("Valid tenant_id is required for ATS sync")
+    uuid.UUID(str(tenant_id))
 
-    # Dev/Test fallback response representing Merge.dev Unified ATS API
-    return [
-        {
-            "id": "cnd_12345",
-            "first_name": "Alice",
-            "last_name": "Engineer",
-            "email": "alice@example.com",
-            "current_title": "Senior Staff Software Engineer",
-            "status": "REJECTED_FINAL_ROUND", # A Silver Medalist!
-            "resume_text": "10 years experience in Python, React, and AWS. Previously at Google and Stripe. Led a team of 15 engineers to build a distributed payment system.",
-            "source_ats": ats_provider
-        },
-        {
-            "id": "cnd_67890",
-            "first_name": "Bob",
-            "last_name": "Developer",
-            "email": "bob@example.com",
-            "current_title": "Frontend Architect",
-            "status": "OFFER_DECLINED", # A Silver Medalist!
-            "resume_text": "Expert in Next.js, TypeScript, and TailwindCSS. Built the core frontend architecture for a Series C startup.",
-            "source_ats": ats_provider
-        }
-    ]
+    log.info(f"Connecting to Merge.dev for tenant {tenant_id} (Provider: {ats_provider})")
+    merge_key = getattr(settings, "merge_api_key", None)
+    if not merge_key:
+        raise NotImplementedError("Merge.dev ATS sync requires MERGE_API_KEY and tenant account token.")
+    return []
 
 async def sync_ats_to_pinecone(tenant_id: str, ats_provider: str):
     """

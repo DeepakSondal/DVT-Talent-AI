@@ -38,8 +38,10 @@ except ImportError:
 _LOCAL_SOURCING_CACHE: Dict[str, str] = {}
 
 
-def _get_sourcing_cache(raw_key: str, tenant_id: str = "default") -> Optional[str]:
-    safe_tenant = str(tenant_id or "default")
+def _get_sourcing_cache(raw_key: str, tenant_id: str) -> Optional[str]:
+    safe_tenant = str(tenant_id or "").strip()
+    if not safe_tenant or safe_tenant.lower() == "default":
+        return None
     q_hash = hashlib.md5(raw_key.encode(), usedforsecurity=False).hexdigest()
     local_k = f"{safe_tenant}:{q_hash}"
     if local_k in _LOCAL_SOURCING_CACHE:
@@ -52,8 +54,10 @@ def _get_sourcing_cache(raw_key: str, tenant_id: str = "default") -> Optional[st
     return cached
 
 
-def _set_sourcing_cache(raw_key: str, value: str, tenant_id: str = "default", ttl_seconds: int = 3600) -> None:
-    safe_tenant = str(tenant_id or "default")
+def _set_sourcing_cache(raw_key: str, value: str, tenant_id: str, ttl_seconds: int = 3600) -> None:
+    safe_tenant = str(tenant_id or "").strip()
+    if not safe_tenant or safe_tenant.lower() == "default":
+        return
     q_hash = hashlib.md5(raw_key.encode(), usedforsecurity=False).hexdigest()
     local_k = f"{safe_tenant}:{q_hash}"
     if len(_LOCAL_SOURCING_CACHE) >= 256:
@@ -267,34 +271,14 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
     facets = ResumeParserService.extract_deterministic_facets(keywords or "")
     raw_candidates: List[Dict[str, Any]] = []
 
-    # 1. Fast hybrid vector + BM25 search on VectorStore
+    # 1. Fast hybrid vector + BM25 search on VectorStore (filtered after DB privacy/hide_from_companies check)
+    hybrid_hits: List[Dict[str, Any]] = []
     try:
         hybrid_hits = vector_store.hybrid_search_resumes(
             tenant_id=str(tenant_uuid),
             query_text=keywords or "Software Engineer",
             limit=limit,
         )
-        for hit in hybrid_hits:
-            meta = hit.get("metadata") or {}
-            name = meta.get("name") or meta.get("full_name") or f"Candidate {str(hit.get('id', ''))[:6]}"
-            raw_score = float(hit.get("score", 0.88))
-            pct_score = round(raw_score * 100, 1) if raw_score <= 1.0 else round(raw_score, 1)
-            raw_candidates.append({
-                "id": str(hit.get("candidate_id") or hit.get("id") or ""),
-                "name": name,
-                "first_name": name.split(" ")[0] if " " in name else name,
-                "last_name": " ".join(name.split(" ")[1:]) if " " in name else "Candidate",
-                "email": meta.get("email") or "verified@talent-vault.io",
-                "phone": meta.get("phone") or "",
-                "title": meta.get("role") or meta.get("title") or "Software Engineer",
-                "company": meta.get("company") or "Talent Vault",
-                "skills": [s.strip() for s in str(meta.get("skills", "")).split(",") if s.strip()] if isinstance(meta.get("skills"), str) else (meta.get("skills") or []),
-                "experience_years": int(meta.get("experience_years", 5)) if str(meta.get("experience_years", "")).isdigit() else 5,
-                "location": meta.get("location") or "Remote",
-                "score": max(75.0, pct_score),
-                "status": "SOURCED",
-                "source": "Vector Hybrid Match",
-            })
     except Exception as exc:
         log.warning("fast_hybrid_vector_search_failed", error=str(exc), tenant_id=str(tenant_id))
 
@@ -308,6 +292,58 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
                     blocked_identifiers.add(tenant_obj.domain.strip().lower())
                 if tenant_obj.name:
                     blocked_identifiers.add(tenant_obj.name.strip().lower())
+
+            if hybrid_hits:
+                hit_uuids = []
+                for h in hybrid_hits:
+                    raw_id = h.get("candidate_id") or h.get("id")
+                    try:
+                        if raw_id:
+                            hit_uuids.append(uuid.UUID(str(raw_id)))
+                    except (ValueError, TypeError):
+                        pass
+                hidden_or_erased_ids = set()
+                if hit_uuids:
+                    hit_rows = (
+                        await session.execute(
+                            select(Candidate).where(
+                                Candidate.tenant_id == tenant_uuid,
+                                Candidate.id.in_(hit_uuids),
+                            )
+                        )
+                    ).scalars().all()
+                    for hc in hit_rows:
+                        hc_hidden = [str(x).strip().lower() for x in (hc.hide_from_companies or []) if x]
+                        if (
+                            hc.pii_erased
+                            or hc.is_searchable is False
+                            or (blocked_identifiers and any(b in hc_hidden for b in blocked_identifiers))
+                        ):
+                            hidden_or_erased_ids.add(str(hc.id))
+                for hit in hybrid_hits:
+                    cid_str = str(hit.get("candidate_id") or hit.get("id") or "")
+                    if cid_str in hidden_or_erased_ids:
+                        continue
+                    meta = hit.get("metadata") or {}
+                    name = meta.get("name") or meta.get("full_name") or f"Candidate {str(hit.get('id', ''))[:6]}"
+                    raw_score = float(hit.get("score", 0.88))
+                    pct_score = round(raw_score * 100, 1) if raw_score <= 1.0 else round(raw_score, 1)
+                    raw_candidates.append({
+                        "id": cid_str,
+                        "name": name,
+                        "first_name": name.split(" ")[0] if " " in name else name,
+                        "last_name": " ".join(name.split(" ")[1:]) if " " in name else "Candidate",
+                        "email": meta.get("email") or "verified@talent-vault.io",
+                        "phone": meta.get("phone") or "",
+                        "title": meta.get("role") or meta.get("title") or "Software Engineer",
+                        "company": meta.get("company") or "Talent Vault",
+                        "skills": [s.strip() for s in str(meta.get("skills", "")).split(",") if s.strip()] if isinstance(meta.get("skills"), str) else (meta.get("skills") or []),
+                        "experience_years": int(meta.get("experience_years", 5)) if str(meta.get("experience_years", "")).isdigit() else 5,
+                        "location": meta.get("location") or "Remote",
+                        "score": max(75.0, pct_score),
+                        "status": "SOURCED",
+                        "source": "Vector Hybrid Match",
+                    })
 
             base_filters = [
                 Candidate.is_searchable.isnot(False),
