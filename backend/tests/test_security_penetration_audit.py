@@ -438,7 +438,7 @@ class TestAdversarialSecurityPenetrationSuite:
 
             # 3. Tenant B cannot hijack Tenant A's Copilot task or spoof tenant_id
             copilot_spoof = await client.post(
-                "/api/v1/copilot/copilot/discovery",
+                "/api/v1/copilot/discovery",
                 headers=headers_b_recruiter,
                 json={
                     "industry": "FinTech",
@@ -449,7 +449,7 @@ class TestAdversarialSecurityPenetrationSuite:
             assert copilot_spoof.status_code == 403
 
             copilot_hijack = await client.post(
-                "/api/v1/copilot/copilot/sourcing",
+                "/api/v1/copilot/sourcing",
                 headers=headers_b_recruiter,
                 json={
                     "task_id": str(env["task_a"].id),

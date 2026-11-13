@@ -1138,3 +1138,19 @@ async def test_compliance_ledger_dynamic_sanitized_and_no_88_confidence_fallback
 
     assert by_id[str(clean_id)]["confidence_score"] == 0.8
     assert by_id[str(clean_id)]["sanitized"] is True
+
+
+@pytest.mark.asyncio
+async def test_canonical_compliance_and_copilot_routes_no_double_prefix(client):
+    """P0-9: Compliance and Copilot routers are mounted canonically without double-prefixed paths."""
+    canonical_compliance = await client.get("/api/v1/compliance/decision-ledger")
+    assert canonical_compliance.status_code != 404
+
+    canonical_copilot = await client.post("/api/v1/copilot/discovery", json={"industry": "Tech", "location": "NY"})
+    assert canonical_copilot.status_code != 404
+
+    dup_compliance = await client.get("/api/v1/compliance/compliance/decision-ledger")
+    assert dup_compliance.status_code == 404
+
+    dup_copilot = await client.post("/api/v1/copilot/copilot/discovery", json={"industry": "Tech", "location": "NY"})
+    assert dup_copilot.status_code == 404
