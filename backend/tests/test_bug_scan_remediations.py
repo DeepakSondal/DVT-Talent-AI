@@ -1491,3 +1491,35 @@ async def test_candidate_notes_and_interview_schedule_persist_in_metadata():
     assert sched_res["status"] == "interviewing"
     assert cand.status == CandidateStatus.INTERVIEWING
     assert cand.meta_data["scheduled_interviews"][0]["scheduled_date"] == "2026-12-01"
+
+
+@pytest.mark.asyncio
+async def test_tenant_patch_merges_preferred_ats_settings():
+    """P2-2: PATCH /tenants/me merges settings (e.g. preferred_ats) without wiping existing settings keys."""
+    import uuid
+
+    from api.routes.tenants import TenantUpdate, update_my_tenant
+    from db.models import Tenant
+
+    tenant_id = uuid.uuid4()
+    admin = User(id=uuid.uuid4(), email="admin@test.com", full_name="Admin", role=UserRole.ADMIN, tenant_id=tenant_id)
+    tenant = Tenant(
+        id=tenant_id,
+        name="Acme Corp",
+        domain="acme.example.com",
+        settings={"existing_flag": True},
+    )
+
+    mock_db = MagicMock()
+    res_obj = MagicMock()
+    res_obj.scalar_one_or_none.return_value = tenant
+    mock_db.execute = AsyncMock(return_value=res_obj)
+    mock_db.commit = AsyncMock()
+    mock_db.refresh = AsyncMock()
+
+    updated = await update_my_tenant(
+        TenantUpdate(settings={"preferred_ats": ["greenhouse", "lever"]}),
+        current_user=admin,
+        db=mock_db,
+    )
+    assert updated.settings == {"existing_flag": True, "preferred_ats": ["greenhouse", "lever"]}

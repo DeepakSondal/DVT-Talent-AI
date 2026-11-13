@@ -65,37 +65,45 @@ export default function OutreachLab() {
             const dbJobs = jobsRes?.items || (Array.isArray(jobsRes) ? jobsRes : []);
             const dbCands = candsRes?.items || (Array.isArray(candsRes) ? candsRes : []);
             if (dbJobs.length > 0 && dbCands.length > 0) {
-                const mappedCands: CandidateItem[] = dbCands.slice(0, 10).map((c: any) => ({
+                const baseMappedCands: CandidateItem[] = dbCands.slice(0, 10).map((c: any) => ({
                     id: String(c.id),
                     first_name: c.first_name || "Candidate",
                     last_name: c.last_name || "",
                     title: c.title || "Software Engineer",
                     company: c.current_company || "Organization",
-                    location: c.location || "Remote",
+                    location: c.location || "—",
                     email: c.email,
-                    phone: c.phone || "Verified",
-                    score: Math.round(c.score || 88),
+                    phone: c.phone || "—",
+                    score: Math.round(c.score || 0),
                     skills: Array.isArray(c.skills) ? c.skills : [],
-                    experience_years: c.experience_years || 5,
-                    linkedin_url: c.linkedin_url || "https://linkedin.com",
-                    github_url: c.github_url || "https://github.com",
+                    experience_years: c.experience_years ?? 0,
+                    linkedin_url: c.linkedin_url || "",
+                    github_url: c.github_url || "",
                     reasoning: c.ai_summary || "Matched to requisition requirements.",
                     deliverability: "VALID",
-                    selected: true,
+                    selected: false,
                 }));
-                const mappedJobs: CombinedRequirementJob[] = dbJobs.slice(0, 5).map((j: any) => ({
-                    id: String(j.id),
-                    title: j.title,
-                    company: "Workspace Requisition",
-                    location: j.location || (j.remote ? "Remote" : "On-site"),
-                    portal: "Internal ATS",
-                    source_link: j.source_url || "/dashboard/jobs",
-                    hiring_manager_name: "Hiring Team",
-                    hiring_manager_email: "recruiting@workspace.io",
-                    hiring_manager_phone: "Internal",
-                    sequence_type: "Hyper-Personalized Engineering Sequence (AI-Generated)",
-                    candidates: mappedCands,
-                }));
+                const mappedJobs: CombinedRequirementJob[] = dbJobs.slice(0, 5).map((j: any) => {
+                    const jobSpecific = baseMappedCands.filter((_: any, idx: number) =>
+                        String(dbCands[idx]?.job_id || "") === String(j.id)
+                    );
+                    const perJobCandidates = (jobSpecific.length > 0 ? jobSpecific : baseMappedCands).map(
+                        (c) => ({ ...c, selected: jobSpecific.length > 0 })
+                    );
+                    return {
+                        id: String(j.id),
+                        title: j.title,
+                        company: "Workspace Requisition",
+                        location: j.location || (j.remote ? "Remote" : "On-site"),
+                        portal: "Internal ATS",
+                        source_link: j.source_url || "/dashboard/jobs",
+                        hiring_manager_name: "Hiring Team",
+                        hiring_manager_email: "recruiting@workspace.io",
+                        hiring_manager_phone: "Internal",
+                        sequence_type: "Hyper-Personalized Engineering Sequence (AI-Generated)",
+                        candidates: perJobCandidates,
+                    };
+                });
                 setJobs(mappedJobs);
             }
         });

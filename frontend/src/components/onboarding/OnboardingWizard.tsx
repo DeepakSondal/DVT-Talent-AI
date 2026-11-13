@@ -214,9 +214,17 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     };
 
     // Step 3: ATS Integrations
-    const handleSaveAts = () => {
-        toast.success("Integrations preference updated");
-        nextStep();
+    const handleSaveAts = async () => {
+        setLoading(true);
+        try {
+            await tenantsApi.updateMe({ settings: { preferred_ats: selectedAts } });
+            toast.success("Integrations preference saved");
+            nextStep();
+        } catch {
+            toast.error("Failed to save integrations preference.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Step 4: Final Launch

@@ -3,7 +3,7 @@ DVT Talent AI — Tenants API
 Manages enterprise client profiles, team members, and branding.
 """
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,11 +17,12 @@ from db.models import Tenant, User, get_db
 router = APIRouter()
 
 class TenantUpdate(BaseModel):
-    name: str
+    name: Optional[str] = None
     logo_url: str | None = None
     industry: str | None = None
     address: str | None = None
     onboarded: bool | None = None
+    settings: Optional[Dict[str, Any]] = None
 
 class TenantOut(BaseModel):
     id: UUID
@@ -36,6 +37,7 @@ class TenantOut(BaseModel):
     sender_name: Optional[str] = None
     sender_email: Optional[str] = None
     sender_verified: Optional[bool] = False
+    settings: Optional[Dict[str, Any]] = None
     created_at: Optional[datetime] = None
 
     class Config:
@@ -92,7 +94,12 @@ async def update_my_tenant(
         raise HTTPException(status_code=404, detail="Tenant not found")
 
     for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(tenant, key, value)
+        if key == "settings" and isinstance(value, dict):
+            merged = dict(tenant.settings or {})
+            merged.update(value)
+            tenant.settings = merged
+        else:
+            setattr(tenant, key, value)
     
     await db.commit()
     await db.refresh(tenant)

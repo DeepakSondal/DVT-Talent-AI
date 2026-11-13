@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { jobsApi } from "@/lib/api";
+import { jobsApi, candidatesApi } from "@/lib/api";
 
 interface OnboardingWorkflowProps {
   stats: {
@@ -178,12 +178,30 @@ export function OnboardingWorkflow({
     }
   };
 
-  const handleFileDrop = (e: React.DragEvent) => {
+  const [isUploadingResumes, setIsUploadingResumes] = useState(false);
+
+  const handleFileDrop = async (e: React.DragEvent) => {
     e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const names = Array.from(e.dataTransfer.files).map((f) => f.name);
-      setDroppedFiles((prev) => [...prev, ...names]);
-      toast.success(`Queued ${names.length} resume(s) for background indexing.`);
+    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+    const files = Array.from(e.dataTransfer.files).slice(0, 10);
+    setIsUploadingResumes(true);
+    try {
+      const results = await Promise.allSettled(
+        files.map((file) => candidatesApi.uploadNewResume(file))
+      );
+      const uploadedNames = files
+        .filter((_, idx) => results[idx]?.status === "fulfilled")
+        .map((f) => f.name);
+      const failedCount = files.length - uploadedNames.length;
+      if (uploadedNames.length > 0) {
+        setDroppedFiles((prev) => [...prev, ...uploadedNames]);
+        toast.success(`Uploaded ${uploadedNames.length} resume(s) for parsing.`);
+      }
+      if (failedCount > 0) {
+        toast.error(`Failed to upload ${failedCount} resume(s).`);
+      }
+    } finally {
+      setIsUploadingResumes(false);
     }
   };
 
@@ -396,11 +414,13 @@ export function OnboardingWorkflow({
                 >
                   <Upload className="w-5 h-5 mx-auto text-muted-foreground mb-1" />
                   <p className="text-[11px] text-muted-foreground">
-                    Drop up to 10 resumes here for automatic parsing &amp; vector scoring.
+                    {isUploadingResumes
+                      ? "Uploading resumes to parsing pipeline..."
+                      : "Drop up to 10 resumes here for automatic parsing & vector scoring."}
                   </p>
                   {droppedFiles.length > 0 && (
                     <div className="mt-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                      ✓ {droppedFiles.length} file(s) attached
+                      ✓ {droppedFiles.length} file(s) uploaded
                     </div>
                   )}
                 </div>

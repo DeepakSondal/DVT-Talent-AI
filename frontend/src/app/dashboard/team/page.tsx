@@ -33,12 +33,24 @@ export default function TeamPage() {
   const [inviteSuccessLink, setInviteSuccessLink] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+
   const { data: teamData, isLoading, refetch, error } = useQuery({
     queryKey: ["team-members"],
     queryFn: () => usersApi.list(),
   });
 
   const members = teamData?.items || [];
+  const filteredMembers = members.filter((m: UserOut) => {
+    const q = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      !q ||
+      (m.full_name || "").toLowerCase().includes(q) ||
+      (m.email || "").toLowerCase().includes(q);
+    const matchesRole = roleFilter === "all" || (m.role || "").toLowerCase() === roleFilter;
+    return matchesSearch && matchesRole;
+  });
 
   const handleUpdateRole = async (userId: string, newRole: UserRole) => {
     try {
@@ -231,15 +243,26 @@ export default function TeamPage() {
                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                  <input 
                    type="text" 
+                   value={searchQuery}
+                   onChange={(e) => setSearchQuery(e.target.value)}
                    placeholder="Search team members..." 
                    className="w-full bg-background border border-border focus:ring-2 focus:ring-primary rounded-lg py-2 pl-10 pr-4 text-sm font-medium text-foreground placeholder:text-muted-foreground transition-colors duration-150"
                  />
               </div>
-              <div className="flex gap-4">
-                 <Button variant="outline" className="gap-2 rounded-lg h-10 px-6 bg-background border-border text-xs font-bold font-semibold text-muted-foreground whitespace-nowrap">
-                    <Filter className="w-4 h-4" />
-                    Filter Roles
-                 </Button>
+              <div className="flex items-center gap-2">
+                 <Filter className="w-4 h-4 text-muted-foreground" />
+                 <select
+                   aria-label="Filter team members by role"
+                   value={roleFilter}
+                   onChange={(e) => setRoleFilter(e.target.value)}
+                   className="rounded-lg h-10 px-3 bg-background border border-border text-xs font-semibold text-foreground"
+                 >
+                   <option value="all">All Roles</option>
+                   <option value="admin">Admin</option>
+                   <option value="manager">Manager</option>
+                   <option value="recruiter">Recruiter</option>
+                   <option value="viewer">Viewer</option>
+                 </select>
               </div>
            </div>
 
@@ -264,7 +287,7 @@ export default function TeamPage() {
                  </thead>
                  <tbody className="divide-y divide-border">
                     <AnimatePresence mode="popLayout">
-                       {members.map((member: UserOut, i: number) => (
+                       {filteredMembers.map((member: UserOut, i: number) => (
                           <motion.tr 
                             key={member.id}
                             initial={{ opacity: 0, y: 10 }}
