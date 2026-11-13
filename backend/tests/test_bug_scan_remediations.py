@@ -1322,3 +1322,35 @@ async def test_websocket_rejects_query_token_and_bad_origin_and_accepts_cookie(m
             await ws_route.pipeline_events_endpoint(ws_ok)
             mock_connect.assert_awaited_once_with(ws_ok, "user-123", "tenant-abc")
             mock_disconnect.assert_called_once_with(ws_ok, "user-123")
+
+
+@pytest.mark.asyncio
+async def test_register_normalizes_email_and_rejects_case_insensitive_duplicate(client, monkeypatch):
+    """P1-3: Registration stores lowercased/trimmed email and rejects case-variant duplicates."""
+    import uuid
+
+    from api.routes import auth as auth_route
+
+    monkeypatch.setattr(auth_route.settings, "allow_dev_otp_bypass", True)
+    monkeypatch.setattr(auth_route.settings, "is_production", False)
+
+    tag = uuid.uuid4().hex[:8]
+    payload_1 = {
+        "email": f"  MixedCase.{tag}@Example.COM ",
+        "password": "StrongPassword123!",
+        "full_name": "Mixed Case",
+        "role": "recruiter",
+        "company_name": "Norm Corp",
+    }
+    resp_1 = await client.post("/api/v1/auth/register", json=payload_1)
+    assert resp_1.status_code in (200, 201), resp_1.text
+    assert resp_1.json()["email"] == f"mixedcase.{tag}@example.com"
+
+    payload_2 = {
+        "email": f"mixedcase.{tag}@example.com",
+        "password": "StrongPassword123!",
+        "full_name": "Duplicate User",
+        "role": "recruiter",
+    }
+    resp_2 = await client.post("/api/v1/auth/register", json=payload_2)
+    assert resp_2.status_code == 400

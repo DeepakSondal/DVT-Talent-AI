@@ -24,10 +24,10 @@ function parseJwtPayload(rawToken: string): Record<string, any> | null {
 
 function isJwtExpired(rawToken: string): boolean {
   const payload = parseJwtPayload(rawToken);
-  if (payload && typeof payload.exp === "number") {
-    return payload.exp * 1000 < Date.now();
+  if (!payload || typeof payload.exp !== "number") {
+    return true;
   }
-  return false;
+  return payload.exp * 1000 < Date.now();
 }
 
 export function middleware(request: NextRequest) {

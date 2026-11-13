@@ -44,6 +44,15 @@ export const authService = {
     return res.data;
   },
 
+  resetPassword: async (payload: {
+    email: string;
+    otp: string;
+    new_password: string;
+  }): Promise<{ status: string; message: string }> => {
+    const res = await http.post<{ status: string; message: string }>("/auth/reset-password", payload);
+    return res.data;
+  },
+
   me: (): Promise<UserOut> => http.get("/auth/me").then((r) => r.data),
 
   logout: async (): Promise<void> => {

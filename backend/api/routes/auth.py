@@ -286,8 +286,8 @@ async def register(
         detail="Too many registration verification attempts for this email. Please wait before trying again.",
     )
 
-    # Check if email exists
-    result = await db.execute(select(User).where(User.email == user_data.email))
+    # Check if email exists (case-insensitive)
+    result = await db.execute(select(User).where(func.lower(User.email) == clean_email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -305,7 +305,7 @@ async def register(
     tenant_id = None
     if not is_candidate:
         # Create a default workspace tenant for the recruiter/agency
-        email_domain = user_data.email.split("@")[-1].lower()
+        email_domain = clean_email.split("@")[-1]
         common_domains = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "example.com", "test.com", "proton.me", "protonmail.com"}
         
         existing_tenant = (await db.execute(select(Tenant).where(Tenant.domain == email_domain))).scalar_one_or_none()
@@ -316,7 +316,7 @@ async def register(
             domain=tenant_domain,
             is_active=True,
             sender_name=user_data.full_name,
-            sender_email=user_data.email,
+            sender_email=clean_email,
             credits_balance=50,
             credits_last_reset_at=datetime.now(timezone.utc),
         )
@@ -334,7 +334,7 @@ async def register(
         db.add(welcome_tx)
 
     user = User(
-        email=user_data.email,
+        email=clean_email,
         full_name=user_data.full_name,
         hashed_password=await hash_password(user_data.password),
         role=UserRole.CANDIDATE if is_candidate else UserRole.ADMIN,
@@ -347,7 +347,7 @@ async def register(
         # Check if an existing B2C candidate record was previously created with this email
         cand_res = await db.execute(
             select(Candidate).where(
-                Candidate.email == user_data.email,
+                func.lower(Candidate.email) == clean_email,
                 Candidate.tenant_id.is_(None),
             )
         )
@@ -367,7 +367,7 @@ async def register(
                 user_id=user.id,
                 first_name=first_name,
                 last_name=last_name or "Candidate",
-                email=user_data.email,
+                email=clean_email,
                 status=CandidateStatus.SOURCED,
                 is_searchable=True,
             )
