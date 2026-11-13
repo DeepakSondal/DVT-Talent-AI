@@ -615,7 +615,6 @@ async def get_me(current_user: User = Depends(get_current_user)):
 @router.post("/logout")
 async def logout(
     request: Request,
-    current_user: User = Depends(get_current_user),
 ):
     """
     Log out user, clear authentication cookies, and blacklist the current access & refresh tokens in Redis.

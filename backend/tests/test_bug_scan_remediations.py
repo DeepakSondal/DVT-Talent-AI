@@ -586,3 +586,57 @@ async def test_logout_receives_refresh_cookie_and_revokes_it(client):
         cookies={"dvt_refresh_token": refresh_token},
     )
     assert refresh_resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_logout_with_expired_access_token_revokes_refresh_token(client):
+    """POST /auth/logout must succeed (200), revoke dvt_refresh_token, and clear cookies even when access token is expired."""
+    import uuid
+    from datetime import timedelta
+
+    from api.routes.auth import create_access_token
+    from services.redis_service import is_token_revoked
+
+    email = f"logout_expired_{uuid.uuid4().hex[:8]}@example.com"
+    await store_email_otp(email, "654321")
+    reg_resp = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": "LogoutPass123!",
+            "full_name": "Expired Logout Tester",
+            "role": "recruiter",
+            "company_name": "Expired Logout Org",
+            "otp": "654321",
+        },
+    )
+    assert reg_resp.status_code == 201
+    user_id = reg_resp.json()["user_id"]
+    refresh_token = reg_resp.cookies.get("dvt_refresh_token")
+    assert refresh_token
+
+    expired_access = create_access_token(
+        {"sub": user_id, "role": "ADMIN", "tenant_id": reg_resp.json()["tenant_id"]},
+        expires_delta=timedelta(minutes=-10),
+    )
+
+    logout_resp = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {expired_access}"},
+        cookies={
+            "dvt_token": f"Bearer {expired_access}",
+            "dvt_refresh_token": refresh_token,
+        },
+    )
+    assert logout_resp.status_code == 200
+    assert await is_token_revoked(refresh_token) is True
+
+    set_cookies_lower = [c.lower() for c in logout_resp.headers.get_list("set-cookie")]
+    assert any(c.startswith("dvt_token=") and "max-age=0" in c for c in set_cookies_lower)
+    assert any(c.startswith("dvt_refresh_token=") and "max-age=0" in c for c in set_cookies_lower)
+
+    refresh_resp = await client.post(
+        "/api/v1/auth/refresh",
+        cookies={"dvt_refresh_token": refresh_token},
+    )
+    assert refresh_resp.status_code == 401
