@@ -501,3 +501,38 @@ async def test_link_oauth_endpoint_consumes_single_use_token(client):
     # Replay must fail closed with 400
     replay_resp = await client.post("/api/v1/auth/link-oauth", json={"token": link_token})
     assert replay_resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_oauth_callback_sets_cookies_with_root_path(client):
+    """Social callback must set both dvt_token and dvt_refresh_token with Path=/ and redirect to /auth/callback."""
+    import uuid
+    from urllib.parse import urlparse
+
+    email = f"cookie_root_{uuid.uuid4().hex[:8]}@example.com"
+    g_client = AsyncMock()
+    g_client.authorize_access_token = AsyncMock(
+        return_value={
+            "userinfo": {
+                "email": email,
+                "email_verified": True,
+                "name": "Cookie Path User",
+                "sub": f"sub-cookie-{uuid.uuid4().hex[:6]}",
+            }
+        }
+    )
+
+    with patch("api.routes.auth_social.oauth.create_client", return_value=g_client):
+        resp = await client.get("/api/v1/auth/callback/google", follow_redirects=False)
+
+    assert resp.status_code == 302
+    parsed_loc = urlparse(resp.headers["location"])
+    assert parsed_loc.path == "/auth/callback"
+
+    set_cookies = resp.headers.get_list("set-cookie")
+    dvt_token_headers = [c for c in set_cookies if c.startswith("dvt_token=")]
+    dvt_refresh_headers = [c for c in set_cookies if c.startswith("dvt_refresh_token=")]
+    assert len(dvt_token_headers) == 1
+    assert len(dvt_refresh_headers) == 1
+    assert "path=/" in dvt_token_headers[0].lower()
+    assert "path=/" in dvt_refresh_headers[0].lower()

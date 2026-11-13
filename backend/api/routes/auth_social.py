@@ -310,6 +310,7 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
         key="dvt_token",
         value=f"Bearer {access_token}",
         httponly=True,
+        path="/",
         max_age=settings.access_token_expire_minutes * 60,
         expires=settings.access_token_expire_minutes * 60,
         samesite="lax",
