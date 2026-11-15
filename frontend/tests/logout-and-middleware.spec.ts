@@ -55,9 +55,23 @@ test.describe('Logout and Middleware Refresh Cookie Handling', () => {
     ]);
 
     let logoutCalled = false;
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': 'http://localhost:3000',
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+    };
+    await page.route('**/api/v1/**', async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        await route.fulfill({ status: 204, headers: corsHeaders });
+        return;
+      }
+      await route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: '{}' });
+    });
     await page.route('**/api/v1/users/me', async (route) => {
       await route.fulfill({
         status: 200,
+        headers: corsHeaders,
         contentType: 'application/json',
         body: JSON.stringify({ id: 'user-1', email: 'test@example.com', full_name: 'Tester', role: 'recruiter' }),
       });
@@ -65,13 +79,18 @@ test.describe('Logout and Middleware Refresh Cookie Handling', () => {
     await page.route('**/api/v1/billing/credits', async (route) => {
       await route.fulfill({
         status: 200,
+        headers: corsHeaders,
         contentType: 'application/json',
         body: JSON.stringify({ credits_balance: 50 }),
       });
     });
     await page.route('**/api/v1/auth/logout', async (route) => {
+      if (route.request().method() === 'OPTIONS') {
+        await route.fulfill({ status: 204, headers: corsHeaders });
+        return;
+      }
       logoutCalled = true;
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"message":"Logged out"}' });
+      await route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: '{"message":"Logged out"}' });
     });
 
     await page.goto('/dashboard');
@@ -80,7 +99,9 @@ test.describe('Logout and Middleware Refresh Cookie Handling', () => {
       localStorage.setItem('tenant_id', 'tenant-1');
     }, validAccess);
 
-    await page.getByRole('button', { name: /logout|sign out/i }).first().click({ force: true });
+    const signOutBtn = page.getByRole('button', { name: /logout|sign out/i }).first();
+    await expect(signOutBtn).toBeVisible({ timeout: 10000 });
+    await signOutBtn.dispatchEvent('click');
 
     await expect(page).toHaveURL(/\/auth\/login/, { timeout: 10000 });
     expect(logoutCalled).toBe(true);

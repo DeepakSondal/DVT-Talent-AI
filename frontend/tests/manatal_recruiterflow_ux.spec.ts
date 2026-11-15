@@ -45,6 +45,6 @@ test.describe('Manatal & Recruiterflow Redesign Suite', () => {
 
         // Verify metric cards and requisition list
         await expect(page.locator('text=Active Roles')).toBeVisible({ timeout: 10000 });
-        await expect(page.locator('text=Pipeline Funnel').first()).toBeVisible({ timeout: 10000 });
+        await expect(page.locator('text=Pipeline Active').first()).toBeVisible({ timeout: 10000 });
     });
 });

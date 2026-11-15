@@ -105,7 +105,7 @@ function ResetPasswordContent() {
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
                 placeholder="123456"
-                className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-ring"
+                className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
           </div>

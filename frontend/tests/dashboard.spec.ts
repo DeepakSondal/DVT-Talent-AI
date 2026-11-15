@@ -12,8 +12,8 @@ test.describe('Dashboard Performance & Components', () => {
 
     test('should render the redesigned recruitment dashboard', async ({ page }) => {
         // Check for the recruitment dashboard header
-        await expect(page.locator('h1')).toContainText('Recruitment Dashboard', { timeout: 15000 });
-        await expect(page.locator('text=AI Sourcing Engine Active')).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('h1')).toContainText('Recruitment Command Cockpit', { timeout: 15000 });
+        await expect(page.locator('text=AI Recruitment Engine Online')).toBeVisible({ timeout: 15000 });
 
         // Check for the primary navigation links in sidebar
         await expect(page.locator('nav >> text=Dashboard')).toBeVisible();
@@ -27,7 +27,7 @@ test.describe('Dashboard Performance & Components', () => {
     });
 
     test('should display core recruitment KPI metrics', async ({ page }) => {
-        await expect(page.getByText('Sourced Candidates', { exact: true })).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Pipeline Candidates', { exact: true })).toBeVisible({ timeout: 15000 });
         await expect(page.locator('text=Autonomous Actions')).toBeVisible({ timeout: 15000 });
         await expect(page.locator('text=Recruiter Hours Saved')).toBeVisible({ timeout: 15000 });
         await expect(page.locator('text=Average Match Score')).toBeVisible({ timeout: 15000 });
@@ -44,6 +44,6 @@ test.describe('Dashboard Performance & Components', () => {
         await expect(refreshBtn).toBeVisible({ timeout: 15000 });
         await refreshBtn.click();
         // Metric cards remain visible and responsive
-        await expect(page.getByText('Sourced Candidates', { exact: true })).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText('Pipeline Candidates', { exact: true })).toBeVisible({ timeout: 15000 });
     });
 });

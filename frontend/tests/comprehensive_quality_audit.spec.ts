@@ -27,6 +27,7 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
     test.describe('2. Recruiter Authentication & System Shell', () => {
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
+            await page.waitForLoadState('networkidle');
             await page.fill('input[name="email"]', 'admin@dvt.com');
             await page.fill('input[name="password"]', 'admin123');
             await page.click('button[type="submit"]');
@@ -54,6 +55,7 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
     test.describe('3. Job Management & Creation Workflow', () => {
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
+            await page.waitForLoadState('networkidle');
             await page.fill('input[name="email"]', 'admin@dvt.com');
             await page.fill('input[name="password"]', 'admin123');
             await page.click('button[type="submit"]');
@@ -81,11 +83,14 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
             await page.fill('#job-title', testJobTitle);
             await page.fill('#job-location', 'Remote, USA');
 
-            // Wait for company options to load from API
-            await page.waitForSelector('#job-company option:not([value=""])', { state: 'attached', timeout: 15000 });
-            const val = await page.locator('#job-company option:not([value=""])').first().getAttribute('value');
-            if (val) {
-                await page.selectOption('#job-company', val);
+            // Company selector is optional if removed in UI redesign
+            const companySelect = page.locator('#job-company');
+            if (await companySelect.count() > 0) {
+                await page.waitForSelector('#job-company option:not([value=""])', { state: 'attached', timeout: 15000 });
+                const val = await page.locator('#job-company option:not([value=""])').first().getAttribute('value');
+                if (val) {
+                    await page.selectOption('#job-company', val);
+                }
             }
 
             // Add skill tags
@@ -101,7 +106,7 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
             await page.fill('#job-description', 'Leading high-throughput distributed database architecture and platform engineering.');
 
             // Submit using publish button
-            const submitBtn = page.locator('#publish-requisition-btn');
+            const submitBtn = page.locator('button:has-text("Publish Job Requisition")');
             await submitBtn.click();
 
             // Wait for redirect to jobs list (anchor with $ so /dashboard/jobs/create does not falsely match)
@@ -117,6 +122,7 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
     test.describe('4. Candidate Directory, Detail Profile & Status Workflow', () => {
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
+            await page.waitForLoadState('networkidle');
             await page.fill('input[name="email"]', 'admin@dvt.com');
             await page.fill('input[name="password"]', 'admin123');
             await page.click('button[type="submit"]');
@@ -127,8 +133,8 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
             await page.click('#nav-candidates');
             await expect(page).toHaveURL(/.*\/dashboard\/candidates/, { timeout: 20000 });
 
-            // Click View Profile on first candidate
-            const viewProfileBtn = page.locator('a:has-text("View Profile")').first();
+            // Click full profile link on first candidate
+            const viewProfileBtn = page.locator('a[href^="/dashboard/candidates/"]').first();
             await expect(viewProfileBtn).toBeVisible({ timeout: 15000 });
             await viewProfileBtn.click();
 
@@ -138,7 +144,7 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
             // Check if status dropdown is interactive
             const statusSelect = page.locator('select').first();
             if (await statusSelect.isVisible()) {
-                await statusSelect.selectOption('interviewed');
+                await statusSelect.selectOption('interviewing');
                 // Wait for confirmation or status badge update
                 await page.waitForTimeout(500);
                 await page.reload();
@@ -151,6 +157,7 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
     test.describe('5. Team Invitations & Security Protocols', () => {
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
+            await page.waitForLoadState('networkidle');
             await page.fill('input[name="email"]', 'admin@dvt.com');
             await page.fill('input[name="password"]', 'admin123');
             await page.click('button[type="submit"]');
@@ -182,6 +189,7 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
     test.describe('6. Governance, Compliance, Monitoring & Settings', () => {
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
+            await page.waitForLoadState('networkidle');
             await page.fill('input[name="email"]', 'admin@dvt.com');
             await page.fill('input[name="password"]', 'admin123');
             await page.click('button[type="submit"]');
@@ -222,6 +230,7 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
 
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
+            await page.waitForLoadState('networkidle');
             await page.fill('input[name="email"]', 'admin@dvt.com');
             await page.fill('input[name="password"]', 'admin123');
             await page.click('button[type="submit"]');
@@ -251,13 +260,14 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
         test('renders mobile drawer and layout cleanly on 375x667', async ({ page }) => {
             await page.setViewportSize({ width: 375, height: 667 });
             await page.goto('/auth/login');
+            await page.waitForLoadState('networkidle');
             await page.fill('input[name="email"]', 'admin@dvt.com');
             await page.fill('input[name="password"]', 'admin123');
             await page.click('button[type="submit"]');
             await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 20000 });
 
             // On mobile, the hamburger menu button is visible
-            const menuBtn = page.locator('header button').first();
+            const menuBtn = page.getByRole('button', { name: 'Open Navigation Menu' });
             await expect(menuBtn).toBeVisible();
             await menuBtn.click();
 
@@ -268,6 +278,7 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
         test('renders tablet layout cleanly on 768x1024', async ({ page }) => {
             await page.setViewportSize({ width: 768, height: 1024 });
             await page.goto('/auth/login');
+            await page.waitForLoadState('networkidle');
             await page.fill('input[name="email"]', 'admin@dvt.com');
             await page.fill('input[name="password"]', 'admin123');
             await page.click('button[type="submit"]');

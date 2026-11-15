@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { candidatesApi } from "@/lib/api";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, normalizeCandidateScore } from "@/lib/utils";
 
 import { CandidateCardData } from "@/components/candidates/CandidateCard";
 import { CandidateKanbanBoard } from "@/components/candidates/CandidateKanbanBoard";
@@ -57,7 +57,7 @@ export default function CandidatesPage() {
                     title: c.title || "Technical Specialist",
                     company: c.current_company || "Organization",
                     location: c.location || "Remote",
-                    score: Math.round(c.score || 85),
+                    score: normalizeCandidateScore(c.score, 85),
                     skills: c.skills || [],
                     experience_years: c.experience_years || 3,
                     status: (c.status?.toLowerCase() as any) || "sourced",
@@ -236,7 +236,7 @@ export default function CandidatesPage() {
                 title: cand.title || "Technical Specialist",
                 company: cand.company || "Parsed From Resume",
                 location: cand.location || "Remote",
-                score: Math.round(cand.score || 88),
+                score: normalizeCandidateScore(cand.score, 88),
                 skills: cand.skills || [],
                 experience_years: cand.experience_years || 4,
                 status: "sourced",
@@ -317,7 +317,7 @@ export default function CandidatesPage() {
                             placeholder="Search by name, title, company, skills..." 
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="w-full bg-card border border-border/80 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl py-2 pl-10 pr-4 text-xs font-medium text-foreground transition-all shadow-xs"
+                            className="w-full bg-card border border-border/80 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl py-2 pl-10 pr-4 text-xs font-medium text-foreground transition-colors shadow-xs"
                         />
                     </div>
 
@@ -345,7 +345,7 @@ export default function CandidatesPage() {
                             type="button"
                             onClick={() => setViewMode("kanban")}
                             className={cn(
-                                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                                 viewMode === "kanban"
                                     ? "bg-card text-foreground shadow-xs"
                                     : "text-muted-foreground hover:text-foreground"
@@ -359,7 +359,7 @@ export default function CandidatesPage() {
                             type="button"
                             onClick={() => setViewMode("table")}
                             className={cn(
-                                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                                 viewMode === "table"
                                     ? "bg-card text-foreground shadow-xs"
                                     : "text-muted-foreground hover:text-foreground"
@@ -374,31 +374,40 @@ export default function CandidatesPage() {
             </div>
 
             {/* Bulk Action Strip (Table View) */}
-            {selectedIds.length > 0 && viewMode === "table" && (
-                <div className="flex items-center justify-between p-3 rounded-xl bg-primary/10 border border-primary/20 text-xs animate-in fade-in duration-150">
-                    <span className="font-semibold text-primary">
-                        {selectedIds.length} candidate(s) selected
-                    </span>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleBulkShortlist}
-                            className="h-8 text-xs font-semibold"
-                        >
-                            Bulk Shortlist
-                        </Button>
-                        <Button
-                            size="sm"
-                            onClick={handleBulkOutreach}
-                            className="h-8 text-xs font-semibold bg-primary text-primary-foreground gap-1.5"
-                        >
-                            <Mail className="w-3.5 h-3.5" />
-                            Bulk Outreach
-                        </Button>
-                    </div>
-                </div>
-            )}
+            <AnimatePresence>
+                {selectedIds.length > 0 && viewMode === "table" && (
+                    <motion.div
+                        key="bulk-selection-floating-bar"
+                        initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+                        transition={shouldReduceMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 30 }}
+                        className="flex items-center justify-between p-3 rounded-xl bg-primary/10 border border-primary/20 text-xs"
+                    >
+                        <span className="font-semibold text-primary">
+                            {selectedIds.length} candidate(s) selected
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleBulkShortlist}
+                                className="h-8 text-xs font-semibold"
+                            >
+                                Bulk Shortlist
+                            </Button>
+                            <Button
+                                size="sm"
+                                onClick={handleBulkOutreach}
+                                className="h-8 text-xs font-semibold bg-primary text-primary-foreground gap-1.5"
+                            >
+                                <Mail className="w-3.5 h-3.5" />
+                                Bulk Outreach
+                            </Button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Empty State Banner when no candidates in pipeline */}
             {candidates.length === 0 && (
@@ -459,33 +468,42 @@ export default function CandidatesPage() {
             />
 
             {/* Resume Upload Modal */}
-            {isUploadOpen && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-                    <Card className="w-full max-w-lg p-6 bg-card border-border rounded-2xl shadow-2xl space-y-4">
-                        <div className="flex items-center justify-between pb-3 border-b border-border">
-                            <h3 className="text-base font-bold text-foreground">Import Candidate Resume</h3>
-                            <Button variant="ghost" size="icon" onClick={() => setIsUploadOpen(false)}>
-                                <X className="w-4 h-4" />
-                            </Button>
-                        </div>
-                        <div 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="p-8 border-2 border-dashed border-border hover:border-primary/50 rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-colors"
-                        >
-                            <Upload className="w-8 h-8 text-muted-foreground mb-2" />
-                            <p className="text-xs font-semibold text-foreground">Click to upload or drag &amp; drop</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">PDF, DOCX, or TXT up to 10MB</p>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".pdf,.docx,.doc,.txt"
-                                className="hidden"
-                                onChange={(e) => handleFileUpload(e.target.files)}
-                            />
-                        </div>
-                    </Card>
-                </div>
-            )}
+            <AnimatePresence>
+                {isUploadOpen && (
+                    <motion.div
+                        key="upload-resume-modal-backdrop"
+                        initial={shouldReduceMotion ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={shouldReduceMotion ? { duration: 0 } : { duration: 0.15 }}
+                        className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50"
+                    >
+                        <Card className="w-full max-w-lg p-6 bg-card border-border rounded-2xl shadow-2xl space-y-4">
+                            <div className="flex items-center justify-between pb-3 border-b border-border">
+                                <h3 className="text-base font-bold text-foreground">Import Candidate Resume</h3>
+                                <Button variant="ghost" size="icon" onClick={() => setIsUploadOpen(false)}>
+                                    <X className="w-4 h-4" />
+                                </Button>
+                            </div>
+                            <div 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="p-8 border-2 border-dashed border-border hover:border-primary/50 rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-colors"
+                            >
+                                <Upload className="w-8 h-8 text-muted-foreground mb-2" />
+                                <p className="text-xs font-semibold text-foreground">Click to upload or drag &amp; drop</p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">PDF, DOCX, or TXT up to 10MB</p>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".pdf,.docx,.doc,.txt"
+                                    className="hidden"
+                                    onChange={(e) => handleFileUpload(e.target.files)}
+                                />
+                            </div>
+                        </Card>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

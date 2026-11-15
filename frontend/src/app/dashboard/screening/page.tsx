@@ -36,6 +36,7 @@ interface ScreeningPlan {
 
 export default function ScreeningPage() {
   const shouldReduceMotion = useReducedMotion();
+  const springTransition = shouldReduceMotion ? { duration: 0 } : { type: "spring" as const, stiffness: 400, damping: 30 };
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [roleTitle, setRoleTitle] = useState("");
@@ -266,7 +267,7 @@ ${q.follow_up_probe ? `**Follow-up Probe:**\n> "${q.follow_up_probe}"\n` : ""}
               return (
                 <Card 
                   key={idx} 
-                  className="border-border bg-card shadow-xs rounded-2xl overflow-hidden transition-all duration-200"
+                  className="border-border bg-card shadow-xs rounded-2xl overflow-hidden transition-colors duration-200"
                 >
                   <div 
                     onClick={() => setExpandedIndex(isExpanded ? null : idx)}
@@ -306,10 +307,15 @@ ${q.follow_up_probe ? `**Follow-up Probe:**\n> "${q.follow_up_probe}"\n` : ""}
                   </div>
 
                   {isExpanded && (
-                    <div className="px-5 pb-5 pt-1 space-y-4 border-t border-border/60 bg-muted/10 text-xs">
+                    <motion.div
+                      initial={shouldReduceMotion ? false : { opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={springTransition}
+                      className="px-5 pb-5 pt-1 space-y-4 border-t border-border/60 bg-muted/10 text-xs"
+                    >
                       {/* Ideal Answer */}
                       <div className="p-3.5 rounded-xl bg-card border border-border space-y-1">
-                        <span className="text-[10px] uppercase font-bold text-primary block">
+                        <span className="text-[10px] font-bold text-primary block">
                           Benchmark Expected Ideal Answer
                         </span>
                         <p className="text-foreground leading-relaxed">
@@ -320,7 +326,7 @@ ${q.follow_up_probe ? `**Follow-up Probe:**\n> "${q.follow_up_probe}"\n` : ""}
                       {/* Signals & Red Flags */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 space-y-2">
-                          <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Key Signals to Look For
                           </span>
                           <ul className="space-y-1 text-muted-foreground">
@@ -334,7 +340,7 @@ ${q.follow_up_probe ? `**Follow-up Probe:**\n> "${q.follow_up_probe}"\n` : ""}
                         </div>
 
                         <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
-                          <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
                             <AlertTriangle className="w-3.5 h-3.5" /> Red Flags to Watch For
                           </span>
                           <ul className="space-y-1 text-muted-foreground">
@@ -380,7 +386,7 @@ ${q.follow_up_probe ? `**Follow-up Probe:**\n> "${q.follow_up_probe}"\n` : ""}
                           </span>
                         </div>
                       </div>
-                    </div>
+                    </motion.div>
                   )}
                 </Card>
               );

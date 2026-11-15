@@ -239,7 +239,7 @@ export default function JobsPage() {
           {filteredJobs.map((job) => (
             <Card
               key={job.id}
-              className="p-5 bg-card border-border/80 hover:border-primary/40 hover:shadow-md transition-all duration-200 rounded-2xl flex flex-col justify-between space-y-4"
+              className="p-5 bg-card border-border/80 hover:border-primary/40 hover:shadow-md transition-colors duration-200 rounded-2xl flex flex-col justify-between space-y-4"
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">

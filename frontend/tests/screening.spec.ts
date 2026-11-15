@@ -1,19 +1,31 @@
 import { test, expect, type Page } from '@playwright/test';
 
+function makeUnsignedJwt(payload: Record<string, unknown>): string {
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    return `${header}.${body}.sig`;
+}
+
 test.describe('AI Technical Screening Studio & Question Bank E2E', () => {
     test.beforeEach(async ({ page }: { page: Page }) => {
+        const mockJwt = makeUnsignedJwt({
+            sub: '11111111-1111-1111-1111-111111111111',
+            role: 'admin',
+            exp: Math.floor(Date.now() / 1000) + 3600,
+        });
+
         // Authenticate via cookie and localStorage
         await page.context().addCookies([
             {
                 name: 'dvt_token',
-                value: 'mock_jwt_auth_token_for_screening',
+                value: mockJwt,
                 url: 'http://localhost:3000',
             },
         ]);
 
-        await page.addInitScript(() => {
-            localStorage.setItem('dvt_token', 'mock_jwt_auth_token_for_screening');
-        });
+        await page.addInitScript((tok) => {
+            localStorage.setItem('dvt_token', tok);
+        }, mockJwt);
 
         // Mock foundational layout and background endpoints
         await page.route(/\/api\/v1\/tenants\/me/, async (route) => {

@@ -210,6 +210,8 @@ def compute_career_ops_score(
     now = datetime.now(timezone.utc)
     posted = job.posted_at or (job.created_at if hasattr(job, "created_at") else now)
     if posted:
+        if posted.tzinfo is None:
+            posted = posted.replace(tzinfo=timezone.utc)
         age_days = (now - posted).days
         if age_days > 60:
             ghost_signals.append(f"Posting is over {age_days} days old without refresh")

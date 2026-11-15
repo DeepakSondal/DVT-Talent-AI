@@ -20,7 +20,7 @@ test.describe('Authentication Flow', () => {
     await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 15000 });
     
     // Should see the dashboard header
-    await expect(page.locator('text=Recruitment Dashboard')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('text=Recruitment Command Cockpit')).toBeVisible({ timeout: 15000 });
   });
 
   test('fails login with invalid credentials', async ({ page }) => {

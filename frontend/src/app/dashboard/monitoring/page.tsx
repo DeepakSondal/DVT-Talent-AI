@@ -344,7 +344,7 @@ export default function MonitoringPage() {
                                                 ID: {String(task.id || "—").slice(0, 8)}
                                             </p>
                                         </div>
-                                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-black uppercase">
+                                        <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[9px] font-black">
                                             {task.status || "unknown"}
                                         </Badge>
                                     </div>

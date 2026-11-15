@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import Link from "next/link";
 import api, { monitoringApi, candidatesApi } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, normalizeCandidateScore } from "@/lib/utils";
 import { RecruiterBriefing } from "@/components/dashboard/recruiter-briefing";
 import { OnboardingWorkflow } from "@/components/dashboard/OnboardingWorkflow";
 
@@ -60,7 +60,7 @@ export default function DashboardHome() {
             const dbCands = (candsRes as any)?.items || (Array.isArray(candsRes) ? candsRes : []);
             const totalCandidates = kpisRes?.candidates?.total ?? dbCands.length;
             const avgScore = dbCands.length > 0
-                ? Math.round(dbCands.reduce((a: number, c: any) => a + (Number(c.score) || 88), 0) / dbCands.length)
+                ? Math.round(dbCands.reduce((a: number, c: any) => a + normalizeCandidateScore(c.score, 88), 0) / dbCands.length)
                 : 0;
             setStats({
                 candidates: totalCandidates,
@@ -81,7 +81,7 @@ export default function DashboardHome() {
                     name: `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Candidate",
                     title: c.title || "Software Engineer",
                     company: c.current_company || "Organization",
-                    score: Math.round(c.score || 90),
+                    score: normalizeCandidateScore(c.score, 90),
                     stage: (c.status || "Sourced"),
                     href: `/dashboard/candidates/${c.id}`,
                 })));
@@ -245,7 +245,7 @@ export default function DashboardHome() {
                                 </div>
                                 <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
                                     <div 
-                                        className={cn("h-full rounded-full transition-all duration-500", st.color)} 
+                                        className={cn("h-full rounded-full transition-colors duration-500", st.color)} 
                                         style={{ width: st.percentage }} 
                                     />
                                 </div>
@@ -325,7 +325,7 @@ export default function DashboardHome() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {navigationCards.map((card, i) => (
                         <Link key={i} href={card.href} className="group block">
-                            <Card className="p-5 h-full bg-card border-border hover:border-primary/40 hover:shadow-md transition-all duration-200 rounded-2xl flex flex-col justify-between">
+                            <Card className="p-5 h-full bg-card border-border hover:border-primary/40 hover:shadow-md transition-colors duration-200 rounded-2xl flex flex-col justify-between">
                                 <div className="space-y-3">
                                     <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", card.color)}>
                                         <card.icon className="w-5 h-5" />

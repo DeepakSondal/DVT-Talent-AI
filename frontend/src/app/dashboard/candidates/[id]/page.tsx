@@ -184,7 +184,7 @@ export default function CandidateDetailPage() {
       {/* Recruiterflow-Style Fixed Pinned Information Header */}
       <div className="p-6 rounded-2xl bg-card border border-border shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="flex items-start gap-4 min-w-0">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-indigo-600 to-purple-600 border border-primary/20 flex items-center justify-center text-white font-black text-xl shadow-md shadow-primary/20 flex-shrink-0">
+          <div className="w-16 h-16 rounded-2xl bg-primary border border-primary/20 flex items-center justify-center text-white font-black text-xl shadow-md shadow-primary/20 flex-shrink-0">
             {initials}
           </div>
           <div className="min-w-0">
@@ -280,7 +280,7 @@ export default function CandidateDetailPage() {
           {/* Contact Details Card */}
           <Card className="p-4 bg-card border-border rounded-2xl shadow-xs space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-border/60">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Contact &amp; Identity</span>
+              <span className="text-xs font-bold text-muted-foreground">Contact &amp; Identity</span>
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
             </div>
 
@@ -304,7 +304,7 @@ export default function CandidateDetailPage() {
 
             {/* Social Links */}
             <div className="pt-2 border-t border-border/60 space-y-1.5">
-              <span className="text-[10px] text-muted-foreground uppercase font-bold block">Social &amp; Repos</span>
+              <span className="text-[10px] text-muted-foreground font-bold block">Social &amp; Repos</span>
               {candidate.linkedin_url && (
                 <a
                   href={candidate.linkedin_url}
@@ -338,7 +338,7 @@ export default function CandidateDetailPage() {
 
           {/* Hiring Logistics */}
           <Card className="p-4 bg-card border-border rounded-2xl shadow-xs space-y-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block pb-2 border-b border-border/60">
+            <span className="text-xs font-bold text-muted-foreground block pb-2 border-b border-border/60">
               Candidate Logistics
             </span>
             <div className="space-y-2 text-xs">
@@ -486,7 +486,7 @@ export default function CandidateDetailPage() {
           {/* Recruiter Notes */}
           <Card className="p-4 bg-card border-border rounded-2xl shadow-xs space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-border/60">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Recruiter Notes</span>
+              <span className="text-xs font-bold text-muted-foreground">Recruiter Notes</span>
               <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
             </div>
 
@@ -523,7 +523,7 @@ export default function CandidateDetailPage() {
 
           {/* Activity Stream */}
           <Card className="p-4 bg-card border-border rounded-2xl shadow-xs space-y-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground block pb-2 border-b border-border/60">
+            <span className="text-xs font-bold text-muted-foreground block pb-2 border-b border-border/60">
               Activity Timeline
             </span>
 

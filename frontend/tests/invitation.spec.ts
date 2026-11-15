@@ -133,6 +133,16 @@ test.describe('Team Invitation Acceptance Flow', () => {
       });
     });
 
+    const mockJwt = (() => {
+      const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+      const body = Buffer.from(JSON.stringify({
+        sub: 'usr_new_alice_123',
+        role: 'hiring_manager',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })).toString('base64url');
+      return `${header}.${body}.sig`;
+    })();
+
     // Intercept accept POST
     let acceptRequestPayload: any = null;
     await page.route('**/api/v1/team/invite/accept', async (route) => {
@@ -140,7 +150,7 @@ test.describe('Team Invitation Acceptance Flow', () => {
       await route.fulfill({
         status: 200,
         headers: {
-          'Set-Cookie': 'dvt_token=mock_jwt_token_alice_session_xyz789; Path=/; SameSite=Lax; HttpOnly',
+          'Set-Cookie': `dvt_token=${mockJwt}; Path=/; SameSite=Lax; HttpOnly`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -153,7 +163,7 @@ test.describe('Team Invitation Acceptance Flow', () => {
             role: 'hiring_manager',
             tenant_id: 'ten_acme_corp_001',
           },
-          access_token: 'mock_jwt_token_alice_session_xyz789',
+          access_token: mockJwt,
           token_type: 'bearer',
         }),
       });
@@ -181,13 +191,13 @@ test.describe('Team Invitation Acceptance Flow', () => {
 
     // Verify localStorage has access token
     const storedToken = await page.evaluate(() => localStorage.getItem('dvt_token'));
-    expect(storedToken).toBe('mock_jwt_token_alice_session_xyz789');
+    expect(storedToken).toBe(mockJwt);
 
     // Verify cookie has access token
     const cookies = await page.context().cookies();
     const dvtCookie = cookies.find((c) => c.name === 'dvt_token');
     expect(dvtCookie).toBeDefined();
-    expect(dvtCookie?.value).toBe('mock_jwt_token_alice_session_xyz789');
+    expect(dvtCookie?.value).toBe(mockJwt);
 
     // Verify redirect occurs towards /dashboard (allowing Next.js compilation time)
     await page.waitForURL('**/dashboard', { timeout: 15000 });
