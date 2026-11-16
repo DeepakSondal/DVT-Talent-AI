@@ -16,6 +16,7 @@ import hashlib
 import json
 import re
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,6 +35,10 @@ try:
     from backend.services.resume_parser import ResumeParserService
 except ImportError:
     from services.resume_parser import ResumeParserService  # pyrefly: ignore[missing-import]  # type: ignore
+try:
+    from backend.services.sanitizer_service import sanitizer_service
+except ImportError:
+    from services.sanitizer_service import sanitizer_service  # pyrefly: ignore[missing-import]  # type: ignore
 
 _LOCAL_SOURCING_CACHE: Dict[str, str] = {}
 
@@ -408,6 +413,7 @@ async def _query_github_talent(deps: AgentDeps, keywords: str) -> str:
     if not deps.github_token:
         return "ERROR: GitHub token missing. Skip GitHub search."
 
+    keywords = str(keywords or "")[:500]
     facets = ResumeParserService.extract_deterministic_facets(keywords)
     primary_lang = facets.get("primary_language")
     skill_terms = " ".join(facets.get("skills", [])[:2]) or keywords.strip()[:60]
@@ -438,6 +444,7 @@ async def _query_stackoverflow_experts(deps: AgentDeps, query: str) -> str:
     Freehire-inspired direct public API ingestion:
     Queries StackExchange's zero-auth public REST API for top-reputation tag answerers.
     """
+    query = str(query or "")[:500]
     facets = ResumeParserService.extract_deterministic_facets(query)
     tags = facets.get("stackoverflow_tags") or []
     tag = tags[0] if tags else "python"
@@ -447,7 +454,8 @@ async def _query_stackoverflow_experts(deps: AgentDeps, query: str) -> str:
     if cached:
         return cached
 
-    url = f"https://api.stackexchange.com/2.3/tags/{tag}/top-answerers/all_time"
+    encoded_tag = quote(str(tag), safe="")
+    url = f"https://api.stackexchange.com/2.3/tags/{encoded_tag}/top-answerers/all_time"
     params = {"site": "stackoverflow", "pagesize": 5}
 
     try:
@@ -479,6 +487,7 @@ async def _query_web_signals(deps: AgentDeps, query: str) -> str:
     if not deps.serper_key:
         return "ERROR: Serper API key missing. Skip web search."
 
+    query = str(query or "")[:500]
     cache_key = f"serper:{query.strip().lower()}"
     cached = _get_sourcing_cache(cache_key, tenant_id=deps.tenant_id)
     if cached:
@@ -545,19 +554,22 @@ async def search_internal_talent_pool(ctx: RunContext[AgentDeps], keywords: str)
 @sourcing_agent.tool
 async def search_github_talent(ctx: RunContext[AgentDeps], keywords: str) -> str:
     """Finds top engineering talent on GitHub using deterministic language and skill qualifiers."""
-    return await _query_github_talent(ctx.deps, keywords)
+    safe_keywords, _ = sanitizer_service.sanitize(str(keywords or "")[:500])
+    return await _query_github_talent(ctx.deps, safe_keywords[:500])
 
 
 @sourcing_agent.tool
 async def search_stackoverflow_experts(ctx: RunContext[AgentDeps], query: str) -> str:
     """Finds top-reputation domain engineers on StackOverflow by canonical technical tag."""
-    return await _query_stackoverflow_experts(ctx.deps, query)
+    safe_query, _ = sanitizer_service.sanitize(str(query or "")[:500])
+    return await _query_stackoverflow_experts(ctx.deps, safe_query[:500])
 
 
 @sourcing_agent.tool
 async def search_web_signals(ctx: RunContext[AgentDeps], query: str) -> str:
     """Scans LinkedIn and public developer profiles for active talent signals via Serper API."""
-    return await _query_web_signals(ctx.deps, query)
+    safe_query, _ = sanitizer_service.sanitize(str(query or "")[:500])
+    return await _query_web_signals(ctx.deps, safe_query[:500])
 
 
 # ── Execution Helper ──────────────────────────────────────────────────────
@@ -565,11 +577,16 @@ async def search_web_signals(ctx: RunContext[AgentDeps], query: str) -> str:
 async def synthesize_talent(jd: str, tenant_id: str) -> SourcingSynthesis:
     """Entry point for the Sourcing Synthesis pipeline."""
     import httpx
+    safe_tenant = str(tenant_id or "").strip()
+    if not safe_tenant or safe_tenant.lower() == "default":
+        raise ValueError("A valid tenant_id is required for synthesize_talent.")
+    safe_jd, _ = sanitizer_service.sanitize(str(jd or ""))
     async with httpx.AsyncClient() as client:
-        deps = AgentDeps(http_client=client, tenant_id=tenant_id)
-        prefetched = await prefetch_all_sourcing_signals(deps, jd)
+        deps = AgentDeps(http_client=client, tenant_id=safe_tenant)
+        prefetched = await prefetch_all_sourcing_signals(deps, safe_jd)
+        safe_prefetched, _ = sanitizer_service.sanitize(str(prefetched or ""))
         result = await sourcing_agent.run(
-            f"Source and synthesize top talent for this role: {jd}\n\nPre-fetched multi-source candidate signals (use directly without redundant tool calls):\n{prefetched}",
+            f"Source and synthesize top talent for this role: {safe_jd}\n\nPre-fetched multi-source candidate signals (use directly without redundant tool calls):\n{safe_prefetched}",
             deps=deps
         )
         return result.output

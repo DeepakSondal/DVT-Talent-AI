@@ -1,12 +1,31 @@
 import asyncio
+import os
+import sys
+
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
 from sqlalchemy import select
 
 from api.routes.auth import hash_password
+try:
+    from config import settings
+except ImportError:
+    from backend.config import settings
 from db.models import AsyncSessionLocal, Base, Tenant, User, UserRole, engine
 
 
 async def create_admin():
+    if settings.is_production:
+        print("Refusing to run create_admin in production.")
+        raise SystemExit(1)
+
+    admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
+    if not admin_password:
+        print("ADMIN_PASSWORD environment variable is required.")
+        raise SystemExit(1)
+
     print("Ensuring database tables exist...")
     try:
         async with engine.begin() as conn:
@@ -30,11 +49,11 @@ async def create_admin():
         existing = result.scalar_one_or_none()
         
         if existing:
-            print("User admin@dvt.com already exists! Resetting password to admin123...")
-            existing.hashed_password = await hash_password("admin123")
+            print("User admin@dvt.com already exists! Updating password from ADMIN_PASSWORD...")
+            existing.hashed_password = await hash_password(admin_password)
             existing.is_active = True
             await session.commit()
-            print("Password for admin@dvt.com has been reset to: admin123")
+            print("Password for admin@dvt.com has been updated.")
             return
             
         print("Creating admin@dvt.com ...")
@@ -42,7 +61,7 @@ async def create_admin():
             tenant_id=tenant.id,
             email="admin@dvt.com",
             full_name="System Admin",
-            hashed_password=await hash_password("admin123"),
+            hashed_password=await hash_password(admin_password),
             role=UserRole.ADMIN,
             is_active=True,
             is_verified=True,
@@ -52,7 +71,6 @@ async def create_admin():
             await session.commit()
             print("Successfully created admin account!")
             print("Email: admin@dvt.com")
-            print("Password: admin123")
         except Exception as e:
             print(f"Failed to create user: {e}")
 

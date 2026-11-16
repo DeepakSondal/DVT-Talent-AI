@@ -22,6 +22,13 @@ services:
       - caddy_config:/config
     networks:
       - dvt_network
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend:
     build:
@@ -34,8 +41,18 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://dvttalent.com/api/v1}
+      - DODO_PAYMENTS_WEBHOOK_KEY=${DODO_PAYMENTS_WEBHOOK_KEY}
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET}
+      - INTERNAL_API_URL=${INTERNAL_API_URL:-http://api:8000/api/v1}
     networks:
       - dvt_network
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   api:
     build:
@@ -63,17 +80,14 @@ services:
       - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
       - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
       - KIMI_API_KEY=${KIMI_API_KEY}
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
     networks:
       - dvt_network
+    mem_limit: 2g
     depends_on:
       redis:
         condition: service_healthy
       db:
         condition: service_healthy
-      chromadb:
-        condition: service_started
     volumes:
       - dvt_storage:/app/storage
       - dvt_uploads:/app/uploads
@@ -91,7 +105,7 @@ services:
       target: worker
     container_name: dvt_worker
     env_file: ./.env-production
-    command: celery -A workers.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=4 --max-tasks-per-child=100 --max-memory-per-child=512000
     restart: always
     environment:
       - APP_ENV=production
@@ -108,17 +122,20 @@ services:
       - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
       - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
       - KIMI_API_KEY=${KIMI_API_KEY}
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
     networks:
       - dvt_network
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=5 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       redis:
         condition: service_healthy
       db:
         condition: service_healthy
-      chromadb:
-        condition: service_started
     volumes:
       - dvt_storage:/app/storage
       - dvt_uploads:/app/uploads
@@ -147,37 +164,28 @@ services:
       - GMAIL_CLIENT_SECRET=${GMAIL_CLIENT_SECRET}
       - GMAIL_REFRESH_TOKEN=${GMAIL_REFRESH_TOKEN}
       - KIMI_API_KEY=${KIMI_API_KEY}
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
     networks:
       - dvt_network
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /app/storage/celerybeat-schedule || kill -0 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     depends_on:
       redis:
         condition: service_healthy
       db:
         condition: service_healthy
-      chromadb:
-        condition: service_started
     volumes:
       - dvt_storage:/app/storage
-
-  chromadb:
-    image: chromadb/chroma:0.4.24
-    container_name: dvt_chromadb
-    restart: always
-    environment:
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
-      - ANONYMIZED_TELEMETRY=FALSE
-    volumes:
-      - chroma_data:/chroma/chroma
-    networks:
-      - dvt_network
 
   redis:
     image: redis:7-alpine
     container_name: dvt_redis
     restart: always
+    mem_limit: 512m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -190,6 +198,7 @@ services:
     image: pgvector/pgvector:pg16
     container_name: dvt_db
     restart: always
+    mem_limit: 2g
     environment:
       - POSTGRES_USER=dvt_user
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -210,7 +219,6 @@ networks:
 
 volumes:
   postgres_prod_data:
-  chroma_data:
   caddy_data:
   caddy_config:
   dvt_storage:

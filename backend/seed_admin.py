@@ -1,5 +1,5 @@
 """
-Seed Admin User: admin@dvt.com with password: admin123
+Seed Admin User: admin@dvt.com (password read from ADMIN_PASSWORD env var; non-production only)
 """
 import asyncio
 import os
@@ -14,6 +14,10 @@ if backend_dir not in sys.path:
 import bcrypt
 from sqlalchemy import select
 
+try:
+    from config import settings
+except ImportError:
+    from backend.config import settings
 from db.models import (
     AsyncSessionLocal,
     Candidate,
@@ -27,8 +31,17 @@ from db.models import (
 
 
 async def seed():
+    if settings.is_production:
+        print("Refusing to run seed_admin in production.")
+        raise SystemExit(1)
+
+    admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
+    if not admin_password:
+        print("ADMIN_PASSWORD environment variable is required.")
+        raise SystemExit(1)
+
     salt = bcrypt.gensalt()
-    hashed_pwd = bcrypt.hashpw(b"admin123", salt).decode("utf-8")
+    hashed_pwd = bcrypt.hashpw(admin_password.encode("utf-8"), salt).decode("utf-8")
     
     async with AsyncSessionLocal() as session:
         # 1. Check or create Tenant for dvt.com

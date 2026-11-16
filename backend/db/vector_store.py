@@ -79,7 +79,7 @@ class VectorStore:
                 host=getattr(settings, "chroma_host", "localhost"),
                 port=getattr(settings, "chroma_port", 8000),
                 # pyrefly: ignore[unexpected-keyword]
-                settings=ChromaSettings(allow_reset=True)
+                settings=ChromaSettings(allow_reset=False)
             )
             self._ensure_collections()
         except Exception:
@@ -599,16 +599,23 @@ class VectorStore:
         self._persist_local_index()
 
     def search_jobs(self, query_text: str, limit: int = 10, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Find most similar jobs to a candidate profile / text, optionally scoped to tenant_id"""
+        """Find most similar jobs to a candidate profile / text, strictly scoped to a valid UUID tenant_id."""
+        safe_tenant = str(tenant_id or "").strip()
+        if not safe_tenant or safe_tenant.lower() == "default":
+            raise ValueError("A valid UUID tenant_id is required for VectorStore.search_jobs.")
+        try:
+            normalized_tenant = str(uuid.UUID(safe_tenant))
+        except (ValueError, TypeError) as exc:
+            raise ValueError("A valid UUID tenant_id is required for VectorStore.search_jobs.") from exc
+
         query_embedding = self.embed_text(query_text)
 
         if CHROMA_AVAILABLE and self.client and getattr(self, "jobs", None):
             query_kwargs: Dict[str, Any] = {
                 "query_embeddings": [query_embedding],
                 "n_results": limit,
+                "where": {"tenant_id": normalized_tenant},
             }
-            if tenant_id:
-                query_kwargs["where"] = {"tenant_id": str(tenant_id)}
             try:
                 results = self.jobs.query(**query_kwargs)
                 formatted = []
@@ -627,7 +634,14 @@ class VectorStore:
 
         matching = []
         for j in self._local_index["jobs"].values():
-            if not tenant_id or j.get("tenant_id") == str(tenant_id):
+            raw_job_tenant = str(j.get("tenant_id") or "").strip()
+            if not raw_job_tenant:
+                continue
+            try:
+                job_tenant_norm = str(uuid.UUID(raw_job_tenant))
+            except (ValueError, TypeError):
+                continue
+            if job_tenant_norm == normalized_tenant:
                 score = self.cosine_similarity(query_embedding, j["embedding"])
                 matching.append({
                     "id": j["id"],

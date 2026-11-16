@@ -34,6 +34,14 @@ function AuthContent() {
     };
 
     if (token) {
+      const cleanParams = new URLSearchParams(searchParams.toString());
+      cleanParams.delete("token");
+      const cleanQuery = cleanParams.toString();
+      window.history.replaceState(
+        {},
+        document.title,
+        cleanQuery ? `${window.location.pathname}?${cleanQuery}` : window.location.pathname
+      );
       finishSignIn(token, tenantId, role);
       return;
     }

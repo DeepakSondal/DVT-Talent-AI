@@ -21,13 +21,17 @@ try:
     from backend.agents.swarm_memory import query_memory_tree
 except ImportError:
     from agents.swarm_memory import query_memory_tree  # pyrefly: ignore[missing-import]  # type: ignore
+try:
+    from backend.services.sanitizer_service import sanitizer_service
+except ImportError:
+    from services.sanitizer_service import sanitizer_service  # pyrefly: ignore[missing-import]  # type: ignore
 
 class AuditResult(BaseModel):
     model_config = ConfigDict(extra="allow")
     passed: bool = Field(default=True)
     issues: List[str] = Field(default_factory=list)
     hallucination_score: int = Field(default=0, ge=0, le=100)
-    recommendation: str = Field(default="Approved")
+    recommendation: str = Field(default="PENDING_REVIEW")
     feedback: Optional[str] = None
 
 critic_agent = Agent(
@@ -51,8 +55,12 @@ async def consult_swarm_memory(ctx: RunContext[AgentDeps], candidate_summary: st
     Queries the Vectorless RAG Memory Tree to check if this specific candidate violates
     any historical rejection rules set by the human executive.
     """
-    tenant_id = getattr(ctx.deps, "tenant_id", "default") or "default"
-    memory_result = await query_memory_tree(candidate_summary, tenant_id=str(tenant_id))
+    tenant_id = str(getattr(ctx.deps, "tenant_id", "") or "").strip()
+    if not tenant_id or tenant_id.lower() == "default":
+        raise ValueError("A valid tenant_id is required for consult_swarm_memory.")
+
+    safe_summary, _ = sanitizer_service.sanitize(str(candidate_summary or "")[:2000])
+    memory_result = await query_memory_tree(safe_summary[:2000], tenant_id=tenant_id)
     
     if memory_result == "NO_CONFLICT":
         return "CLEAR: No historical rejection rules apply to this candidate."

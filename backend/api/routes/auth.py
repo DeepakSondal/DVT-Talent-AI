@@ -38,9 +38,11 @@ from services.email_service import email_service
 from services.redis_service import (
     get_rate_limit_count,
     is_token_revoked,
+    is_user_token_revoked,
     record_rate_limit,
     reset_rate_limit,
     revoke_token,
+    revoke_user_tokens,
     store_email_otp,
     verify_email_otp,
 )
@@ -119,15 +121,17 @@ async def hash_password(password: str) -> str:
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
-    to_encode.update({"exp": expire, "type": "access"})
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
+    to_encode.update({"iat": now.timestamp(), "exp": expire, "type": "access"})
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
 def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=30)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(days=30)
+    to_encode.update({"iat": now.timestamp(), "exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
@@ -176,10 +180,18 @@ async def get_current_user(
     except ValueError as exc:
         raise credentials_exception from exc
 
+    if await is_user_token_revoked(str(user_uuid), payload.get("iat")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise credentials_exception
+    request.state.user = user
     return user
 
 
@@ -555,6 +567,9 @@ async def refresh_token_route(
     except ValueError as exc:
         raise HTTPException(status_code=401, detail="Invalid token payload") from exc
 
+    if await is_user_token_revoked(str(user_uuid), payload.get("iat")):
+        raise HTTPException(status_code=401, detail="Refresh token has been revoked")
+
     result = await db.execute(select(User).where(User.id == user_uuid))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
@@ -725,4 +740,5 @@ async def reset_password(
         raise HTTPException(status_code=400, detail="Invalid or expired password reset code")
     user.hashed_password = await hash_password(payload.new_password)
     await db.commit()
+    await revoke_user_tokens(str(user.id))
     return {"status": "success", "message": "Password has been reset successfully."}

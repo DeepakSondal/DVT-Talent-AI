@@ -132,7 +132,10 @@ async def deactivate_job(job_id: UUID, db: AsyncSession = Depends(get_db), curre
     await db.commit()
     return {"message": "Job deactivated"}
 
-async def _source_candidates_bg(job_id: str, skills: list, location: Optional[str], tenant_id: str = "default"):
+async def _source_candidates_bg(job_id: str, skills: list, location: Optional[str], tenant_id: str):
+    if not tenant_id or str(tenant_id).strip().lower() == "default":
+        raise ValueError("A valid UUID tenant_id is required")
+    UUID(str(tenant_id))
     try:
         from workers.tasks import safe_dispatch_task, source_candidates_for_job
         safe_dispatch_task(source_candidates_for_job, job_id, skills, location, tenant_id)

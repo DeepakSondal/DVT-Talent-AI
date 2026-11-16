@@ -14,10 +14,23 @@ from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_
 from api.routes.auth import User, get_current_user
 from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
 from services.llm_guardrail_service import guardrail_service
+from services.sanitizer_service import sanitizer_service
 from workers.tasks import copilot_discovery_task, copilot_outreach_task, copilot_sourcing_task
 
 log = structlog.get_logger(__name__)
 router = APIRouter(prefix="/copilot", tags=["copilot"])
+
+
+def _sanitize_input(value: Any) -> Any:
+    """Recursively sanitizes user-supplied free-text values against prompt injection."""
+    if isinstance(value, str):
+        cleaned, _ = sanitizer_service.sanitize(value)
+        return cleaned
+    if isinstance(value, list):
+        return [_sanitize_input(item) for item in value]
+    if isinstance(value, dict):
+        return {k: _sanitize_input(v) for k, v in value.items()}
+    return value
 
 # ── Pydantic Schemas ─────────────────────────────────────────────────────────
 class DiscoveryRequest(BaseModel):
@@ -91,8 +104,10 @@ async def start_copilot_discovery(
     await db.commit()
     
     # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
+    safe_industry = _sanitize_input(req.industry)
+    safe_location = _sanitize_input(req.location)
     try:
-        copilot_discovery_task.delay(str(task_id), req.industry, req.location, str(tenant_uuid))
+        copilot_discovery_task.delay(str(task_id), safe_industry, safe_location, str(tenant_uuid))
     except Exception as e:
         log.warning("copilot_discovery_dispatch_warning", error=str(e))
     return {"status": "accepted", "task_id": str(task_id), "phase": "discovery"}
@@ -124,8 +139,10 @@ async def start_copilot_sourcing(
     await db.commit()
 
     # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
+    safe_approved_jd = _sanitize_input(req.approved_jd)
+    safe_location = _sanitize_input(req.location)
     try:
-        copilot_sourcing_task.delay(str(task_uuid), req.approved_jd, req.location, str(tenant_uuid))
+        copilot_sourcing_task.delay(str(task_uuid), safe_approved_jd, safe_location, str(tenant_uuid))
     except Exception as e:
         log.warning("copilot_sourcing_dispatch_warning", error=str(e))
     return {"status": "accepted", "task_id": str(task_uuid), "phase": "sourcing"}
@@ -157,8 +174,10 @@ async def start_copilot_outreach(
     await db.commit()
 
     # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
+    safe_candidates = _sanitize_input(req.approved_candidates)
+    safe_job_context = _sanitize_input(req.job_context)
     try:
-        copilot_outreach_task.delay(str(task_uuid), req.approved_candidates, req.job_context, str(tenant_uuid), req.enable_screening)
+        copilot_outreach_task.delay(str(task_uuid), safe_candidates, safe_job_context, str(tenant_uuid), req.enable_screening)
     except Exception as e:
         log.warning("copilot_outreach_dispatch_warning", error=str(e))
     return {"status": "accepted", "task_id": str(task_uuid), "phase": "outreach"}

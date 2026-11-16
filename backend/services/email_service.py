@@ -132,6 +132,10 @@ def _get_system_oauth_sender() -> Optional[OAuthSenderConfig]:
             sender_email=sender_email,
             refresh_token=settings.gmail_refresh_token,
         )
+    if settings.is_production:
+        log.warning("system_email_sender_unconfigured_in_production")
+        return None
+
     # Default to simulated Resend HTTPS driver in development / test environments
     return OAuthSenderConfig(
         provider="resend",
@@ -199,7 +203,14 @@ async def _deliver_oauth_message(
             log.warning("google_oauth_token_missing", sender=sender_cfg.sender_email)
             return False
 
-        if os.getenv("PYTEST_CURRENT_TEST"):
+        if token.startswith("simulated_"):
+            if not settings.is_production:
+                log.info("oauth_simulated_delivery", provider="google", to=to_address, sender=sender_cfg.sender_email)
+                return True
+            log.warning("oauth_simulated_token_blocked_in_production", provider="google", to=to_address)
+            return False
+
+        if os.getenv("PYTEST_CURRENT_TEST") and not settings.is_production:
             log.info("oauth_simulated_delivery", provider="google", to=to_address, sender=sender_cfg.sender_email)
             return True
 
@@ -227,7 +238,14 @@ async def _deliver_oauth_message(
             log.warning("microsoft_oauth_token_missing", sender=sender_cfg.sender_email)
             return False
 
-        if os.getenv("PYTEST_CURRENT_TEST"):
+        if token.startswith("simulated_"):
+            if not settings.is_production:
+                log.info("oauth_simulated_delivery", provider="microsoft", to=to_address, sender=sender_cfg.sender_email)
+                return True
+            log.warning("oauth_simulated_token_blocked_in_production", provider="microsoft", to=to_address)
+            return False
+
+        if os.getenv("PYTEST_CURRENT_TEST") and not settings.is_production:
             log.info("oauth_simulated_delivery", provider="microsoft", to=to_address, sender=sender_cfg.sender_email)
             return True
 
@@ -249,7 +267,13 @@ async def _deliver_oauth_message(
             return resp.status_code in (200, 202)
 
     if sender_cfg.provider == "resend" and token:
-        if token.startswith("simulated_") or os.getenv("PYTEST_CURRENT_TEST"):
+        if token.startswith("simulated_"):
+            if not settings.is_production:
+                log.info("resend_simulated_delivery", to=to_address, sender=sender_cfg.sender_email)
+                return True
+            log.warning("resend_simulated_token_blocked_in_production", to=to_address, sender=sender_cfg.sender_email)
+            return False
+        if os.getenv("PYTEST_CURRENT_TEST") and not settings.is_production:
             log.info("resend_simulated_delivery", to=to_address, sender=sender_cfg.sender_email)
             return True
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -481,13 +505,35 @@ class EmailService:
 
     async def process_incoming_webhook(self, payload: Dict[str, Any]) -> bool:
         """Track email replies via webhook."""
-        headers = payload.get("Headers", {})
-        if isinstance(headers, list):
-            headers = {h.get("Name"): h.get("Value") for h in headers}
+        if not isinstance(payload, dict):
+            return False
 
-        in_reply_to = headers.get("In-Reply-To")
-        if not in_reply_to:
-            log.warning("unmatched_reply", msg="No In-Reply-To header found")
+        raw_headers = payload.get("Headers")
+        if isinstance(raw_headers, dict):
+            headers = raw_headers
+        elif isinstance(raw_headers, list):
+            headers = {
+                h.get("Name"): h.get("Value")
+                for h in raw_headers
+                if isinstance(h, dict) and isinstance(h.get("Name"), str)
+            }
+        else:
+            headers = {}
+
+        raw_in_reply_to = headers.get("In-Reply-To")
+        if raw_in_reply_to is None:
+            raw_in_reply_to = next(
+                (v for k, v in headers.items() if isinstance(k, str) and k.lower() == "in-reply-to"),
+                None,
+            )
+
+        in_reply_to = raw_in_reply_to.strip() if isinstance(raw_in_reply_to, str) else ""
+        if (
+            not in_reply_to
+            or len(in_reply_to) > 512
+            or any(c in in_reply_to for c in ("\r", "\n", "\x00"))
+        ):
+            log.warning("unmatched_reply", msg="No valid In-Reply-To header found")
             return False
 
         async with AsyncSessionLocal() as session:

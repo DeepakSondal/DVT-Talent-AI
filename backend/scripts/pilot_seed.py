@@ -19,6 +19,10 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import select
 
+try:
+    from config import settings
+except ImportError:
+    from backend.config import settings
 from db.models import (
     AsyncSessionLocal,
     CreditTransaction,
@@ -31,6 +35,15 @@ from db.models import (
 
 
 async def seed():
+    if settings.is_production:
+        print("Refusing to run pilot_seed in production.")
+        raise SystemExit(1)
+
+    admin_password = os.getenv("ADMIN_PASSWORD", "").strip()
+    if not admin_password:
+        print("ADMIN_PASSWORD environment variable is required.")
+        raise SystemExit(1)
+
     print("🚀 Initiating Master Pilot Seed...")
 
     alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
@@ -87,8 +100,7 @@ async def seed():
         user = existing_user.scalar_one_or_none()
         
         if not user:
-            password = os.getenv("ADMIN_PASSWORD", "admin_password_123")
-            hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            hashed_pw = bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             
             user = User(
                 id=uuid.uuid4(),
@@ -101,7 +113,7 @@ async def seed():
                 is_verified=True
             )
             session.add(user)
-            print(f"  ✅ Admin Created: {user.email} (Password: admin_password_123)")
+            print(f"  ✅ Admin Created: {user.email}")
         else:
             print("  ℹ️ Admin 'admin@dvttalent.com' already exists. Skipping.")
 

@@ -35,6 +35,7 @@ try:
     from backend.agents.sourcing_pydantic import prefetch_all_sourcing_signals, sourcing_agent
     from backend.services.llm_guardrail_service import guardrail_service
     from backend.services.notification_service import notification_service
+    from backend.services.sanitizer_service import sanitizer_service
 except ImportError:
     from agents.analytics_pydantic import analytics_agent  # pyrefly: ignore[missing-import]  # type: ignore
     from agents.critic_pydantic import critic_agent  # pyrefly: ignore[missing-import]  # type: ignore
@@ -45,6 +46,7 @@ except ImportError:
     from agents.sourcing_pydantic import prefetch_all_sourcing_signals, sourcing_agent  # pyrefly: ignore[missing-import]  # type: ignore
     from services.llm_guardrail_service import guardrail_service  # pyrefly: ignore[missing-import]  # type: ignore
     from services.notification_service import notification_service  # pyrefly: ignore[missing-import]  # type: ignore
+    from services.sanitizer_service import sanitizer_service  # pyrefly: ignore[missing-import]  # type: ignore
 
 
 log = structlog.get_logger(__name__)
@@ -79,6 +81,23 @@ def _serialize(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_serialize(item) for item in obj]
     return obj
+
+
+def _sanitize_prompt_input(value: Any) -> str:
+    """Serializes dicts/lists to JSON or str and sanitizes prompt-injection payloads."""
+    if value is None:
+        return ""
+    serialized = _serialize(value)
+    if isinstance(serialized, (dict, list)):
+        try:
+            import json
+            raw_text = json.dumps(serialized, ensure_ascii=False, default=str)
+        except Exception:
+            raw_text = str(serialized)
+    else:
+        raw_text = str(serialized)
+    cleaned, _ = sanitizer_service.sanitize(raw_text)
+    return cleaned
 
 
 def _trim_candidates_for_critic(candidates: List[Any]) -> List[Dict[str, Any]]:
@@ -256,7 +275,9 @@ class AgentOrchestrator:
     ) -> Dict[str, Any]:
         """Runs the complete 5/6-stage recruitment swarm pipeline."""
         pipeline_start = datetime.now(timezone.utc)
-        log.info("unified_pipeline_started", industry=industry, location=location)
+        safe_industry = _sanitize_prompt_input(industry)
+        safe_location = _sanitize_prompt_input(location)
+        log.info("unified_pipeline_started", industry=safe_industry, location=safe_location)
         results: Dict[str, Any] = {"stages": {}}
 
         if not self.tenant_id or str(self.tenant_id).strip().lower() == "default":
@@ -282,18 +303,18 @@ class AgentOrchestrator:
                     discovery_res, prefetched_signals = await asyncio.gather(
                         self._run_agent_with_retry(
                             discovery_agent,
-                            f"Identify leads and extract JD for {industry} in {location}",
+                            f"Identify leads and extract JD for {safe_industry} in {safe_location}",
                             deps=deps,
                             model=dynamic_model,
                             model_settings={"max_tokens": 1200},
                         ),
-                        prefetch_all_sourcing_signals(deps, f"{industry} {location}"),
+                        prefetch_all_sourcing_signals(deps, f"{safe_industry} {safe_location}"),
                     )
-                    prefetched_block = f"\n\nPre-fetched candidate signals:\n{prefetched_signals}"
+                    prefetched_block = f"\n\nPre-fetched candidate signals:\n{_sanitize_prompt_input(prefetched_signals)}"
                 else:
                     discovery_res = await self._run_agent_with_retry(
                         discovery_agent,
-                        f"Identify leads and extract JD for {industry} in {location}",
+                        f"Identify leads and extract JD for {safe_industry} in {safe_location}",
                         deps=deps,
                         model=dynamic_model,
                         model_settings={"max_tokens": 1200},
@@ -306,10 +327,11 @@ class AgentOrchestrator:
                 broadcast_signal("Agent 'sourcing' initiated node discovery...", "agent_start", self.tenant_id)
                 disc_data = _get_agent_data(discovery_res)
                 extracted_jd_data = self._format_jd_context(disc_data)
+                safe_jd_data = _sanitize_prompt_input(extracted_jd_data)
 
                 sourcing_res = await self._run_agent_with_retry(
                     sourcing_agent,
-                    f"Find candidates for {industry} roles in {location} matching constraints: {extracted_jd_data}{prefetched_block}",
+                    f"Find candidates for {safe_industry} roles in {safe_location} matching constraints: {safe_jd_data}{prefetched_block}",
                     deps=deps,
                     model=dynamic_model,
                     model_settings={"max_tokens": 1200},
@@ -326,13 +348,14 @@ class AgentOrchestrator:
                     )
                     discovery_res = await self._run_agent_with_retry(
                         discovery_agent,
-                        f"Extract JD for {industry} in {location}. PREVIOUS EXTRACTION YIELDED NO CANDIDATES. LOOSEN THE 'MUST-HAVE' CONSTRAINTS IMMEDIATELY.",
+                        f"Extract JD for {safe_industry} in {safe_location}. PREVIOUS EXTRACTION YIELDED NO CANDIDATES. LOOSEN THE 'MUST-HAVE' CONSTRAINTS IMMEDIATELY.",
                         deps=deps,
                         model=dynamic_model,
                         model_settings={"max_tokens": 1200},
                     )
                     disc_data = _get_agent_data(discovery_res)
                     extracted_jd_data = self._format_jd_context(disc_data)
+                    safe_jd_data = _sanitize_prompt_input(extracted_jd_data)
 
                     broadcast_signal(
                         "Agent 'sourcing' re-initiating hunt with loosened market constraints...",
@@ -341,7 +364,7 @@ class AgentOrchestrator:
                     )
                     sourcing_res = await self._run_agent_with_retry(
                         sourcing_agent,
-                        f"Find candidates for {industry} roles in {location} matching loosened constraints: {extracted_jd_data}{prefetched_block}",
+                        f"Find candidates for {safe_industry} roles in {safe_location} matching loosened constraints: {safe_jd_data}{prefetched_block}",
                         deps=deps,
                         model=dynamic_model,
                         model_settings={"max_tokens": 1200},
@@ -356,11 +379,13 @@ class AgentOrchestrator:
                 results["stages"]["sourcing"] = _serialize(sourc_data)
 
                 broadcast_signal("Agent 'critic' initiating logic audit...", "agent_start", self.tenant_id)
-                role_desc = self._extract_role_summary(disc_data, industry)
+                role_desc = self._extract_role_summary(disc_data, safe_industry)
+                safe_role_desc = _sanitize_prompt_input(role_desc)
                 sanitized_candidates = _trim_candidates_for_critic(candidates)
+                safe_critic_candidates = _sanitize_prompt_input(sanitized_candidates)
                 audit_res = await self._run_agent_with_retry(
                     critic_agent,
-                    f"Audit these trimmed candidates for role '{role_desc}': {sanitized_candidates}",
+                    f"Audit these trimmed candidates for role '{safe_role_desc}': {safe_critic_candidates}",
                     deps=deps,
                     model=dynamic_model,
                     model_settings={"max_tokens": 1200},
@@ -379,7 +404,7 @@ class AgentOrchestrator:
                     await self._persist_sourcing_and_ledger(
                         candidates=candidates,
                         audit_data=_serialize(c_data),
-                        role_title=role_desc,
+                        role_title=safe_role_desc,
                     )
 
                 # 4, 5 & 6. Concurrent Post-Sourcing Execution (Outreach gated by critic + Analytics + Optional Screening)
@@ -387,6 +412,7 @@ class AgentOrchestrator:
                     c.get("full_name") or c.get("name") if isinstance(c, dict) else getattr(c, "full_name", str(c))
                     for c in candidates[:5]
                 ]
+                safe_candidate_names = _sanitize_prompt_input(candidate_names)
 
                 post_keys: List[str] = []
                 post_tasks: List[Any] = []
@@ -397,7 +423,7 @@ class AgentOrchestrator:
                     post_tasks.append(
                         self._run_agent_with_retry(
                             outreach_agent,
-                            f"Draft personalized outreach for these candidates: {candidate_names} for role {role_desc}",
+                            f"Draft personalized outreach for these candidates: {safe_candidate_names} for role {safe_role_desc}",
                             deps=deps,
                             model=dynamic_model,
                             model_settings={"max_tokens": 1200},
@@ -416,10 +442,11 @@ class AgentOrchestrator:
 
                 broadcast_signal("Agent 'analytics' generating run report...", "agent_start", self.tenant_id)
                 post_keys.append("analytics")
+                safe_audit_payload = _sanitize_prompt_input(_serialize(c_data))
                 post_tasks.append(
                     self._run_agent_with_retry(
                         analytics_agent,
-                        f"Generate report for this run: role={role_desc}, sourced_candidates={len(candidates)}, audit={_serialize(c_data)}",
+                        f"Generate report for this run: role={safe_role_desc}, sourced_candidates={len(candidates)}, audit={safe_audit_payload}",
                         deps=deps,
                         model=dynamic_model,
                         model_settings={"max_tokens": 1200},
@@ -432,7 +459,7 @@ class AgentOrchestrator:
                     post_tasks.append(
                         self._run_agent_with_retry(
                             screening_agent,
-                            f"Generate interview guide and benchmark questions for role: {role_desc}. Requisition context: {extracted_jd_data}",
+                            f"Generate interview guide and benchmark questions for role: {safe_role_desc}. Requisition context: {safe_jd_data}",
                             deps=deps,
                             model=dynamic_model,
                             model_settings={"max_tokens": 1500},
@@ -496,7 +523,7 @@ class AgentOrchestrator:
             elif phase == "sourcing":
                 return await self.run_sourcing_phase(
                     deps,
-                    job_description=kwargs.get("job_description", ""),
+                    job_description=kwargs.get("job_description") or kwargs.get("approved_jd") or "",
                     location=kwargs.get("location", ""),
                     mode=mode,
                     mock_mode=mock_mode,
@@ -534,21 +561,28 @@ class AgentOrchestrator:
         results: Dict[str, Any] = {}
         dynamic_model = get_pydantic_model(deps=deps)
 
-        context_parts = []
-        if job_title:
-            context_parts.append(f"for {job_title}")
-        if industry:
-            context_parts.append(f"in {industry} sector")
-        if location:
-            context_parts.append(f"in {location}")
-        if work_mode:
-            context_parts.append(f"({work_mode} mode)")
-        if target_company:
-            context_parts.append(f"targeting company: {target_company}")
-        if skills:
-            context_parts.append(f"requiring {skills}")
+        safe_industry = _sanitize_prompt_input(industry)
+        safe_location = _sanitize_prompt_input(location)
+        safe_work_mode = _sanitize_prompt_input(work_mode) if work_mode else ""
+        safe_target_company = _sanitize_prompt_input(target_company) if target_company else ""
+        safe_skills = _sanitize_prompt_input(skills) if skills else ""
+        safe_job_title = _sanitize_prompt_input(job_title) if job_title else ""
 
-        full_context = " ".join(context_parts)
+        context_parts = []
+        if safe_job_title:
+            context_parts.append(f"for {safe_job_title}")
+        if safe_industry:
+            context_parts.append(f"in {safe_industry} sector")
+        if safe_location:
+            context_parts.append(f"in {safe_location}")
+        if safe_work_mode:
+            context_parts.append(f"({safe_work_mode} mode)")
+        if safe_target_company:
+            context_parts.append(f"targeting company: {safe_target_company}")
+        if safe_skills:
+            context_parts.append(f"requiring {safe_skills}")
+
+        full_context = _sanitize_prompt_input(" ".join(context_parts))
         broadcast_signal(f"Discovery Agent scanning {full_context}...", "agent_start", self.tenant_id)
         broadcast_signal(f"Synthesizing Hyper-Sourcing results {full_context}...", "agent_start", self.tenant_id)
 
@@ -571,7 +605,7 @@ class AgentOrchestrator:
             await notification_service.notify_recruiter_action(
                 tenant_id=deps.tenant_id,
                 action_type="Hyper-Sourcing Ready",
-                job_title=job_title or f"{industry} Role",
+                job_title=safe_job_title or f"{safe_industry} Role",
                 details=f"The Discovery Agent has completed a deep-dive scan {full_context}.",
             )
 
@@ -586,16 +620,20 @@ class AgentOrchestrator:
         mock_mode: bool = False,
     ) -> Dict[str, Any]:
         """Phase 2: Talent Sourcing with Concurrent Pre-Fetch and Trimmed Critic Audit."""
+        safe_job_description = _sanitize_prompt_input(job_description)
+        safe_location = _sanitize_prompt_input(location)
         dynamic_model = get_pydantic_model(deps=deps)
         is_sourcing_mocked = mock_mode or hasattr(sourcing_agent.run, "_mock_name")
         prefetched_block = ""
         if not is_sourcing_mocked:
-            prefetched_signals = await prefetch_all_sourcing_signals(deps, f"{job_description or ''} {location or ''}".strip())
-            prefetched_block = f"\n\nPre-fetched candidate signals:\n{prefetched_signals}"
+            prefetched_signals = await prefetch_all_sourcing_signals(
+                deps, f"{safe_job_description} {safe_location}".strip()
+            )
+            prefetched_block = f"\n\nPre-fetched candidate signals:\n{_sanitize_prompt_input(prefetched_signals)}"
 
         res = await self._run_agent_with_retry(
             sourcing_agent,
-            f"Find candidates for: {job_description}{prefetched_block}",
+            f"Find candidates for: {safe_job_description}{prefetched_block}",
             deps=deps,
             model=dynamic_model,
         )
@@ -604,10 +642,11 @@ class AgentOrchestrator:
 
         candidates = self._extract_candidates(s_data)
         sanitized_candidates = _trim_candidates_for_critic(candidates)
+        safe_critic_candidates = _sanitize_prompt_input(sanitized_candidates)
 
         audit = await self._run_agent_with_retry(
             critic_agent,
-            f"Audit these trimmed candidates: {sanitized_candidates}",
+            f"Audit these trimmed candidates: {safe_critic_candidates}",
             deps=deps,
             model=dynamic_model,
         )
@@ -619,7 +658,7 @@ class AgentOrchestrator:
             await self._persist_sourcing_and_ledger(
                 candidates=candidates,
                 audit_data=_serialize(a_data),
-                role_title=(job_description or "Target Role")[:80],
+                role_title=(safe_job_description or "Target Role")[:80],
             )
 
         if mode == "copilot":
@@ -627,7 +666,7 @@ class AgentOrchestrator:
             await notification_service.notify_recruiter_action(
                 tenant_id=deps.tenant_id,
                 action_type="Candidates Ready",
-                job_title=(job_description or "Target Role")[:50],
+                job_title=(safe_job_description or "Target Role")[:50],
                 details=f"Found {cand_count} candidates.",
             )
         return {"sourcing": sourcing_res}
@@ -653,11 +692,14 @@ class AgentOrchestrator:
             c.get("full_name") or c.get("name") if isinstance(c, dict) else getattr(c, "full_name", str(c))
             for c in approved_candidates
         ]
+        safe_candidate_names = _sanitize_prompt_input(candidate_names)
         job_title = job.get("title") or job.get("role") or "Target Role"
+        safe_job_title = _sanitize_prompt_input(job_title)
+        safe_job_desc = _sanitize_prompt_input(job.get("description") or job.get("approved_jd") or "")
 
         out_task = self._run_agent_with_retry(
             outreach_agent,
-            f"Draft outreach for {candidate_names} for role {job_title}",
+            f"Draft outreach for {safe_candidate_names} for role {safe_job_title}",
             deps=deps,
             model=dynamic_model,
             model_settings={"max_tokens": 800},
@@ -666,7 +708,7 @@ class AgentOrchestrator:
         if enable_screening and job:
             scr_task = self._run_agent_with_retry(
                 screening_agent,
-                f"Generate interview guide for role: {job_title}. Description: {job.get('description', '')}",
+                f"Generate interview guide for role: {safe_job_title}. Description: {safe_job_desc}",
                 deps=deps,
                 model=dynamic_model,
                 model_settings={"max_tokens": 1500},
@@ -735,9 +777,7 @@ class AgentOrchestrator:
                     job_uuid = None
 
             audit_passed = audit_data.get("passed", True) if isinstance(audit_data, dict) else True
-            audit_rec = (audit_data.get("recommendation") if isinstance(audit_data, dict) else None) or (
-                "APPROVED" if audit_passed else "PENDING_REVIEW"
-            )
+            audit_rec = (audit_data.get("recommendation") if isinstance(audit_data, dict) else None) or "PENDING_REVIEW"
 
             async with AsyncSessionLocal() as session:
                 for c in candidates:

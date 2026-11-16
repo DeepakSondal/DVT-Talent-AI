@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.middleware.rate_limit import enforce_endpoint_rate_limit
+from api.middleware.rate_limit import enforce_endpoint_rate_limit, get_real_client_ip
 from api.routes.auth import get_current_user
 from config import settings
 from db.models import (
@@ -50,9 +50,13 @@ def _resolve_safe_return_url(raw_url: Optional[str], default_path: str) -> str:
         return cleaned
     raise HTTPException(status_code=400, detail="Invalid return URL: must match application frontend origin")
 
-DODO_PAYMENTS_API_KEY = os.getenv("DODO_PAYMENTS_API_KEY", "")
-DODO_ENVIRONMENT = os.getenv("DODO_PAYMENTS_ENVIRONMENT", "test")
-DODO_BASE_URL = "https://api.dodopayments.com" if DODO_ENVIRONMENT == "live" else "https://test.dodopayments.com"
+def _get_dodo_api_key() -> str:
+    return (getattr(settings, "dodo_payments_api_key", "") or os.getenv("DODO_PAYMENTS_API_KEY", "")).strip()
+
+
+def _get_dodo_base_url() -> str:
+    env = (getattr(settings, "dodo_payments_environment", "") or os.getenv("DODO_PAYMENTS_ENVIRONMENT", "test")).strip().lower()
+    return "https://api.dodopayments.com" if env == "live" else "https://test.dodopayments.com"
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
@@ -158,13 +162,15 @@ async def create_checkout(
         _resolve_safe_return_url(req.cancel_url, "/dashboard/billing")
     
     # If Dodo API key is configured, create real checkout session via Dodo Payments API
-    if DODO_PAYMENTS_API_KEY:
+    dodo_api_key = _get_dodo_api_key()
+    dodo_base_url = _get_dodo_base_url()
+    if dodo_api_key:
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
-                    f"{DODO_BASE_URL}/checkouts",
+                    f"{dodo_base_url}/checkouts",
                     headers={
-                        "Authorization": f"Bearer {DODO_PAYMENTS_API_KEY}",
+                        "Authorization": f"Bearer {dodo_api_key}",
                         "Content-Type": "application/json"
                     },
                     json={
@@ -222,7 +228,9 @@ async def create_portal(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    portal_url = f"{DODO_BASE_URL}/portal" if DODO_PAYMENTS_API_KEY else f"{settings.frontend_url}/dashboard/billing"
+    dodo_api_key = _get_dodo_api_key()
+    dodo_base_url = _get_dodo_base_url()
+    portal_url = f"{dodo_base_url}/portal" if dodo_api_key else f"{settings.frontend_url}/dashboard/billing"
     return {"portal_url": portal_url, "provider": "dodopayments"}
 
 
@@ -251,11 +259,14 @@ async def _process_webhook_sync(req: WebhookSyncRequest, db: AsyncSession) -> Di
         log.warning("dodo_sync_tenant_not_found", email=req.customer_email)
         return {"status": "ignored", "reason": "Tenant not identified"}
 
-    # Idempotency check: skip already processed payment or subscription IDs
+    # Idempotency check: skip already processed payment or subscription IDs scoped to tenant
     dedup_key = req.payment_id or req.subscription_id
     if dedup_key:
         existing_tx = await db.execute(
-            select(CreditTransaction).where(CreditTransaction.description.contains(dedup_key))
+            select(CreditTransaction).where(
+                CreditTransaction.tenant_id == tenant.id,
+                CreditTransaction.description.contains(f"[{dedup_key}]"),
+            )
         )
         if existing_tx.scalar_one_or_none():
             log.info("dodo_sync_duplicate_skipped", payment_id=dedup_key)
@@ -315,13 +326,13 @@ async def sync_dodo_webhook(
 _REPLAYED_WEBHOOK_IDS: Dict[str, float] = {}
 
 
-def _record_and_check_webhook_replay(webhook_id: str, now_ts: float) -> bool:
+async def _record_and_check_webhook_replay(webhook_id: str, now_ts: float) -> bool:
     """Returns True if webhook_id was already seen within the replay window."""
     try:
         from services.redis_service import get_redis_client
         r = get_redis_client()
         if r is not None:
-            added = r.set(f"dodo_webhook_seen:{webhook_id}", "1", nx=True, ex=600)
+            added = await r.set(f"dodo_webhook_seen:{webhook_id}", "1", nx=True, ex=600)
             return not bool(added)
     except Exception as exc:
         log.debug("webhook_replay_redis_fallback", error=str(exc))
@@ -376,6 +387,16 @@ async def dodo_webhook(
     """Direct webhook endpoint for Dodo Payments (Standard Webhook payload)."""
     import time
 
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="billing_webhook_ip",
+        identifier=client_ip,
+        limit=60,
+        window_seconds=60,
+        detail="Webhook rate limit exceeded.",
+    )
+
     dodo_webhook_key = getattr(settings, "dodo_payments_webhook_key", "") or os.getenv("DODO_PAYMENTS_WEBHOOK_KEY", "")
     if not dodo_webhook_key:
         raise HTTPException(status_code=503, detail="Webhook verification key is not configured")
@@ -405,7 +426,7 @@ async def dodo_webhook(
     ):
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
-    if _record_and_check_webhook_replay(webhook_id, now_ts):
+    if await _record_and_check_webhook_replay(webhook_id, now_ts):
         raise HTTPException(status_code=400, detail="Replayed webhook-id rejected")
 
     try:

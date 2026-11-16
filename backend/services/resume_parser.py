@@ -219,11 +219,15 @@ class ResumeParserService:
         clean_text = re.sub(r"<\s*script[^>]*>.*?<\s*/\s*script\s*>", "", clean_text, flags=re.IGNORECASE | re.DOTALL)
         clean_text = re.sub(r"<\s*/?\s*script[^>]*>", "", clean_text, flags=re.IGNORECASE)
         try:
-            from services.sanitizer_service import sanitizer_service
+            try:
+                from services.sanitizer_service import sanitizer_service
+            except ImportError:
+                from backend.services.sanitizer_service import sanitizer_service
             sanitized_result = sanitizer_service.sanitize(clean_text)
             clean_text = sanitized_result[0] if isinstance(sanitized_result, tuple) else sanitized_result
         except Exception as exc:
-            logger.debug("sanitizer_fallback_skipped", error=str(exc))
+            logger.error("prompt_sanitization_failed_aborting", error=str(exc), filename=filename)
+            raise RuntimeError("Prompt sanitization failed; aborting resume processing") from exc
         return clean_text[:cls.MAX_EXTRACTED_CHARS]
 
     @classmethod

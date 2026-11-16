@@ -103,8 +103,14 @@ manager = ConnectionManager()
 def _extract_ws_token(websocket: WebSocket) -> str | None:
     """Extract JWT from httpOnly cookie or Authorization header; never from URL query params."""
     cookie_token = websocket.cookies.get("dvt_token")
-    if cookie_token:
-        return cookie_token
+    if isinstance(cookie_token, str) and cookie_token:
+        token = cookie_token.strip()
+        if token.lower() == "bearer":
+            token = ""
+        elif token.lower().startswith("bearer "):
+            token = token[7:].strip()
+        if token:
+            return token
     auth_header = websocket.headers.get("authorization", "")
     if auth_header.lower().startswith("bearer "):
         return auth_header[7:].strip() or None

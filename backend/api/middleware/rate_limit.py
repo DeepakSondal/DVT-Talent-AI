@@ -19,10 +19,20 @@ _PUBLIC_IP_ENFORCED_PREFIXES = (
     "/api/v1/auth/login",
     "/api/v1/auth/register",
     "/api/v1/auth/sso",
+    "/api/v1/auth/forgot-password",
+    "/api/v1/auth/reset-password",
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/callback",
+    "/api/v1/auth/send-otp",
+    "/api/v1/auth/link-oauth",
+    "/api/v1/billing/webhook",
     "/api/v1/webhooks",
     "/api/v1/track",
     "/api/v1/invite/validate",
     "/api/v1/invite/accept",
+    "/api/v1/team/invite/validate",
+    "/api/v1/team/invite/accept",
+    "/api/v1/team/invitations/",
 )
 
 

@@ -13,6 +13,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -31,9 +32,12 @@ from db.models import (
     User,
     get_db,
 )
+from services.compliance_service import compliance_service
+from services.email_service import email_service
 from services.privacy_service import is_domain_or_company_blocked
 from services.resume_parser import ResumeParserService
 
+log = structlog.get_logger(__name__)
 router = APIRouter()
 
 
@@ -692,6 +696,16 @@ async def apply_to_job(
     # Compute snapshot score
     dimensions = compute_career_ops_score(cand, job, company_name)
 
+    notice_sent_at = datetime.now(timezone.utc)
+    updated_meta, notice_details = compliance_service.create_aedt_notice_record(
+        existing_meta=cand.meta_data,
+        sent_at=notice_sent_at,
+        required_business_days=10,
+        method="candidate_portal_apply",
+        job_id=str(job.id),
+    )
+    cand.meta_data = updated_meta
+
     application = JobCandidate(
         job_id=job.id,
         candidate_id=cand.id,
@@ -705,11 +719,44 @@ async def apply_to_job(
     db.add(application)
     await db.commit()
 
+    email_sent = False
+    if cand.email:
+        try:
+            email_sent = await email_service.send_email(
+                email_id=str(uuid.uuid4()),
+                to_address=cand.email,
+                subject=f"AEDT Notice for your {job.title} application at {company_name}",
+                body=(
+                    f"Hello {cand.first_name or 'Candidate'},\n\n"
+                    f"Thank you for applying to {job.title} at {company_name}. "
+                    f"Under NYC Local Law 144, please note that an Automated Employment Decision Tool (AEDT) "
+                    f"may be used in connection with evaluating your candidacy.\n\n"
+                    f"Notice Sent At: {notice_details['aedt_notice_sent_at']}\n"
+                    f"Automated Screening Eligible After (10 business days): {notice_details['screening_eligible_after']}\n"
+                    f"Bias Audit Summary: /api/v1/compliance/bias-audit-summary\n\n"
+                    f"You may request an alternative selection process or reasonable accommodation."
+                ),
+                tenant_id=job.tenant_id,
+            )
+        except Exception as exc:
+            log.warning("portal_apply_aedt_notice_email_failed", error=str(exc), candidate_id=str(cand.id))
+
     return {
         "status": "success",
         "message": f"Successfully applied to {job.title} at {company_name}",
         "global_score": dimensions.global_score,
         "recommendation": dimensions.recommendation,
+        "aedt_notice": {
+            **notice_details,
+            "email_notification_sent": bool(email_sent),
+            "qualifications_evaluated": ["skills", "experience_years", "role_alignment", "compensation_realism"],
+            "bias_audit_summary_url": "/api/v1/compliance/bias-audit-summary",
+            "alternative_process_notice": (
+                "An Automated Employment Decision Tool (AEDT) may be used to evaluate your application. "
+                "Automated screening is eligible 10 business days after notice under NYC Local Law 144. "
+                "You may request an alternative selection process or accommodation."
+            ),
+        },
     }
 
 

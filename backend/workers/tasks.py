@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 
 import redis
 import structlog
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import create_engine, text
 
 from agents.analytics_pydantic import analytics_agent
@@ -25,7 +26,53 @@ from agents.screening_pydantic import screening_agent
 from agents.sourcing_pydantic import sourcing_agent
 from config import settings
 from services.resume_parser import ResumeParserService
+from services.sanitizer_service import sanitizer_service
 from workers.celery_app import celery_app
+
+
+def _sanitize_recursive(value: Any) -> Any:
+    """Recursively sanitizes strings inside dicts/lists via sanitizer_service."""
+    if isinstance(value, str):
+        cleaned, _ = sanitizer_service.sanitize(value)
+        return cleaned
+    if isinstance(value, list):
+        return [_sanitize_recursive(item) for item in value]
+    if isinstance(value, dict):
+        return {k: _sanitize_recursive(v) for k, v in value.items()}
+    return value
+
+
+async def _mark_agent_task_failed(task_id: str, error_message: str) -> None:
+    """Mark an AgentTask row FAILED cleanly on soft time limit or fatal termination."""
+    from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    try:
+        task_uuid = uuid.UUID(str(task_id))
+    except (ValueError, TypeError):
+        return
+    async with AsyncSessionLocal() as db:
+        task = await db.get(AgentTask, task_uuid)
+        if task:
+            task.status = AgentTaskStatus.FAILED
+            task.error_message = error_message[:500]
+            await db.commit()
+
+
+async def _mark_agent_task_failed_by_celery_id(celery_task_id: Optional[str], error_message: str) -> None:
+    """Mark an AgentTask row FAILED by celery_task_id when task UUID is not in task kwargs."""
+    if not celery_task_id:
+        return
+    from sqlalchemy import select
+
+    from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            select(AgentTask).where(AgentTask.celery_task_id == str(celery_task_id)).limit(1)
+        )
+        task = res.scalar_one_or_none()
+        if task:
+            task.status = AgentTaskStatus.FAILED
+            task.error_message = error_message[:500]
+            await db.commit()
 
 log = structlog.get_logger(__name__)
 
@@ -121,17 +168,35 @@ def run_agent_task(self, agent_name: str, params: Dict[str, Any] = None, tenant_
         # Use httpx client for agent deps
         async def _run():
             async with httpx.AsyncClient() as client:
-                deps = AgentDeps(http_client=client, tenant_id=tenant_id)
+                deps = AgentDeps(http_client=client, tenant_id=safe_tenant_id)
                 # Run the Pydantic AI agent
-                result = await agent.run(f"Process task with params: {json.dumps(params)}", deps=deps)
+                safe_params, _ = sanitizer_service.sanitize(json.dumps(params, default=str))
+                result = await agent.run(f"Process task with params: {safe_params}", deps=deps)
                 return result.output.model_dump()
 
         import httpx
         result = asyncio.run(_run())
             
-        broadcast_signal(f"Agent '{agent_name}' completed sequence.", "agent_success", tenant_id=tenant_id)
+        broadcast_signal(f"Agent '{agent_name}' completed sequence.", "agent_success", tenant_id=safe_tenant_id)
         log.info("celery_task_completed", task="run_agent_task", agent=agent_name)
         return result
+    except SoftTimeLimitExceeded as exc:
+        log.error("celery_task_soft_time_limit", task="run_agent_task", agent=agent_name, error=str(exc))
+        task_id_hint = params.get("task_id") if isinstance(params, dict) else None
+        try:
+            if task_id_hint:
+                asyncio.run(_mark_agent_task_failed(str(task_id_hint), "Task exceeded soft execution time limit."))
+            else:
+                asyncio.run(
+                    _mark_agent_task_failed_by_celery_id(
+                        getattr(getattr(self, "request", None), "id", None),
+                        "Task exceeded soft execution time limit.",
+                    )
+                )
+        except Exception as mark_exc:
+            log.warning("mark_agent_task_failed_error", error=str(mark_exc))
+        broadcast_signal(f"Agent '{agent_name}' exceeded execution time limit.", "agent_error", tenant_id=safe_tenant_id)
+        return {"status": "failed", "agent": agent_name, "error": "SoftTimeLimitExceeded"}
     except Exception as exc:
         log.error("celery_task_failed", task="run_agent_task", agent=agent_name, error=str(exc))
         raise self.retry(exc=exc, countdown=60) from exc
@@ -147,17 +212,32 @@ def run_full_autonomous_pipeline(
 ) -> Dict[str, Any]:
     """Run the complete end-to-end 5-agent pipeline"""
     safe_tenant_id = _require_tenant_uuid(tenant_id)
-    log.info("celery_task_started", task="full_pipeline", industry=industry, tenant_id=safe_tenant_id)
+    safe_industry, _ = sanitizer_service.sanitize(str(industry or ""))
+    safe_location, _ = sanitizer_service.sanitize(str(location or ""))
+    log.info("celery_task_started", task="full_pipeline", industry=safe_industry, tenant_id=safe_tenant_id)
     try:
         orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
-        broadcast_signal(f"Initiating full swarm for {industry} in {location}...", "swarm_start", tenant_id=safe_tenant_id)
+        broadcast_signal(f"Initiating full swarm for {safe_industry} in {safe_location}...", "swarm_start", tenant_id=safe_tenant_id)
         result = asyncio.run(orchestrator.run_full_pipeline(
-            industry=industry,
-            location=location,
+            industry=safe_industry,
+            location=safe_location,
             mock_mode=mock_mode
         ))
         log.info("celery_task_completed", task="full_pipeline")
         return result
+    except SoftTimeLimitExceeded as exc:
+        log.error("celery_task_soft_time_limit", task="full_pipeline", error=str(exc))
+        try:
+            asyncio.run(
+                _mark_agent_task_failed_by_celery_id(
+                    getattr(getattr(self, "request", None), "id", None),
+                    "Pipeline exceeded soft execution time limit.",
+                )
+            )
+        except Exception as mark_exc:
+            log.warning("mark_agent_task_failed_error", error=str(mark_exc))
+        broadcast_signal("Full swarm exceeded execution time limit.", "agent_error", tenant_id=safe_tenant_id)
+        return {"status": "failed", "error": "SoftTimeLimitExceeded"}
     except Exception as exc:
         log.error("celery_task_failed", task="full_pipeline", error=str(exc))
         raise self.retry(exc=exc, countdown=300) from exc
@@ -213,7 +293,9 @@ def analyze_resume_task(
             import httpx
             async with httpx.AsyncClient() as client:
                 deps = AgentDeps(http_client=client, tenant_id=resolved_tenant_id)
-                prompt = f"Analyze this resume against the JD: {job_description or 'Software Engineer'}. Resume text: {anonymized_text}"
+                safe_jd, _ = sanitizer_service.sanitize(str(job_description or "Software Engineer"))
+                safe_resume, _ = sanitizer_service.sanitize(str(anonymized_text or ""))
+                prompt = f"Analyze this resume against the JD: {safe_jd}. Resume text: {safe_resume}"
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
                 
@@ -283,7 +365,9 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
             import httpx
             async with httpx.AsyncClient() as client:
                 deps = AgentDeps(http_client=client, tenant_id=resolved_tenant_id)
-                prompt = f"Score this candidate against JD: {jd_text}. Candidate info: {redacted_resume_text}"
+                safe_jd, _ = sanitizer_service.sanitize(str(jd_text or ""))
+                safe_resume, _ = sanitizer_service.sanitize(str(redacted_resume_text or ""))
+                prompt = f"Score this candidate against JD: {safe_jd}. Candidate info: {safe_resume}"
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
 
@@ -324,7 +408,9 @@ def source_candidates_for_job(self, job_id: str, skills: list, location: Optiona
             import httpx
             async with httpx.AsyncClient() as client:
                 deps = AgentDeps(http_client=client, tenant_id=safe_tenant_id)
-                prompt = f"Source qualified talent for Job ID {job_id}. Required skills: {', '.join(skills or [])}. Location: {location or 'Remote'}."
+                safe_skills, _ = sanitizer_service.sanitize(", ".join(str(s) for s in (skills or [])))
+                safe_location, _ = sanitizer_service.sanitize(str(location or "Remote"))
+                prompt = f"Source qualified talent for Job ID {job_id}. Required skills: {safe_skills}. Location: {safe_location}."
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
 
@@ -362,10 +448,16 @@ def send_campaign_emails(self, campaign_id: str, tenant_id: Optional[str] = None
 @celery_app.task(bind=True, name="workers.tasks.copilot_discovery_task", max_retries=5)
 def copilot_discovery_task(self, task_id: str, industry: str, location: str, tenant_id: str):
     from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    safe_tenant_id = _require_tenant_uuid(tenant_id)
+    safe_industry, _ = sanitizer_service.sanitize(str(industry or ""))
+    safe_location, _ = sanitizer_service.sanitize(str(location or ""))
+
     async def _run():
-        orchestrator = AgentOrchestrator(tenant_id=tenant_id)
+        orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
         try:
-            results = await orchestrator.run_swarm_phase("discovery", mode="copilot", industry=industry, location=location)
+            results = await orchestrator.run_swarm_phase(
+                "discovery", mode="copilot", industry=safe_industry, location=safe_location
+            )
             task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
                 task = await db.get(AgentTask, task_uuid)
@@ -374,7 +466,7 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
                     task.status = AgentTaskStatus.AWAITING_INPUT
                     task.current_checkpoint = "discovery_complete"
                     await db.commit()
-            broadcast_signal("Discovery phase completed.", "agent_success", tenant_id)
+            broadcast_signal("Discovery phase completed.", "agent_success", safe_tenant_id)
         except Exception as e:
             task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
@@ -386,6 +478,14 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
             raise
     try:
         asyncio.run(_run())
+    except SoftTimeLimitExceeded as exc:
+        log.error("celery_task_soft_time_limit", task="copilot_discovery_task", task_id=task_id, error=str(exc))
+        try:
+            asyncio.run(_mark_agent_task_failed(str(task_id), "Task exceeded soft execution time limit."))
+        except Exception as mark_exc:
+            log.warning("mark_agent_task_failed_error", error=str(mark_exc))
+        broadcast_signal("Discovery phase exceeded execution time limit.", "agent_error", safe_tenant_id)
+        return {"status": "failed", "task_id": str(task_id), "error": "SoftTimeLimitExceeded"}
     except Exception as exc:
         # Rate Limit Backoff: 4, 8, 16, 32, 64 seconds
         raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
@@ -393,10 +493,16 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
 @celery_app.task(bind=True, name="workers.tasks.copilot_sourcing_task", max_retries=5)
 def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, tenant_id: str):
     from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    safe_tenant_id = _require_tenant_uuid(tenant_id)
+    safe_approved_jd, _ = sanitizer_service.sanitize(str(approved_jd or ""))
+    safe_location, _ = sanitizer_service.sanitize(str(location or ""))
+
     async def _run():
-        orchestrator = AgentOrchestrator(tenant_id=tenant_id)
+        orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
         try:
-            results = await orchestrator.run_swarm_phase("sourcing", mode="copilot", job_description=approved_jd, location=location)
+            results = await orchestrator.run_swarm_phase(
+                "sourcing", mode="copilot", job_description=safe_approved_jd, location=safe_location
+            )
             task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
                 task = await db.get(AgentTask, task_uuid)
@@ -405,7 +511,7 @@ def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, t
                     task.status = AgentTaskStatus.AWAITING_INPUT
                     task.current_checkpoint = "sourcing_complete"
                     await db.commit()
-            broadcast_signal("Sourcing phase completed.", "agent_success", tenant_id)
+            broadcast_signal("Sourcing phase completed.", "agent_success", safe_tenant_id)
         except Exception as e:
             task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
@@ -417,16 +523,34 @@ def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, t
             raise
     try:
         asyncio.run(_run())
+    except SoftTimeLimitExceeded as exc:
+        log.error("celery_task_soft_time_limit", task="copilot_sourcing_task", task_id=task_id, error=str(exc))
+        try:
+            asyncio.run(_mark_agent_task_failed(str(task_id), "Task exceeded soft execution time limit."))
+        except Exception as mark_exc:
+            log.warning("mark_agent_task_failed_error", error=str(mark_exc))
+        broadcast_signal("Sourcing phase exceeded execution time limit.", "agent_error", safe_tenant_id)
+        return {"status": "failed", "task_id": str(task_id), "error": "SoftTimeLimitExceeded"}
     except Exception as exc:
         raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
 
 @celery_app.task(bind=True, name="workers.tasks.copilot_outreach_task", max_retries=5)
 def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_context: dict, tenant_id: str, enable_screening: bool = False):
     from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+    safe_tenant_id = _require_tenant_uuid(tenant_id)
+    safe_candidates = _sanitize_recursive(approved_candidates)
+    safe_job_context = _sanitize_recursive(job_context)
+
     async def _run():
-        orchestrator = AgentOrchestrator(tenant_id=tenant_id)
+        orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
         try:
-            results = await orchestrator.run_swarm_phase("outreach", mode="copilot", approved_candidates=approved_candidates, job=job_context, enable_screening=enable_screening)
+            results = await orchestrator.run_swarm_phase(
+                "outreach",
+                mode="copilot",
+                approved_candidates=safe_candidates,
+                job=safe_job_context,
+                enable_screening=enable_screening,
+            )
             task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
                 task = await db.get(AgentTask, task_uuid)
@@ -435,7 +559,7 @@ def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_con
                     task.status = AgentTaskStatus.COMPLETED
                     task.current_checkpoint = "pipeline_complete"
                     await db.commit()
-            broadcast_signal("Outreach pipeline completed.", "agent_success", tenant_id)
+            broadcast_signal("Outreach pipeline completed.", "agent_success", safe_tenant_id)
         except Exception as e:
             task_uuid = uuid.UUID(str(task_id))
             async with AsyncSessionLocal() as db:
@@ -447,6 +571,14 @@ def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_con
             raise
     try:
         asyncio.run(_run())
+    except SoftTimeLimitExceeded as exc:
+        log.error("celery_task_soft_time_limit", task="copilot_outreach_task", task_id=task_id, error=str(exc))
+        try:
+            asyncio.run(_mark_agent_task_failed(str(task_id), "Task exceeded soft execution time limit."))
+        except Exception as mark_exc:
+            log.warning("mark_agent_task_failed_error", error=str(mark_exc))
+        broadcast_signal("Outreach pipeline exceeded execution time limit.", "agent_error", safe_tenant_id)
+        return {"status": "failed", "task_id": str(task_id), "error": "SoftTimeLimitExceeded"}
     except Exception as exc:
         raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
 

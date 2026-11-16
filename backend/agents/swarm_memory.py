@@ -22,7 +22,7 @@ try:
 except ImportError:
     from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
 
-PINECONE_API_KEY = getattr(settings, "pinecone_api_key", "mock_pinecone_key")
+PINECONE_API_KEY = getattr(settings, "pinecone_api_key", "") or os.getenv("PINECONE_API_KEY", "")
 PINECONE_HOST = getattr(settings, "pinecone_host", "https://dvt-memory-tree.pinecone.io")
 
 _redis_pool = None
@@ -70,7 +70,7 @@ def _set_cache(query: str, result: str, tenant_id: str, ttl_seconds: int = 86400
 def _has_external_pinecone() -> bool:
     return bool(
         PINECONE_API_KEY
-        and PINECONE_API_KEY != "mock_pinecone_key"
+        and PINECONE_HOST
         and os.getenv("OPENAI_API_KEY")
     )
 

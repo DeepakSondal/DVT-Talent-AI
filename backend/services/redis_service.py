@@ -29,6 +29,7 @@ _circuit_state = {
 
 _redis_client: Optional[aioredis.Redis] = None
 _in_memory_blacklist: Dict[str, float] = {}  # token -> expires_at
+_in_memory_user_revoked_at: Dict[str, Tuple[float, float]] = {}  # user_id -> (revoked_at_ts, expires_at)
 _in_memory_ratelimit: Dict[str, Tuple[int, int, int]] = {}  # key -> (curr_bucket, curr_count, prev_count)
 _ratelimit_lock = asyncio.Lock()
 
@@ -133,10 +134,16 @@ async def is_token_revoked(token: str) -> bool:
         try:
             val = await client.get(f"blacklist:{token}")
             return bool(val)
-        except Exception:
-            # Circuit breaker trip
+        except Exception as exc:
+            # Circuit breaker trip & fail-closed so revoked tokens cannot pass on Redis errors
+            log.warning("redis_revocation_check_failed_failing_closed", error=str(exc))
             _circuit_state["available"] = False
             _circuit_state["last_checked"] = now
+            return True
+
+    if getattr(settings, "is_production", True):
+        log.warning("redis_unavailable_in_production_failing_closed_revocation")
+        return True
 
     return False
 
@@ -161,6 +168,77 @@ async def revoke_token(token: str, expire_seconds: int = 86400) -> None:
         except Exception:
             _circuit_state["available"] = False
             _circuit_state["last_checked"] = now
+
+
+async def revoke_user_tokens(user_id: str, expire_seconds: int = 30 * 86400) -> None:
+    """
+    Revokes all existing tokens issued for user_id at or before the current timestamp.
+    Supports both Redis and in-memory dev/test fallback without requiring a DB migration.
+    """
+    now = time.time()
+    uid = str(user_id)
+    if len(_in_memory_user_revoked_at) > 10000:
+        to_del = [k for k, (_, exp) in _in_memory_user_revoked_at.items() if now >= exp]
+        for k in to_del:
+            del _in_memory_user_revoked_at[k]
+
+    _in_memory_user_revoked_at[uid] = (now, now + expire_seconds)
+
+    client = get_redis_client()
+    if client:
+        try:
+            await client.setex(f"user_revoked_before:{uid}", expire_seconds, repr(now))
+        except Exception:
+            _circuit_state["available"] = False
+            _circuit_state["last_checked"] = now
+
+
+async def is_user_token_revoked(user_id: str, iat: Optional[float]) -> bool:
+    """
+    Returns True if all tokens for user_id issued at or before `revoked_at` were revoked.
+    Fails closed when Redis errors or when Redis is unavailable in production.
+    """
+    now = time.time()
+    uid = str(user_id)
+
+    entry = _in_memory_user_revoked_at.get(uid)
+    if entry:
+        revoked_at, exp = entry
+        if now < exp:
+            if iat is None:
+                return True
+            try:
+                if float(iat) <= revoked_at:
+                    return True
+            except (TypeError, ValueError):
+                return True
+        else:
+            del _in_memory_user_revoked_at[uid]
+
+    client = get_redis_client()
+    if client:
+        try:
+            val = await client.get(f"user_revoked_before:{uid}")
+            if val is not None:
+                revoked_at = float(val)
+                if iat is None:
+                    return True
+                try:
+                    return float(iat) <= revoked_at
+                except (TypeError, ValueError):
+                    return True
+            return False
+        except Exception as exc:
+            log.warning("redis_user_revocation_check_failed_failing_closed", error=str(exc))
+            _circuit_state["available"] = False
+            _circuit_state["last_checked"] = now
+            return True
+
+    if getattr(settings, "is_production", True):
+        log.warning("redis_unavailable_in_production_failing_closed_user_revocation")
+        return True
+
+    return False
 
 
 async def record_rate_limit(

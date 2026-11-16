@@ -17,8 +17,12 @@ from pydantic_ai import Agent
 
 try:
     from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
+    from backend.config import settings
+    from backend.services.sanitizer_service import sanitizer_service
 except ImportError:
     from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
+    from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
+    from services.sanitizer_service import sanitizer_service  # pyrefly: ignore[missing-import]  # type: ignore
 
 class ScreeningQuestion(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -64,12 +68,24 @@ async def generate_screening_guide(
     deps: Optional[AgentDeps] = None
 ) -> ScreeningPlan:
     """Entry point for generating screening questions with answers from a JD."""
-    prompt = f"Generate an interview screening plan with questions and detailed ideal answers for the following Job Description:\nRole: {role_title or 'Target Role'}\n\nJob Description:\n{job_description}"
+    effective_tenant = str((getattr(deps, "tenant_id", None) if deps is not None else tenant_id) or "").strip()
+    if (deps is None or getattr(settings, "is_production", False)) and (
+        not effective_tenant or effective_tenant.lower() == "default"
+    ):
+        raise ValueError("A valid tenant_id is required for generate_screening_guide.")
+
+    safe_role_title, _ = sanitizer_service.sanitize(str(role_title or "Target Role"))
+    safe_job_description, _ = sanitizer_service.sanitize(str(job_description or ""))
+    prompt = (
+        "Generate an interview screening plan with questions and detailed ideal answers for the following Job Description:\n"
+        f"Role: {safe_role_title or 'Target Role'}\n\n"
+        f"Job Description:\n{safe_job_description}"
+    )
     if deps:
         result = await screening_agent.run(prompt, deps=deps)
     else:
         import httpx
         async with httpx.AsyncClient() as client:
-            d = AgentDeps(http_client=client, tenant_id=tenant_id)
+            d = AgentDeps(http_client=client, tenant_id=effective_tenant)
             result = await screening_agent.run(prompt, deps=d)
     return result.output

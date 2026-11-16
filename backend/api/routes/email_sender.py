@@ -28,7 +28,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.middleware.rate_limit import enforce_endpoint_rate_limit
+from api.middleware.rate_limit import enforce_endpoint_rate_limit, get_real_client_ip
 from api.routes.auth import User, get_current_user
 from config import settings
 from db.models import Tenant, get_db
@@ -416,8 +416,19 @@ async def oauth_sender_callback(
     code: str = Query(...),
     state: str = Query(...),
     db: AsyncSession = Depends(get_db),
+    request: Request = None,
 ):
     """Exchanges the OAuth 2.0 authorization code, verifies send capability, and persists encrypted tokens."""
+    if request is not None:
+        client_ip = get_real_client_ip(request)
+        await enforce_endpoint_rate_limit(
+            request,
+            scope="email_oauth_callback_ip",
+            identifier=client_ip,
+            limit=20,
+            window_seconds=60,
+            detail="Too many OAuth callback requests. Please wait a minute.",
+        )
     provider_clean = provider.strip().lower()
     try:
         claims = jwt.decode(state, settings.secret_key, algorithms=[settings.algorithm])

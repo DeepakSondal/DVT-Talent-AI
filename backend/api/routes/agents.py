@@ -14,9 +14,22 @@ from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_
 from api.routes.auth import User, get_current_user
 from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
 from services.llm_guardrail_service import guardrail_service
+from services.sanitizer_service import sanitizer_service
 
 router = APIRouter()
 _BACKGROUND_SWARM_TASKS: set[Any] = set()
+
+
+def _sanitize_input(value: Any) -> Any:
+    """Recursively sanitizes user-supplied free-text values against prompt injection."""
+    if isinstance(value, str):
+        cleaned, _ = sanitizer_service.sanitize(value)
+        return cleaned
+    if isinstance(value, list):
+        return [_sanitize_input(item) for item in value]
+    if isinstance(value, dict):
+        return {k: _sanitize_input(v) for k, v in value.items()}
+    return value
 
 
 async def _enforce_agent_rate_limit(request: Request, current_user: User) -> uuid.UUID:
@@ -88,8 +101,9 @@ async def trigger_agent(
     if trigger.agent not in VALID_AGENTS:
         raise HTTPException(status_code=400, detail=f"Unknown agent. Valid: {VALID_AGENTS}")
 
+    safe_params = _sanitize_input(trigger.params or {})
     from workers.tasks import run_agent_task, safe_dispatch_task
-    dispatched = safe_dispatch_task(run_agent_task, trigger.agent, trigger.params, tenant_id=str(tenant_uuid))
+    dispatched = safe_dispatch_task(run_agent_task, trigger.agent, safe_params, tenant_id=str(tenant_uuid))
     task_id = dispatched.id if dispatched else f"local-{uuid.uuid4().hex[:12]}"
 
     # Log to DB
@@ -98,7 +112,7 @@ async def trigger_agent(
         agent_name=trigger.agent,
         task_type="manual_trigger",
         status=AgentTaskStatus.PENDING,
-        input_data=trigger.params,
+        input_data=safe_params,
         celery_task_id=task_id,
         user_id=current_user.id,
     )
@@ -123,11 +137,13 @@ async def trigger_dag(
     current_user: User = Depends(get_current_user),
 ):
     tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
+    safe_industry = _sanitize_input(industry)
+    safe_location = _sanitize_input(location)
     from agents.orchestrator import AgentOrchestrator
     orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
     if background_tasks:
-        background_tasks.add_task(orchestrator.run_full_swarm, industry=industry, location=location)
-    return {"status": "initiated", "industry": industry, "location": location}
+        background_tasks.add_task(orchestrator.run_full_swarm, industry=safe_industry, location=safe_location)
+    return {"status": "initiated", "industry": safe_industry, "location": safe_location}
 
 
 @router.post("/swarm/run")
@@ -139,17 +155,23 @@ async def run_swarm_pipeline(
     current_user: User = Depends(get_current_user),
 ):
     tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
-    print(f"🚀 [SWARM TRACE] Received initiation request for industry: {config.industry}")
+    safe_industry = _sanitize_input(config.industry)
+    safe_location = _sanitize_input(config.location)
+    print(f"🚀 [SWARM TRACE] Received initiation request for industry: {safe_industry}")
     """Trigger the unified swarm pipeline via native background tasks (No Celery required)"""
     from agents.orchestrator import AgentOrchestrator
     from db.models import AsyncSessionLocal
+
+    safe_input_data = config.model_dump()
+    safe_input_data["industry"] = safe_industry
+    safe_input_data["location"] = safe_location
 
     agent_task = AgentTask(
         tenant_id=tenant_uuid,
         agent_name="swarm",
         task_type="full_pipeline",
         status=AgentTaskStatus.RUNNING,
-        input_data=config.model_dump(),
+        input_data=safe_input_data,
         started_at=datetime.now(timezone.utc),
         user_id=current_user.id,
     )
@@ -161,8 +183,8 @@ async def run_swarm_pipeline(
     async def _run_and_persist():
         orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
         res = await orchestrator.run_full_swarm(
-            industry=config.industry,
-            location=config.location,
+            industry=safe_industry,
+            location=safe_location,
             mock_mode=config.mock_mode,
         )
         async with AsyncSessionLocal() as session:
@@ -186,8 +208,8 @@ async def run_swarm_pipeline(
     if is_celery_broker_available():
         dispatched = safe_dispatch_task(
             run_full_autonomous_pipeline,
-            industry=config.industry,
-            location=config.location,
+            industry=safe_industry,
+            location=safe_location,
             send_emails=config.send_emails,
             mock_mode=config.mock_mode,
             tenant_id=str(tenant_uuid),
@@ -221,10 +243,12 @@ async def fast_sourcing(
 ):
     """Sub-second hybrid vector + multi-keyword candidate sourcing scoped strictly to caller's tenant."""
     tenant_uuid = _require_agent_access(current_user)
+    safe_query = _sanitize_input(req.query)
+    safe_location = _sanitize_input(req.location or "")
     from agents.sourcing_pydantic import fast_hybrid_candidate_search
     candidates = await fast_hybrid_candidate_search(
         tenant_id=str(tenant_uuid),
-        keywords=f"{req.query} {req.location or ''}".strip(),
+        keywords=f"{safe_query} {safe_location}".strip(),
         limit=min(max(1, req.limit), 25),
     )
     return {
@@ -248,18 +272,20 @@ async def run_swarm_phase(
     if phase not in ["discovery", "sourcing", "outreach"]:
         raise HTTPException(status_code=400, detail="Invalid phase")
 
+    safe_params = _sanitize_input(params or {})
+
     from agents.orchestrator import AgentOrchestrator
     orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
     
     import asyncio
-    task = asyncio.create_task(orchestrator.run_swarm_phase(phase, mode=mode, **(params or {})))
+    task = asyncio.create_task(orchestrator.run_swarm_phase(phase, mode=mode, **safe_params))
     _BACKGROUND_SWARM_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_SWARM_TASKS.discard)
 
     fast_candidates: List[Dict[str, Any]] = []
     if phase == "sourcing":
         from agents.sourcing_pydantic import fast_hybrid_candidate_search
-        query_str = (params or {}).get("job_description") or ""
+        query_str = safe_params.get("job_description") or safe_params.get("approved_jd") or ""
         fast_candidates = await fast_hybrid_candidate_search(str(tenant_uuid), query_str, limit=5)
     
     return {
@@ -344,7 +370,9 @@ async def generate_screening_questions(
     current_user: User = Depends(get_current_user),
 ):
     tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
-    if not req.job_description or not req.job_description.strip():
+    safe_jd = _sanitize_input(req.job_description)
+    safe_role_title = _sanitize_input(req.role_title) if req.role_title is not None else None
+    if not safe_jd or not safe_jd.strip():
         raise HTTPException(status_code=400, detail="Job description cannot be empty.")
     
     import httpx
@@ -355,8 +383,8 @@ async def generate_screening_questions(
     async with httpx.AsyncClient() as client:
         deps = AgentDeps(http_client=client, tenant_id=str(tenant_uuid))
         plan = await generate_screening_guide(
-            job_description=req.job_description,
-            role_title=req.role_title,
+            job_description=safe_jd,
+            role_title=safe_role_title,
             tenant_id=str(tenant_uuid),
             deps=deps,
         )

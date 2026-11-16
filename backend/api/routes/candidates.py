@@ -5,6 +5,8 @@ Full candidate lifecycle management with AI scoring
 import base64
 import csv
 import io
+import os
+import re
 import uuid as _uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -35,6 +37,14 @@ from services.resume_parser import ResumeParserService
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
+
+
+def _sanitize_upload_filename(raw_name: Optional[str]) -> str:
+    """Strip directory traversal components and control/quote characters from uploaded filenames."""
+    normalized = (raw_name or "").replace("\x00", "").replace("\\", "/").strip()
+    base = os.path.basename(normalized).strip()
+    cleaned = re.sub(r'[\r\n"<>|:*?]+', "", base).strip().lstrip(".")
+    return cleaned or "resume"
 
 
 class CandidateCreate(BaseModel):
@@ -449,7 +459,7 @@ async def upload_resume(
         detail="Resume upload rate limit exceeded (max 10 per minute).",
     )
 
-    filename = (file.filename or "").strip()
+    filename = _sanitize_upload_filename(file.filename)
     allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".rtf"}
     ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
     if ext not in allowed_exts:
@@ -624,7 +634,7 @@ async def download_candidate_resume(
 
     return FileResponse(
         path=str(file_path),
-        filename=res.file_name or file_path.name,
+        filename=_sanitize_upload_filename(res.file_name or file_path.name),
         media_type=media_type,
     )
 
@@ -711,7 +721,7 @@ async def intake_candidate_resume(
         detail="Resume upload rate limit exceeded (max 10 per minute).",
     )
 
-    filename = (file.filename or "").strip()
+    filename = _sanitize_upload_filename(file.filename)
     allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".rtf"}
     ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
     if ext not in allowed_exts:

@@ -80,11 +80,18 @@ class LLMGuardrailService:
             logger.warning("rate_limit_check_error_failing_open", error=str(e))
             return True, None
 
-    async def get_circuit_state(self, provider: str = "groq") -> CircuitState:
+    @staticmethod
+    def _circuit_keys(provider: str, tenant_id: Optional[str] = None) -> Tuple[str, str]:
+        safe_tenant = str(tenant_id or "").strip()
+        prefix = f"circuit:{provider}:{safe_tenant}" if safe_tenant else f"circuit:{provider}"
+        return f"{prefix}:state", f"{prefix}:errors"
+
+    async def get_circuit_state(self, provider: str = "groq", tenant_id: Optional[str] = None) -> CircuitState:
         """Check current health state of LLM provider."""
+        state_key, _ = self._circuit_keys(provider, tenant_id)
         try:
             r = await self._get_redis()
-            state = await r.get(f"circuit:{provider}:state")
+            state = await r.get(state_key)
             if not state:
                 return CircuitState.CLOSED
             decoded = state.decode("utf-8") if isinstance(state, bytes) else str(state)
@@ -92,36 +99,48 @@ class LLMGuardrailService:
         except Exception:
             return CircuitState.CLOSED
 
-    async def record_provider_error(self, provider: str = "groq", error_status: int = 429, cooldown_seconds: int = 60):
+    async def record_provider_error(
+        self,
+        provider: str = "groq",
+        error_status: int = 429,
+        cooldown_seconds: int = 60,
+        tenant_id: Optional[str] = None,
+    ):
         """Record provider error (e.g. 429) and trip circuit breaker if threshold reached."""
+        state_key, err_key = self._circuit_keys(provider, tenant_id)
         try:
             r = await self._get_redis()
-            err_key = f"circuit:{provider}:errors"
             errors = await r.incr(err_key)
             await r.expire(err_key, 30)
 
             # If 3 or more errors within 30 seconds, trip circuit to OPEN
             if errors >= 3 or error_status == 429:
-                await r.setex(f"circuit:{provider}:state", cooldown_seconds, CircuitState.OPEN.value)
-                logger.error("circuit_breaker_tripped", provider=provider, cooldown_seconds=cooldown_seconds)
+                await r.setex(state_key, cooldown_seconds, CircuitState.OPEN.value)
+                logger.error(
+                    "circuit_breaker_tripped",
+                    provider=provider,
+                    tenant_id=tenant_id,
+                    cooldown_seconds=cooldown_seconds,
+                )
         except Exception as e:
             logger.warning("circuit_record_error_failed", error=str(e))
 
-    async def record_provider_success(self, provider: str = "groq"):
+    async def record_provider_success(self, provider: str = "groq", tenant_id: Optional[str] = None):
         """Record successful invocation to reset error count or close half-open circuit."""
+        state_key, err_key = self._circuit_keys(provider, tenant_id)
         try:
             r = await self._get_redis()
-            await r.delete(f"circuit:{provider}:errors")
-            await r.delete(f"circuit:{provider}:state")
+            await r.delete(err_key)
+            await r.delete(state_key)
         except Exception as exc:
             logger.debug("circuit_reset_skipped", error=str(exc), provider=provider)
 
-    async def resolve_active_provider(self, primary_provider: str = "groq") -> str:
+    async def resolve_active_provider(self, primary_provider: str = "groq", tenant_id: Optional[str] = None) -> str:
         """
         Returns active provider. If primary provider's circuit is OPEN,
         automatically falls back to secondary provider.
         """
-        state = await self.get_circuit_state(primary_provider)
+        state = await self.get_circuit_state(primary_provider, tenant_id=tenant_id)
         if state == CircuitState.OPEN:
             fallback = "openai" if primary_provider == "groq" else "deepseek"
             logger.warning("primary_llm_circuit_open_failing_over", primary=primary_provider, fallback=fallback)

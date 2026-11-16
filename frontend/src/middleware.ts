@@ -52,7 +52,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (token && pathname.startsWith("/dashboard")) {
+  if (token && !pathname.startsWith("/portal")) {
     const payload = parseJwtPayload(token);
     if (payload?.role === "candidate") {
       return NextResponse.redirect(new URL("/portal", request.url));

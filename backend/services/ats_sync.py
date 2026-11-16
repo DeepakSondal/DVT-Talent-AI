@@ -4,25 +4,29 @@ Pulls historical candidates from an agency's Greenhouse/Lever instances,
 converts their resumes to vector embeddings, and stores them in Pinecone
 to build a proprietary Data Lake.
 """
+import os
 from typing import Any, Dict, List
+import uuid
 
 import httpx
 import structlog
 from openai import AsyncOpenAI
 
-from config import settings
+try:
+    from backend.config import settings
+except ImportError:
+    from config import settings
 
 log = structlog.get_logger(__name__)
 
-PINECONE_API_KEY = getattr(settings, 'pinecone_api_key', 'mock_pinecone_key')
-PINECONE_HOST = getattr(settings, 'pinecone_host', 'https://dvt-memory-tree.pinecone.io')
+PINECONE_API_KEY = getattr(settings, "pinecone_api_key", "") or os.getenv("PINECONE_API_KEY", "")
+PINECONE_HOST = getattr(settings, "pinecone_host", "") or os.getenv("PINECONE_HOST", "https://dvt-memory-tree.pinecone.io")
 
 async def fetch_candidates_from_merge_dev(tenant_id: str, ats_provider: str) -> List[Dict[str, Any]]:
     """
     Integration to Merge.dev to pull candidates from Greenhouse/Lever.
     Requires a valid tenant_id and configured Merge.dev integration (no synthetic mock candidates).
     """
-    import uuid
     if not tenant_id or str(tenant_id).strip().lower() == "default":
         raise ValueError("Valid tenant_id is required for ATS sync")
     uuid.UUID(str(tenant_id))
@@ -38,6 +42,14 @@ async def sync_ats_to_pinecone(tenant_id: str, ats_provider: str):
     Pulls raw resumes from the ATS, generates OpenAI embeddings, 
     and upserts them into the Pinecone Data Lake.
     """
+    if not tenant_id or str(tenant_id).strip().lower() == "default":
+        raise ValueError("Valid tenant_id is required for ATS sync")
+    uuid.UUID(str(tenant_id))
+
+    if not PINECONE_API_KEY:
+        log.warning("ats_sync_pinecone_skipped_missing_api_key", tenant_id=str(tenant_id), ats_provider=ats_provider)
+        return
+
     candidates = await fetch_candidates_from_merge_dev(tenant_id, ats_provider)
     if not candidates:
         return
@@ -74,6 +86,9 @@ async def sync_ats_to_pinecone(tenant_id: str, ats_provider: str):
             log.error(f"Failed to generate embedding for {c['id']}: {e}")
             
     if not vectors:
+        return
+    if not PINECONE_API_KEY or not PINECONE_HOST:
+        log.warning("ats_sync_pinecone_skipped_unconfigured", tenant_id=str(tenant_id))
         return
         
     # Upsert to Pinecone

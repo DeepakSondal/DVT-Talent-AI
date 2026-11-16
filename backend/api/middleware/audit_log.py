@@ -6,6 +6,7 @@ import structlog
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from api.middleware.rate_limit import get_real_client_ip
 from db.models import AsyncSessionLocal, AuditLog
 
 log = structlog.get_logger(__name__)
@@ -33,6 +34,9 @@ SENSITIVE_PATHS = [
     "/team",
     "/invite",
     "/invitations",
+    "/jobs",
+    "/agents",
+    "/integrations",
 ]
 
 class AuditLogMiddleware(BaseHTTPMiddleware):
@@ -103,7 +107,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                     "entity_type": normalized_path.strip("/").split("/")[0] if normalized_path.strip("/") else "root",
                     "severity": severity,
                     "status": status,
-                    "ip_address": request.client.host if request.client else "unknown",
+                    "ip_address": get_real_client_ip(request),
                     "user_agent": request.headers.get("user-agent", "unknown"),
                     "meta_data": {
                         "status_code": response.status_code,

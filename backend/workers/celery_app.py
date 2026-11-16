@@ -2,6 +2,10 @@
 DVT Talent AI — Celery App Configuration (Simplified)
 Background task queue for consolidated 5-agent operations.
 """
+import os
+import uuid
+from typing import Optional
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -35,29 +39,20 @@ celery_app.conf.update(
     result_expires=86400,       # Results expire in 24 hours
 )
 
+def _resolve_beat_tenant_id() -> Optional[str]:
+    raw = (os.getenv("BEAT_TENANT_ID") or "").strip()
+    if not raw or raw.lower() == "default":
+        return None
+    try:
+        return str(uuid.UUID(raw))
+    except (ValueError, TypeError):
+        return None
+
+
+_BEAT_TENANT_ID = _resolve_beat_tenant_id()
+
 # ── Periodic Schedule (Autonomous Daily Operations) ─────────────────────────
 celery_app.conf.beat_schedule = {
-    # Full pipeline runs every morning at 7 AM UTC
-    "daily-full-swarm-pipeline": {
-        "task": "workers.tasks.run_full_autonomous_pipeline",
-        "schedule": crontab(hour=7, minute=0),
-        "args": [],
-        "kwargs": {"industry": "technology", "location": "United States", "send_emails": True},
-    },
-    # Unified Discovery scan every 6 hours
-    "swarm-discovery": {
-        "task": "workers.tasks.run_agent_task",
-        "schedule": crontab(hour="*/6", minute=30),
-        "args": ["discovery"],
-        "kwargs": {"industry": "technology"},
-    },
-    # Analytics & Learning refresh every 2 hours
-    "swarm-analytics-refresh": {
-        "task": "workers.tasks.run_agent_task",
-        "schedule": crontab(minute=15, hour="*/2"),
-        "args": ["analytics"],
-        "kwargs": {},
-    },
     # Periodic GDPR cleanup retry sweep every 15 minutes (reconciles broker outages)
     "periodic-gdpr-cleanup-sweep": {
         "task": "workers.tasks.process_pending_gdpr_cleanups_task",
@@ -67,6 +62,36 @@ celery_app.conf.beat_schedule = {
     },
 }
 
+if _BEAT_TENANT_ID:
+    celery_app.conf.beat_schedule.update({
+        # Full pipeline runs every morning at 7 AM UTC (enabled only with valid BEAT_TENANT_ID)
+        "daily-full-swarm-pipeline": {
+            "task": "workers.tasks.run_full_autonomous_pipeline",
+            "schedule": crontab(hour=7, minute=0),
+            "args": [],
+            "kwargs": {
+                "industry": "technology",
+                "location": "United States",
+                "send_emails": True,
+                "tenant_id": _BEAT_TENANT_ID,
+            },
+        },
+        # Unified Discovery scan every 6 hours
+        "swarm-discovery": {
+            "task": "workers.tasks.run_agent_task",
+            "schedule": crontab(hour="*/6", minute=30),
+            "args": ["discovery"],
+            "kwargs": {"params": {"industry": "technology"}, "tenant_id": _BEAT_TENANT_ID},
+        },
+        # Analytics & Learning refresh every 2 hours
+        "swarm-analytics-refresh": {
+            "task": "workers.tasks.run_agent_task",
+            "schedule": crontab(minute=15, hour="*/2"),
+            "args": ["analytics"],
+            "kwargs": {"params": {}, "tenant_id": _BEAT_TENANT_ID},
+        },
+    })
+
 from celery.signals import worker_process_init
 
 
@@ -75,7 +100,11 @@ def init_worker(**kwargs):
     import structlog
     log = structlog.get_logger()
     try:
+        if getattr(settings, "is_production", False):
+            settings.validate_required_settings()
         # Note: Embedding warmup now handled inside SourcingAgent if needed
         log.info("celery_worker_process_init")
     except Exception as e:
         log.error("celery_worker_init_failed", error=str(e))
+        if getattr(settings, "is_production", False):
+            raise

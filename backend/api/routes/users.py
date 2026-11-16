@@ -18,6 +18,7 @@ from services.redis_service import (
     record_rate_limit,
     reset_rate_limit,
     revoke_token,
+    revoke_user_tokens,
 )
 
 router = APIRouter()
@@ -107,6 +108,7 @@ async def change_password(
 
     current_user.hashed_password = await hash_password(data.new_password)
     await db.commit()
+    await revoke_user_tokens(str(current_user.id))
 
     # Revoke any active refresh token cookie upon password change
     refresh_cookie = request.cookies.get("dvt_refresh_token")
@@ -176,4 +178,5 @@ async def deactivate_user(
         raise HTTPException(status_code=404, detail="User not found")
     user.is_active = False
     await db.commit()
+    await revoke_user_tokens(str(user.id))
     return {"message": "User deactivated"}

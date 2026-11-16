@@ -23,6 +23,14 @@ SUSPECT_PATTERNS = [
     r"do\s+not\s+fail\s+this\s+candidate",
     r"sudo\s+mode",
     r"jailbreak",
+    r"<\|im_start\|>",
+    r"<\|im_end\|>",
+    r"<\|system\|>",
+    r"\[INST\]",
+    r"\[/INST\]",
+    r"###\s*System\b",
+    r"(disregard|forget)\s+(all\s+)?(previous|prior)\s+instructions?",
+    r"new\s+instructions?\s*:",
 ]
 
 # Zero-width and invisible unicode characters used for obfuscation

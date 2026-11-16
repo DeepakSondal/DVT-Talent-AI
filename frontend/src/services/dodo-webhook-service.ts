@@ -27,7 +27,7 @@ function resolveBackendApiUrl(): string {
 }
 
 function resolveInternalSecret(): string {
-  const secret = process.env.INTERNAL_SERVICE_SECRET || process.env.SECRET_KEY || "";
+  const secret = process.env.INTERNAL_SERVICE_SECRET || "";
   if (!secret && process.env.NODE_ENV === "production") {
     throw new Error("[Dodo Webhook] INTERNAL_SERVICE_SECRET must be configured in production.");
   }
@@ -79,7 +79,6 @@ export async function handlePaymentSucceeded(payload: {
     console.warn(`[Dodo Webhook] Duplicate payment.succeeded skipped: ${paymentId}`);
     return { status: "duplicate", paymentId };
   }
-  recordProcessedEvent(paymentId);
 
   // 2. Extract key details
   const customerEmail = payment.customer?.email || "unknown";
@@ -113,6 +112,7 @@ export async function handlePaymentSucceeded(payload: {
   if (!res.ok) {
     throw new Error(`[Dodo Webhook] Backend payment.succeeded sync failed (${res.status})`);
   }
+  recordProcessedEvent(paymentId);
 
   return { status: "processed", paymentId, customerEmail };
 }
@@ -131,7 +131,6 @@ export async function handleSubscriptionActive(payload: {
     console.warn(`[Dodo Webhook] Duplicate subscription.active skipped: ${subscriptionId}`);
     return { status: "duplicate", subscriptionId };
   }
-  recordProcessedEvent(subscriptionId);
 
   // 2. Extract key details
   const customerEmail = subscription.customer?.email || "unknown";
@@ -167,6 +166,7 @@ export async function handleSubscriptionActive(payload: {
   if (!res.ok) {
     throw new Error(`[Dodo Webhook] Backend subscription.active sync failed (${res.status})`);
   }
+  recordProcessedEvent(subscriptionId);
 
   return { status: "processed", subscriptionId, customerEmail };
 }

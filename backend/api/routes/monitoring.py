@@ -21,16 +21,23 @@ async def get_recent_signals(
     limit: int = 50,
     current_user: User = Depends(get_current_user),
 ):
-    """Fetches the last N signals from the Redis history list, filtered to the caller's tenant."""
-    if not current_user.tenant_id or current_user.role == UserRole.CANDIDATE:
+    """Fetches the last N signals from the tenant-namespaced Redis history list."""
+    if (
+        not current_user.tenant_id
+        or str(current_user.tenant_id).strip().lower() == "default"
+        or current_user.role == UserRole.CANDIDATE
+    ):
         raise HTTPException(status_code=403, detail="Workspace permissions required")
     r = get_redis_client()
     if not r:
         return []
     try:
-        signals = await r.lrange("dvt_signals_history", 0, min(max(1, limit), 100) - 1)
-        parsed = [json.loads(s) for s in signals]
         tenant_str = str(current_user.tenant_id)
+        limit_end = min(max(1, limit), 100) - 1
+        signals = await r.lrange(f"dvt_signals_history:{tenant_str}", 0, limit_end)
+        if not signals:
+            signals = await r.lrange("dvt_signals_history", 0, limit_end)
+        parsed = [json.loads(s) for s in signals]
         return [
             s for s in parsed
             if str(s.get("tenant_id") or "") == tenant_str

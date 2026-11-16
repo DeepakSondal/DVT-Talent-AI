@@ -4,6 +4,7 @@ Handles inbound data from Monster, LinkedIn, and other job boards.
 """
 import hashlib
 import hmac
+import os
 import uuid
 
 import structlog
@@ -48,7 +49,8 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
     raw_body = await request.body()
     secret = getattr(settings, "monster_webhook_secret", "") or ""
     sig_header = request.headers.get("X-Monster-Signature") or request.headers.get("X-Webhook-Signature") or ""
-    if secret or settings.is_production:
+    is_testing_bypass = os.getenv("TESTING", "").strip().lower() == "true" and not settings.is_production
+    if secret or not is_testing_bypass:
         if not _verify_webhook_hmac(raw_body, sig_header, secret):
             raise HTTPException(status_code=401, detail="Invalid or missing webhook signature")
 
@@ -131,7 +133,8 @@ async def email_inbound_webhook(request: Request):
     raw_body = await request.body()
     secret = getattr(settings, "inbound_email_webhook_secret", "") or ""
     sig_header = request.headers.get("X-Inbound-Signature") or request.headers.get("X-Webhook-Signature") or ""
-    if secret or settings.is_production:
+    is_testing_bypass = os.getenv("TESTING", "").strip().lower() == "true" and not settings.is_production
+    if secret or not is_testing_bypass:
         if not _verify_webhook_hmac(raw_body, sig_header, secret):
             raise HTTPException(status_code=401, detail="Invalid or missing webhook signature")
 
