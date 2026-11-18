@@ -15,13 +15,14 @@ except ImportError:
     def FileLock(path, timeout=10):  # noqa: N802
         try:
             import fcntl
-            flock = getattr(fcntl, "flock")
+            fcntl_mod: Any = fcntl
+            flock = fcntl_mod.flock
             f = open(path, "a+")
             try:
-                flock(f, getattr(fcntl, "LOCK_EX"))
+                flock(f, fcntl_mod.LOCK_EX)
                 yield
             finally:
-                flock(f, getattr(fcntl, "LOCK_UN"))
+                flock(f, fcntl_mod.LOCK_UN)
                 f.close()
         except Exception:
             yield

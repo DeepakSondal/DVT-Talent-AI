@@ -16,6 +16,7 @@ from pydantic_ai import Agent
 
 from .pydantic_config import AgentDeps, get_pydantic_model
 
+
 class PerformanceMetrics(BaseModel):
     model_config = ConfigDict(extra="allow")
     conversion_rate: float = Field(default=0.0)

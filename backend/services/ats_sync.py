@@ -5,8 +5,8 @@ converts their resumes to vector embeddings, and stores them in Pinecone
 to build a proprietary Data Lake.
 """
 import os
-from typing import Any, Dict, List
 import uuid
+from typing import Any, Dict, List
 
 import httpx
 import structlog

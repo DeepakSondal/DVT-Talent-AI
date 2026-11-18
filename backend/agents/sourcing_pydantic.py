@@ -25,6 +25,7 @@ from pydantic_ai import Agent, RunContext
 log = structlog.get_logger(__name__)
 from .pydantic_config import AgentDeps, get_pydantic_model
 from .swarm_memory import _get_cache, _set_cache
+
 try:
     from backend.services.resume_parser import ResumeParserService
 except ImportError:

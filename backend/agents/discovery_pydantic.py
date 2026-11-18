@@ -11,11 +11,11 @@ elif __name__.startswith("agents."):
 
 from typing import Any, Dict, List
 
+import structlog
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import Agent, RunContext
 
 from .pydantic_config import AgentDeps, get_pydantic_model
-import structlog
 
 log = structlog.get_logger(__name__)
 

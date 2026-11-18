@@ -17,18 +17,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import yaml  # pyrefly: ignore[untyped-import]
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import select
 
 from api.middleware.audit_log import drain_audit_log_tasks
 from api.routes import agents as agents_route
 from api.routes import billing as billing_route
 from api.routes.auth import hash_password
-from celery.exceptions import SoftTimeLimitExceeded
 from config import settings
 from db.models import (
-    AIDecisionLedger,
     AgentTask,
     AgentTaskStatus,
+    AIDecisionLedger,
     AsyncSessionLocal,
     Candidate,
     CandidateStatus,

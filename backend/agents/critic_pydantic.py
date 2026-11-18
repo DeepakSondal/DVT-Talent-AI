@@ -15,6 +15,7 @@ from pydantic_ai import Agent, RunContext
 
 from .pydantic_config import AgentDeps, get_pydantic_model
 from .swarm_memory import query_memory_tree
+
 try:
     from backend.services.sanitizer_service import sanitizer_service
 except ImportError:

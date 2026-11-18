@@ -24,7 +24,6 @@ from agents.critic_pydantic import AuditResult, critic_agent
 from agents.pydantic_config import AgentDeps
 from agents.screening_pydantic import ScreeningPlan, screening_agent
 
-
 # ── 1. FallbackModel Unit & Failover Tests ────────────────────────────────────
 
 

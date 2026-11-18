@@ -36,8 +36,8 @@ try:
     from backend.config import settings
 except ImportError:
     from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
-from typing import Any, Dict, Optional
 import os
+from typing import Any, Dict, Optional
 
 _MODEL_CACHE: Dict[str, Any] = {}
 

@@ -209,9 +209,10 @@ async def test_send_campaign_execution():
 async def test_create_checkout_defaults_to_google_pay_and_all_supported_methods(monkeypatch):
     """Default checkout session includes google_pay, apple_pay, credit, debit, and upi_intent."""
     from types import SimpleNamespace
+
     from api.routes.auth import get_current_user
     from config import settings
-    from db.models import SubscriptionPlan, Tenant, get_db
+    from db.models import get_db
     from main import app
 
     monkeypatch.setattr(settings, "is_production", False)
@@ -257,6 +258,7 @@ async def test_create_checkout_defaults_to_google_pay_and_all_supported_methods(
 async def test_create_checkout_google_pay_forwards_allowed_methods_to_dodo_api(monkeypatch):
     """Selecting payment_method='google_pay' sends allowed_payment_method_types=['google_pay', 'credit', 'debit'] to Dodo /checkouts."""
     from types import SimpleNamespace
+
     from api.routes.auth import get_current_user
     from config import settings
     from db.models import get_db
@@ -323,6 +325,7 @@ async def test_create_checkout_google_pay_forwards_allowed_methods_to_dodo_api(m
 async def test_create_checkout_rejects_unsupported_payment_method(monkeypatch):
     """Unsupported payment_method or allowed_payment_method_types returns 400 Bad Request."""
     from types import SimpleNamespace
+
     from api.routes.auth import get_current_user
     from db.models import get_db
     from main import app
@@ -366,6 +369,7 @@ async def test_create_checkout_rejects_unsupported_payment_method(monkeypatch):
 async def test_create_checkout_returns_direct_upi_details_when_configured(monkeypatch):
     """When MERCHANT_UPI_ID and MERCHANT_UPI_NUMBER are set, create-checkout returns provider='upi_direct' and upi_details even in production without Dodo API key."""
     from types import SimpleNamespace
+
     from api.routes.auth import get_current_user
     from config import settings
     from db.models import get_db
@@ -420,6 +424,7 @@ async def test_create_checkout_returns_direct_upi_details_when_configured(monkey
 async def test_upi_confirm_validates_12_digit_utr_credits_tenant_and_blocks_replay(monkeypatch):
     """POST /api/v1/billing/upi-confirm queues unverified UTR in prod (0 credits), auto-credits when verified by provider API, and blocks replay."""
     from types import SimpleNamespace
+
     from api.routes.auth import get_current_user
     from config import settings
     from db.models import CreditTransaction, get_db

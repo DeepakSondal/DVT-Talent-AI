@@ -13,8 +13,8 @@ try:
 except ImportError:
     from config import settings
     from db.models import AsyncSessionLocal, AuditLog
-from typing import Any, Optional
 import uuid
+from typing import Any, Optional
 
 import structlog
 

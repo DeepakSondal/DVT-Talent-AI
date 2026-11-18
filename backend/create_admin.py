@@ -9,6 +9,7 @@ if backend_dir not in sys.path:
 from sqlalchemy import select
 
 from api.routes.auth import hash_password
+
 try:
     from config import settings
 except ImportError:

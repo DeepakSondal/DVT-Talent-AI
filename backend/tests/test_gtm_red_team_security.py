@@ -36,14 +36,16 @@ for p in (str(BACKEND_DIR), str(REPO_ROOT)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-import agents.critic_pydantic as critic_pydantic  # noqa: E402
-import agents.screening_pydantic as screening_pydantic  # noqa: E402
-import agents.sourcing_pydantic as sourcing_pydantic  # noqa: E402
+from scripts.validate_tool_call import validate_tool_call  # noqa: E402
+
 import agents.swarm_memory as sm  # noqa: E402
 import api.routes.jobs as jobs_routes  # noqa: E402
 import api.routes.monitoring as monitoring_routes  # noqa: E402
-import db.models as db_models  # noqa: E402
-import services.pii_service as pii_service_mod  # noqa: E402
+from agents import (
+    critic_pydantic,  # noqa: E402
+    screening_pydantic,  # noqa: E402
+    sourcing_pydantic,  # noqa: E402
+)
 from agents.orchestrator import AgentOrchestrator  # noqa: E402
 from agents.outreach_pydantic import push_to_smartlead_campaign  # noqa: E402
 from agents.pydantic_config import AgentDeps  # noqa: E402
@@ -51,9 +53,9 @@ from agents.sourcing_pydantic import fast_hybrid_candidate_search  # noqa: E402
 from api.routes.auth import get_current_user  # noqa: E402
 from config import settings  # noqa: E402
 from db.models import (  # noqa: E402
-    AIDecisionLedger,
     AgentTask,
     AgentTaskStatus,
+    AIDecisionLedger,
     Base,
     Candidate,
     CandidateStatus,
@@ -67,7 +69,6 @@ from db.models import (  # noqa: E402
 )
 from db.vector_store import VectorStore  # noqa: E402
 from main import app  # noqa: E402
-from scripts.validate_tool_call import validate_tool_call  # noqa: E402
 from services import ats_sync  # noqa: E402
 from services.email_service import (  # noqa: E402
     EmailService,
@@ -393,7 +394,7 @@ async def test_tenant_isolation_swarm_memory_vector_store_and_hybrid_search(tmp_
     redis_store: dict[str, bytes] = {}
     redis_sets: dict[str, set[bytes]] = {}
     mock_redis = MagicMock()
-    mock_redis.get.side_effect = lambda k: redis_store.get(k)
+    mock_redis.get.side_effect = redis_store.get
     mock_redis.setex.side_effect = lambda k, ttl, v: redis_store.__setitem__(k, v.encode("utf-8"))
     mock_redis.sadd.side_effect = lambda k, v: redis_sets.setdefault(k, set()).add(v.encode("utf-8"))
     mock_redis.smembers.side_effect = lambda k: redis_sets.get(k, set())
@@ -1072,7 +1073,7 @@ async def test_sprint1_rr12_multitenant_search_jobs_circuits_signals_and_jobs_bg
                 ]
             return []
 
-    monkeypatch.setattr(monitoring_routes, "get_redis_client", lambda: _FakeMonitorRedis())
+    monkeypatch.setattr(monitoring_routes, "get_redis_client", _FakeMonitorRedis)
     sig_rows = await monitoring_routes.get_recent_signals(
         limit=10,
         current_user=cast(Any, SimpleNamespace(tenant_id=uuid.UUID(tenant_a), role=UserRole.RECRUITER)),
