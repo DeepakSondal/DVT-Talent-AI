@@ -197,7 +197,10 @@ class VectorStore:
                 return [[0.0] * 384 for _ in texts]
 
         try:
-            return model.encode(truncated).tolist()
+            encode_fn = getattr(model, "encode", None)
+            if callable(encode_fn):
+                return encode_fn(truncated).tolist()
+            return [[0.0] * 384 for _ in texts]
         except Exception:
             return [[0.0] * 384 for _ in texts]
 
@@ -266,7 +269,7 @@ class VectorStore:
             if not pool and self._local_index["resumes"]:
                 pool = [
                     v for v in self._local_index["resumes"].values()
-                    if v.get("tenant_id") == str(tenant_id)
+                    if v.get("tenant_id") == tenant_id
                 ]
 
         if not pool:
@@ -321,14 +324,14 @@ class VectorStore:
     def upsert_resume(self, tenant_id: str, resume_id: str, text: str, metadata: Optional[Dict[str, Any]] = None):
         """Add or update a resume with forced tenant metadata isolation"""
         extended_metadata = {k: str(v) for k, v in (metadata or {}).items()}
-        extended_metadata["tenant_id"] = str(tenant_id)
+        extended_metadata["tenant_id"] = tenant_id
         embedding = self.embed_text(text)
 
         # 1. Update Chroma if client is active
         if CHROMA_AVAILABLE and self.client and getattr(self, "resumes", None):
             try:
                 self.resumes.upsert(
-                    ids=[str(resume_id)],
+                    ids=[resume_id],
                     embeddings=[embedding],
                     documents=[text[:2000]],
                     metadatas=[extended_metadata]
@@ -337,10 +340,10 @@ class VectorStore:
                 log.warning("chroma_upsert_failed", error=str(exc))
 
         # 2. Update local index for in-memory and test consistency
-        self._local_index["resumes"][str(resume_id)] = {
-            "id": str(resume_id),
-            "tenant_id": str(tenant_id),
-            "candidate_id": str(extended_metadata.get("candidate_id", "")),
+        self._local_index["resumes"][resume_id] = {
+            "id": resume_id,
+            "tenant_id": tenant_id,
+            "candidate_id": extended_metadata.get("candidate_id", ""),
             "document": text[:2000],
             "metadata": extended_metadata,
             "embedding": embedding
@@ -365,7 +368,7 @@ class VectorStore:
             metadatas = []
             for item in items:
                 m = {k: str(v) for k, v in item.get("metadata", {}).items()}
-                m["tenant_id"] = str(tenant_id)
+                m["tenant_id"] = tenant_id
                 metadatas.append(m)
             try:
                 self.resumes.upsert(
@@ -381,11 +384,11 @@ class VectorStore:
         for item, emb in zip(items, embeddings, strict=True):
             rid = str(item["id"])
             m = {k: str(v) for k, v in item.get("metadata", {}).items()}
-            m["tenant_id"] = str(tenant_id)
+            m["tenant_id"] = tenant_id
             self._local_index["resumes"][rid] = {
                 "id": rid,
-                "tenant_id": str(tenant_id),
-                "candidate_id": str(m.get("candidate_id", "")),
+                "tenant_id": tenant_id,
+                "candidate_id": m.get("candidate_id", ""),
                 "document": item.get("text", "")[:2000],
                 "metadata": m,
                 "embedding": emb
@@ -400,7 +403,7 @@ class VectorStore:
 
         # 1. Query Chroma if online
         if CHROMA_AVAILABLE and self.client and getattr(self, "resumes", None):
-            where_clause = {"tenant_id": str(tenant_id)}
+            where_clause = {"tenant_id": tenant_id}
             if filters:
                 user_filters = {k: str(v) for k, v in filters.items()}
                 where_clause = {"$and": [where_clause, user_filters]}
@@ -428,7 +431,7 @@ class VectorStore:
         # 2. Local in-memory search fallback (guarantees tests pass with Chroma decommissioned)
         matching = []
         for r in self._local_index["resumes"].values():
-            if r.get("tenant_id") == str(tenant_id):
+            if r.get("tenant_id") == tenant_id:
                 score = self.cosine_similarity(query_embedding, r["embedding"])
                 matching.append({
                     "id": r["id"],
@@ -460,7 +463,7 @@ class VectorStore:
 
         query_vector = self.embed_text(query_text)
         try:
-            t_uuid = uuid.UUID(str(tenant_id))
+            t_uuid = uuid.UUID(tenant_id)
         except (ValueError, AttributeError):
             t_uuid = tenant_id
 
@@ -504,7 +507,7 @@ class VectorStore:
                 batch_embs[idx] = vec
                 resumes[idx].embedding = vec
 
-        ranked = []
+        ranked: List[Dict[str, Any]] = []
         for idx, r in enumerate(resumes):
             emb = r.embedding or batch_embs.get(idx)
             sim = self.cosine_similarity(query_vector, emb) if emb else 0.0
@@ -532,24 +535,24 @@ class VectorStore:
         # Purge from local store
         if resume_ids:
             for rid in resume_ids:
-                if str(rid) in self._local_index["resumes"]:
-                    if self._local_index["resumes"][str(rid)].get("tenant_id") == str(tenant_id):
-                        del self._local_index["resumes"][str(rid)]
+                if rid in self._local_index["resumes"]:
+                    if self._local_index["resumes"][rid].get("tenant_id") == tenant_id:
+                        del self._local_index["resumes"][rid]
 
         if candidate_id:
             to_del = [
                 k for k, v in self._local_index["resumes"].items()
-                if v.get("candidate_id") == str(candidate_id) and v.get("tenant_id") == str(tenant_id)
+                if v.get("candidate_id") == candidate_id and v.get("tenant_id") == tenant_id
             ]
             for k in to_del:
                 del self._local_index["resumes"][k]
 
         # Purge from Chroma if connected
         if CHROMA_AVAILABLE and self.client and getattr(self, "resumes", None):
-            ids_to_delete = [str(i) for i in (resume_ids or []) if i]
+            ids_to_delete = [i for i in (resume_ids or []) if i]
             if ids_to_delete:
                 try:
-                    self.resumes.delete(ids=ids_to_delete, where={"tenant_id": str(tenant_id)})
+                    self.resumes.delete(ids=ids_to_delete, where={"tenant_id": tenant_id})
                 except Exception as e:
                     log.warning("chroma_delete_by_ids_failed", error=str(e), ids=ids_to_delete)
                     raise
@@ -558,8 +561,8 @@ class VectorStore:
                 try:
                     where_filter = {
                         "$and": [
-                            {"tenant_id": str(tenant_id)},
-                            {"candidate_id": str(candidate_id)}
+                            {"tenant_id": tenant_id},
+                            {"candidate_id": candidate_id}
                         ]
                     }
                     self.resumes.delete(where=where_filter)
@@ -575,13 +578,13 @@ class VectorStore:
         """Add or update a job post in the vector store with tenant isolation metadata"""
         extended_metadata = {k: str(v) for k, v in (metadata or {}).items()}
         if tenant_id:
-            extended_metadata["tenant_id"] = str(tenant_id)
+            extended_metadata["tenant_id"] = tenant_id
         embedding = self.embed_text(text)
 
         if CHROMA_AVAILABLE and self.client and getattr(self, "jobs", None):
             try:
                 self.jobs.upsert(
-                    ids=[str(job_id)],
+                    ids=[job_id],
                     embeddings=[embedding],
                     documents=[text[:2000]],
                     metadatas=[extended_metadata]
@@ -589,9 +592,9 @@ class VectorStore:
             except Exception as e:
                 log.warning("chroma_job_upsert_failed", error=str(e))
 
-        self._local_index["jobs"][str(job_id)] = {
-            "id": str(job_id),
-            "tenant_id": str(tenant_id) if tenant_id else None,
+        self._local_index["jobs"][job_id] = {
+            "id": job_id,
+            "tenant_id": tenant_id if tenant_id else None,
             "document": text[:2000],
             "metadata": extended_metadata,
             "embedding": embedding
@@ -600,7 +603,7 @@ class VectorStore:
 
     def search_jobs(self, query_text: str, limit: int = 10, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Find most similar jobs to a candidate profile / text, strictly scoped to a valid UUID tenant_id."""
-        safe_tenant = str(tenant_id or "").strip()
+        safe_tenant = (tenant_id or "").strip()
         if not safe_tenant or safe_tenant.lower() == "default":
             raise ValueError("A valid UUID tenant_id is required for VectorStore.search_jobs.")
         try:

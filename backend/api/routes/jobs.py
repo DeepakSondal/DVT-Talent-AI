@@ -128,14 +128,14 @@ async def deactivate_job(job_id: UUID, db: AsyncSession = Depends(get_db), curre
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    job.is_active = False
+    setattr(job, "is_active", False)
     await db.commit()
     return {"message": "Job deactivated"}
 
 async def _source_candidates_bg(job_id: str, skills: list, location: Optional[str], tenant_id: str):
-    if not tenant_id or str(tenant_id).strip().lower() == "default":
+    if not tenant_id or tenant_id.strip().lower() == "default":
         raise ValueError("A valid UUID tenant_id is required")
-    UUID(str(tenant_id))
+    UUID(tenant_id)
     try:
         from workers.tasks import safe_dispatch_task, source_candidates_for_job
         safe_dispatch_task(source_candidates_for_job, job_id, skills, location, tenant_id)

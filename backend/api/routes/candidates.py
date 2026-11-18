@@ -9,7 +9,7 @@ import os
 import re
 import uuid as _uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
 import structlog
@@ -103,14 +103,14 @@ class CandidateList(BaseModel):
 
 async def _resolve_recruiter_tenant_info(db: AsyncSession, current_user: User) -> tuple[Optional[str], Optional[str]]:
     """Resolve recruiter's corporate tenant domain and tenant name for privacy evaluation."""
-    tenant_domain = None
-    tenant_name = None
+    tenant_domain: Optional[str] = None
+    tenant_name: Optional[str] = None
     if getattr(current_user, "tenant_id", None):
         res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
         tenant = res.scalar_one_or_none()
         if tenant:
-            tenant_domain = tenant.domain
-            tenant_name = tenant.name
+            tenant_domain = cast(Optional[str], tenant.domain)
+            tenant_name = cast(Optional[str], tenant.name)
     return tenant_domain, tenant_name
 
 
@@ -129,14 +129,14 @@ async def list_candidates(
 ):
     if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=403,
             detail="Recruiter or administrative permissions required to access candidate management."
         )
 
     tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
 
     # Base filter conditions
-    base_filters = [
+    base_filters: List[Any] = [
         Candidate.tenant_id == current_user.tenant_id,
         Candidate.is_searchable.isnot(False),
         Candidate.pii_erased.isnot(True),
@@ -183,7 +183,7 @@ async def list_candidates(
                 candidate=type("CandidateStub", (), {"is_searchable": True, "hide_from_companies": row[1]})(),
                 recruiter_tenant_domain=tenant_domain,
                 recruiter_tenant_name=tenant_name,
-                recruiter_email=current_user.email,
+                recruiter_email=cast(Optional[str], current_user.email),
             )
         ]
         if blocked_ids:
@@ -278,7 +278,7 @@ async def export_candidates(
             candidate=c,
             recruiter_tenant_domain=tenant_domain,
             recruiter_tenant_name=tenant_name,
-            recruiter_email=current_user.email,
+            recruiter_email=cast(Optional[str], current_user.email),
         )
     ]
     
@@ -342,7 +342,7 @@ async def get_candidate(
         candidate=candidate,
         recruiter_tenant_domain=tenant_domain,
         recruiter_tenant_name=tenant_name,
-        recruiter_email=current_user.email,
+        recruiter_email=cast(Optional[str], current_user.email),
     ):
         raise HTTPException(status_code=404, detail="Candidate not found")
 
@@ -365,7 +365,7 @@ async def update_candidate_status(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    candidate.status = status
+    setattr(candidate, "status", status)
     await db.commit()
     return {"status": "updated", "new_status": status.value}
 
@@ -390,11 +390,11 @@ async def add_candidate_note(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    meta = dict(candidate.meta_data or {})
+    meta = dict(cast(Any, candidate.meta_data) or {})
     notes = list(meta.get("notes") or [])
     notes.insert(0, clean_note)
     meta["notes"] = notes
-    candidate.meta_data = meta
+    setattr(candidate, "meta_data", meta)
     await db.commit()
     return {"notes": notes}
 
@@ -419,7 +419,7 @@ async def schedule_candidate_interview(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    meta = dict(candidate.meta_data or {})
+    meta = dict(cast(Any, candidate.meta_data) or {})
     interviews = list(meta.get("scheduled_interviews") or [])
     interviews.insert(
         0,
@@ -429,8 +429,8 @@ async def schedule_candidate_interview(
         },
     )
     meta["scheduled_interviews"] = interviews
-    candidate.meta_data = meta
-    candidate.status = CandidateStatus.INTERVIEWING
+    setattr(candidate, "meta_data", meta)
+    setattr(candidate, "status", CandidateStatus.INTERVIEWING)
     await db.commit()
     return {"scheduled_interviews": interviews, "status": candidate.status.value}
 
@@ -498,35 +498,36 @@ async def upload_resume(
     )
 
     # 4. Update candidate profile fields
-    curr_skills = set(candidate.skills or [])
+    cand_any: Any = candidate
+    curr_skills = set(cand_any.skills or [])
     curr_skills.update(parsed_data.get("skills", []))
-    candidate.skills = sorted(list(curr_skills))
+    setattr(candidate, "skills", sorted(list(curr_skills)))
 
     if parsed_data.get("experience_years"):
-        candidate.experience_years = max(candidate.experience_years or 0, parsed_data["experience_years"])
+        setattr(candidate, "experience_years", max(int(cand_any.experience_years or 0), parsed_data["experience_years"]))
     
     if parsed_data.get("current_company") and parsed_data["current_company"] != "Parsed From Resume":
-        candidate.current_company = parsed_data["current_company"]
+        setattr(candidate, "current_company", parsed_data["current_company"])
     
     if parsed_data.get("current_title") and not candidate.title:
-        candidate.title = parsed_data["current_title"]
+        setattr(candidate, "title", parsed_data["current_title"])
 
     contact = parsed_data.get("contact", {})
     if contact.get("phone") and not candidate.phone:
-        candidate.phone = contact["phone"]
+        setattr(candidate, "phone", contact["phone"])
     if contact.get("location") and not candidate.location:
-        candidate.location = contact["location"]
+        setattr(candidate, "location", contact["location"])
     if contact.get("linkedin_url") and not candidate.linkedin_url:
-        candidate.linkedin_url = contact["linkedin_url"]
+        setattr(candidate, "linkedin_url", contact["linkedin_url"])
     if contact.get("github_url") and not candidate.github_url:
-        candidate.github_url = contact["github_url"]
+        setattr(candidate, "github_url", contact["github_url"])
 
     # 5. Mark older resumes as not current
     old_resumes = (await db.execute(
         select(Resume).where(Resume.candidate_id == candidate_id, Resume.is_current.is_(True))
     )).scalars().all()
     for r in old_resumes:
-        r.is_current = False
+        setattr(r, "is_current", False)
 
     # 6. Compute vector embedding & index into VectorStore for instant hybrid sourcing
     from db.vector_store import vector_store
@@ -555,7 +556,7 @@ async def upload_resume(
             "candidate_id": str(candidate_id),
             "name": f"{candidate.first_name} {candidate.last_name}".strip(),
             "title": candidate.title or "",
-            "skills": ", ".join(candidate.skills or []),
+            "skills": ", ".join(list(cast(Any, candidate.skills) or [])),
             "location": candidate.location or "Remote",
             "email": candidate.email or "",
             "company": candidate.current_company or "",
@@ -606,7 +607,7 @@ async def download_candidate_resume(
         candidate=candidate,
         recruiter_tenant_domain=tenant_domain,
         recruiter_tenant_name=tenant_name,
-        recruiter_email=current_user.email,
+        recruiter_email=cast(Optional[str], current_user.email),
     ):
         raise HTTPException(status_code=404, detail="Candidate not found")
 
@@ -619,7 +620,7 @@ async def download_candidate_resume(
     if not res:
         raise HTTPException(status_code=404, detail="No resume on file for this candidate.")
 
-    file_path = ResumeParserService.get_resume_file_path(res.file_url)
+    file_path = ResumeParserService.get_resume_file_path(cast(Optional[str], res.file_url))
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="Original resume file not found on disk.")
 
@@ -634,7 +635,7 @@ async def download_candidate_resume(
 
     return FileResponse(
         path=str(file_path),
-        filename=_sanitize_upload_filename(res.file_name or file_path.name),
+        filename=_sanitize_upload_filename(str(res.file_name) if res.file_name else file_path.name),
         media_type=media_type,
     )
 
@@ -664,7 +665,7 @@ async def get_candidate_resume_details(
         candidate=candidate,
         recruiter_tenant_domain=tenant_domain,
         recruiter_tenant_name=tenant_name,
-        recruiter_email=current_user.email,
+        recruiter_email=cast(Optional[str], current_user.email),
     ):
         raise HTTPException(status_code=404, detail="Candidate not found")
 
@@ -796,13 +797,14 @@ async def intake_candidate_resume(
         db.add(candidate)
     else:
         # Update existing candidate
-        curr_skills = set(candidate.skills or [])
+        cand_any: Any = candidate
+        curr_skills = set(cand_any.skills or [])
         curr_skills.update(parsed_data.get("skills", []))
-        candidate.skills = sorted(list(curr_skills))
+        setattr(candidate, "skills", sorted(list(curr_skills)))
         if parsed_data.get("experience_years"):
-            candidate.experience_years = max(candidate.experience_years or 0, parsed_data["experience_years"])
+            setattr(candidate, "experience_years", max(int(cand_any.experience_years or 0), parsed_data["experience_years"]))
         if parsed_data.get("current_title") and not candidate.title:
-            candidate.title = parsed_data["current_title"]
+            setattr(candidate, "title", parsed_data["current_title"])
 
     resume_id = _uuid.uuid4()
     file_path = ResumeParserService.save_resume_file(
@@ -814,7 +816,7 @@ async def intake_candidate_resume(
         select(Resume).where(Resume.candidate_id == cand_id, Resume.is_current.is_(True))
     )).scalars().all()
     for r in old_res:
-        r.is_current = False
+        setattr(r, "is_current", False)
 
     from db.vector_store import vector_store
     resume_embedding = vector_store.embed_text(raw_text)
@@ -842,7 +844,7 @@ async def intake_candidate_resume(
             "candidate_id": str(cand_id),
             "name": f"{candidate.first_name} {candidate.last_name}".strip(),
             "title": candidate.title or "",
-            "skills": ", ".join(candidate.skills or []),
+            "skills": ", ".join(list(cast(Any, candidate.skills) or [])),
             "location": candidate.location or "Remote",
             "email": candidate.email or "",
             "company": candidate.current_company or "",
@@ -886,9 +888,8 @@ async def intake_candidate_resume(
 @router.post("/{candidate_id}/score")
 async def score_candidate(
     candidate_id: UUID,
+    background_tasks: BackgroundTasks,
     job_id: Optional[UUID] = None,
-    # FIX [C-04]: Removed mutable default `BackgroundTasks()` — breaks FastAPI DI
-    background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -902,8 +903,6 @@ async def score_candidate(
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    if background_tasks is None:
-        background_tasks = BackgroundTasks()
     background_tasks.add_task(score_candidate_background, str(candidate_id), str(job_id) if job_id else None)
     return {"message": "Scoring started", "candidate_id": str(candidate_id)}
 

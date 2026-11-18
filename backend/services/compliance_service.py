@@ -120,7 +120,7 @@ class ComplianceService:
         Build updated Candidate.meta_data and structured AEDT notice details
         recording aedt_notice_sent_at and screening_eligible_after (+N business days).
         """
-        effective_days = max(1, int(required_business_days))
+        effective_days = max(1, required_business_days)
         notice_dt = _parse_utc_datetime(sent_at) or datetime.now(timezone.utc)
         eligible_after = cls.add_business_days(notice_dt, effective_days)
 
@@ -130,9 +130,9 @@ class ComplianceService:
         updated_meta["aedt_notice_business_days"] = effective_days
         updated_meta["aedt_notice_method"] = method
         if job_id:
-            updated_meta["aedt_notice_job_id"] = str(job_id)
+            updated_meta["aedt_notice_job_id"] = job_id
         if sent_by_user_id:
-            updated_meta["aedt_notice_sent_by"] = str(sent_by_user_id)
+            updated_meta["aedt_notice_sent_by"] = sent_by_user_id
 
         details: Dict[str, Any] = {
             "notice_sent": True,
@@ -142,7 +142,7 @@ class ComplianceService:
             "method": method,
         }
         if job_id:
-            details["job_id"] = str(job_id)
+            details["job_id"] = job_id
 
         return updated_meta, details
 
@@ -158,7 +158,7 @@ class ComplianceService:
         elapsed since aedt_notice_sent_at (and screening_eligible_after has been reached).
         """
         now_dt = _parse_utc_datetime(now) or datetime.now(timezone.utc)
-        req_days = max(1, int(required_business_days))
+        req_days = max(1, required_business_days)
 
         if not isinstance(candidate_meta, dict) or not candidate_meta.get("aedt_notice_sent_at"):
             return {
@@ -258,9 +258,9 @@ class ComplianceService:
     @staticmethod
     def is_nyc_jurisdiction(location: Optional[str]) -> bool:
         """Return True when location matches NYC/NY or is unspecified (fail-safe default)."""
-        if location is None or not str(location).strip():
+        if location is None or not location.strip():
             return True
-        loc = str(location).strip().lower()
+        loc = location.strip().lower()
         nyc_tokens = (
             "nyc",
             "new york",
@@ -398,7 +398,7 @@ class ComplianceService:
         ]
         """
         threshold = cls.FOUR_FIFTHS_THRESHOLD
-        effective_min_sample = max(1, int(min_sample_size))
+        effective_min_sample = max(1, min_sample_size)
         job_id_str = str(job_id) if job_id is not None else None
         ll144_scope = cls.get_ll144_scope_metadata()
 

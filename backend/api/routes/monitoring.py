@@ -2,7 +2,9 @@
 DVT Talent AI — Real-Time Monitoring API
 Replaces all hardcoded mock data with live Redis SCAN and Celery inspect data.
 """
+import inspect
 import json
+from typing import Any, Dict, List
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +16,10 @@ from services.redis_service import get_redis_client
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
+
+
+async def _resolve(val: Any) -> Any:
+    return await val if inspect.isawaitable(val) else val
 
 
 @router.get("/signals/recent", summary="Get recent agent broadcast signals")
@@ -34,10 +40,10 @@ async def get_recent_signals(
     try:
         tenant_str = str(current_user.tenant_id)
         limit_end = min(max(1, limit), 100) - 1
-        signals = await r.lrange(f"dvt_signals_history:{tenant_str}", 0, limit_end)
+        signals = await _resolve(r.lrange(f"dvt_signals_history:{tenant_str}", 0, limit_end))
         if not signals:
-            signals = await r.lrange("dvt_signals_history", 0, limit_end)
-        parsed = [json.loads(s) for s in signals]
+            signals = await _resolve(r.lrange("dvt_signals_history", 0, limit_end))
+        parsed = [json.loads(s) for s in (signals or [])]
         return [
             s for s in parsed
             if str(s.get("tenant_id") or "") == tenant_str
@@ -70,7 +76,7 @@ async def get_active_mediations(
         active_locks = []
         cursor = 0
         while True:
-            cursor, keys = await r.scan(cursor, match="lock:*", count=100)
+            cursor, keys = await _resolve(r.scan(cursor, match="lock:*", count=100))
             active_locks.extend(keys)
             if cursor == 0:
                 break
@@ -79,7 +85,7 @@ async def get_active_mediations(
         score_keys = []
         cursor = 0
         while True:
-            cursor, keys = await r.scan(cursor, match="candidate:*:score_history", count=100)
+            cursor, keys = await _resolve(r.scan(cursor, match="candidate:*:score_history", count=100))
             score_keys.extend(keys)
             if cursor == 0:
                 break
@@ -88,7 +94,7 @@ async def get_active_mediations(
         latest_reconciliation = None
         if score_keys:
             latest_key = score_keys[0]
-            latest_entry = await r.lindex(latest_key, 0)
+            latest_entry = await _resolve(r.lindex(latest_key, 0))
             if latest_entry:
                 latest_reconciliation = f"{latest_key}: {latest_entry}"
 
@@ -124,7 +130,7 @@ async def get_celery_workers(
         reserved = inspector.reserved() or {}
         stats = inspector.stats() or {}
 
-        workers_summary = []
+        workers_summary: List[Dict[str, Any]] = []
         for worker_name, worker_stats in stats.items():
             workers_summary.append({
                 "name": worker_name,

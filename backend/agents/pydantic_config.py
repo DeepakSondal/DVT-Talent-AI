@@ -18,7 +18,7 @@ except (ImportError, TypeError):
 
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.groq import GroqModel
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 
 try:
     from pydantic_ai.providers.openai import OpenAIProvider
@@ -42,10 +42,10 @@ import os
 _MODEL_CACHE: Dict[str, Any] = {}
 
 
-def _build_openai_model(model_name: str, api_key: Optional[str] = None, base_url: Optional[str] = None) -> OpenAIModel:
+def _build_openai_model(model_name: str, api_key: Optional[str] = None, base_url: Optional[str] = None) -> OpenAIChatModel:
     if OpenAIProvider is not None and (api_key or base_url):
-        return OpenAIModel(model_name, provider=OpenAIProvider(api_key=api_key, base_url=base_url))
-    return OpenAIModel(model_name)
+        return OpenAIChatModel(model_name, provider=OpenAIProvider(api_key=api_key, base_url=base_url))
+    return OpenAIChatModel(model_name)
 
 
 def _build_anthropic_model(model_name: str, api_key: str):
@@ -73,7 +73,7 @@ def _build_chain(models: list[Any]):
 
 # 2. Unified Model Routing
 # We use the existing settings to decide which model to use for Pydantic AI
-def get_pydantic_model(dynamic_api_key: str = None, deps: Optional['AgentDeps'] = None):
+def get_pydantic_model(dynamic_api_key: Optional[str] = None, deps: Optional['AgentDeps'] = None):
     """
     Returns a Pydantic AI model (or FallbackModel chain when multiple providers are configured).
     Caches model instances to avoid repeated SSL context initialization overhead.

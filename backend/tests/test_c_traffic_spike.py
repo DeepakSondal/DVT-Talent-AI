@@ -35,7 +35,7 @@ async def authenticate_user(client: httpx.AsyncClient, user_idx: int) -> dict:
         pass
     return {"email": email, "token": None}
 
-async def user_request_loop(client: httpx.AsyncClient, token: str, duration_sec: float) -> list:
+async def user_request_loop(client: httpx.AsyncClient, token: str, duration_sec: float) -> dict:
     headers = {
         "Authorization": f"Bearer {token}",
         "X-Load-Test-Bypass": "true"

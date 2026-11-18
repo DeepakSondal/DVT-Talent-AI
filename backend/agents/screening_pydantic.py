@@ -15,12 +15,12 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import Agent
 
+from .pydantic_config import AgentDeps, get_pydantic_model
+
 try:
-    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
     from backend.config import settings
     from backend.services.sanitizer_service import sanitizer_service
 except ImportError:
-    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
     from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
     from services.sanitizer_service import sanitizer_service  # pyrefly: ignore[missing-import]  # type: ignore
 
@@ -74,8 +74,8 @@ async def generate_screening_guide(
     ):
         raise ValueError("A valid tenant_id is required for generate_screening_guide.")
 
-    safe_role_title, _ = sanitizer_service.sanitize(str(role_title or "Target Role"))
-    safe_job_description, _ = sanitizer_service.sanitize(str(job_description or ""))
+    safe_role_title, _ = sanitizer_service.sanitize((role_title or "Target Role"))
+    safe_job_description, _ = sanitizer_service.sanitize((job_description or ""))
     prompt = (
         "Generate an interview screening plan with questions and detailed ideal answers for the following Job Description:\n"
         f"Role: {safe_role_title or 'Target Role'}\n\n"

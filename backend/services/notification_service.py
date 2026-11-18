@@ -15,12 +15,12 @@ elif __name__.startswith("services."):
 import structlog
 from jinja2 import Template
 
+from .email_service import email_service
+
 try:
     from backend.db.models import AsyncSessionLocal, Tenant, User
-    from backend.services.email_service import email_service
 except ImportError:
     from db.models import AsyncSessionLocal, Tenant, User  # pyrefly: ignore[missing-import]  # type: ignore
-    from services.email_service import email_service  # pyrefly: ignore[missing-import]  # type: ignore
 from sqlalchemy import select
 
 log = structlog.get_logger(__name__)
@@ -53,9 +53,9 @@ class NotificationService:
         async with AsyncSessionLocal() as session:
             # 1. Get Tenant & Recruiters with defensive UUID conversion
             tenant_uuid = None
-            if tenant_id and str(tenant_id) != "default":
+            if tenant_id and tenant_id != "default":
                 try:
-                    tenant_uuid = uuid.UUID(str(tenant_id))
+                    tenant_uuid = uuid.UUID(tenant_id)
                 except (ValueError, TypeError):
                     tenant_uuid = tenant_id
 
@@ -78,7 +78,7 @@ class NotificationService:
             
             for recruiter in recruiters:
                 html_content = template.render(
-                    name=recruiter.first_name or "Recruiter",
+                    name=getattr(recruiter, "full_name", None) or "Recruiter",
                     job_title=job_title,
                     action_description=action_type,
                     details=details,
@@ -89,8 +89,8 @@ class NotificationService:
                 try:
                     await email_service.send_email(
                         email_id=str(uuid.uuid4()),
-                        tenant_id=tenant_uuid,
-                        to_address=recruiter.email,
+                        tenant_id=tenant_uuid if isinstance(tenant_uuid, uuid.UUID) else None,
+                        to_address=str(recruiter.email),
                         subject=f"⚠️ Action Required: {action_type}",
                         body=html_content
                     )

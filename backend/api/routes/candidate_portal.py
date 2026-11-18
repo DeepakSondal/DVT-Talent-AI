@@ -11,7 +11,7 @@ Provides free B2C candidate capabilities:
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -173,7 +173,7 @@ def compute_career_ops_score(
     else:
         ratio = len(matched) / len(job_skills)
         # Experience alignment bonus/penalty
-        exp_delta = (candidate.experience_years or 0) - (job.experience_years or 0)
+        exp_delta = int(cast(Any, candidate.experience_years) or 0) - int(cast(Any, job.experience_years) or 0)
         exp_adj = 0.5 if exp_delta >= 0 else max(-1.5, exp_delta * 0.4)
         cv_match = min(5.0, max(1.0, round(1.0 + (ratio * 3.5) + exp_adj, 1)))
 
@@ -317,22 +317,7 @@ async def get_or_create_candidate_for_user(user: User, db: AsyncSession) -> Cand
 
 # ── Routes ──────────────────────────────────────────────────────────────────
 
-@router.get("/profile", response_model=CandidateProfileOut)
-async def get_candidate_profile(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Retrieve candidate profile and privacy shield settings."""
-    cand = await get_or_create_candidate_for_user(current_user, db)
-    
-    # Check for active resume
-    res_query = await db.execute(
-        select(Resume)
-        .where(Resume.candidate_id == cand.id)
-        .order_by(desc(Resume.created_at))
-    )
-    latest_resume = res_query.scalars().first()
-
+def _build_candidate_profile_out(cand: Any, latest_resume: Any) -> CandidateProfileOut:
     return CandidateProfileOut(
         id=cand.id,
         email=cand.email,
@@ -354,6 +339,25 @@ async def get_candidate_profile(
         has_resume=latest_resume is not None,
         resume_name=latest_resume.file_name if latest_resume else None,
     )
+
+
+@router.get("/profile", response_model=CandidateProfileOut)
+async def get_candidate_profile(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve candidate profile and privacy shield settings."""
+    cand = await get_or_create_candidate_for_user(current_user, db)
+    
+    # Check for active resume
+    res_query = await db.execute(
+        select(Resume)
+        .where(Resume.candidate_id == cand.id)
+        .order_by(desc(Resume.created_at))
+    )
+    latest_resume = res_query.scalars().first()
+
+    return _build_candidate_profile_out(cand, latest_resume)
 
 
 @router.patch("/profile", response_model=CandidateProfileOut)
@@ -389,27 +393,7 @@ async def update_candidate_profile(
     )
     latest_resume = res_query.scalars().first()
 
-    return CandidateProfileOut(
-        id=cand.id,
-        email=cand.email,
-        first_name=cand.first_name,
-        last_name=cand.last_name,
-        title=cand.title,
-        location=cand.location,
-        linkedin_url=cand.linkedin_url,
-        github_url=cand.github_url,
-        portfolio_url=cand.portfolio_url,
-        skills=cand.skills or [],
-        experience_years=cand.experience_years or 0,
-        current_company=cand.current_company,
-        current_salary=cand.current_salary,
-        expected_salary=cand.expected_salary,
-        availability=cand.availability,
-        is_searchable=cand.is_searchable,
-        hide_from_companies=cand.hide_from_companies or [],
-        has_resume=latest_resume is not None,
-        resume_name=latest_resume.file_name if latest_resume else None,
-    )
+    return _build_candidate_profile_out(cand, latest_resume)
 
 
 @router.post("/resume")
@@ -467,35 +451,37 @@ async def upload_candidate_resume(
     )
 
     # 4. Update candidate profile fields
-    curr_skills = set(cand.skills or [])
+    cand_any: Any = cand
+    curr_skills = set(cand_any.skills or [])
     curr_skills.update(parsed_data.get("skills", []))
-    cand.skills = sorted(list(curr_skills))
+    updated_skills = sorted(list(curr_skills))
+    setattr(cand, "skills", updated_skills)
 
     if parsed_data.get("experience_years"):
-        cand.experience_years = max(cand.experience_years or 0, parsed_data["experience_years"])
+        setattr(cand, "experience_years", max(int(cand_any.experience_years or 0), parsed_data["experience_years"]))
     
     if parsed_data.get("current_company") and parsed_data["current_company"] != "Parsed From Resume":
-        cand.current_company = parsed_data["current_company"]
+        setattr(cand, "current_company", parsed_data["current_company"])
     
     if parsed_data.get("current_title") and not cand.title:
-        cand.title = parsed_data["current_title"]
+        setattr(cand, "title", parsed_data["current_title"])
 
     contact = parsed_data.get("contact", {})
     if contact.get("phone") and not cand.phone:
-        cand.phone = contact["phone"]
+        setattr(cand, "phone", contact["phone"])
     if contact.get("location") and not cand.location:
-        cand.location = contact["location"]
+        setattr(cand, "location", contact["location"])
     if contact.get("linkedin_url") and not cand.linkedin_url:
-        cand.linkedin_url = contact["linkedin_url"]
+        setattr(cand, "linkedin_url", contact["linkedin_url"])
     if contact.get("github_url") and not cand.github_url:
-        cand.github_url = contact["github_url"]
+        setattr(cand, "github_url", contact["github_url"])
 
     # 5. Mark older resumes as not current
     old_resumes = (await db.execute(
         select(Resume).where(Resume.candidate_id == cand.id, Resume.is_current.is_(True))
     )).scalars().all()
     for r in old_resumes:
-        r.is_current = False
+        setattr(r, "is_current", False)
 
     # 6. Save Resume record
     new_resume = Resume(
@@ -515,7 +501,7 @@ async def upload_candidate_resume(
         "status": "success",
         "message": f"Resume '{filename}' parsed and stored successfully.",
         "skills_detected": parsed_data.get("skills", []),
-        "total_skills": len(cand.skills),
+        "total_skills": len(updated_skills),
         "experience_detected": len(parsed_data.get("experience", [])),
         "education_detected": len(parsed_data.get("education", [])),
         "file_name": filename,
@@ -539,7 +525,7 @@ async def download_candidate_resume(
     if not res:
         raise HTTPException(status_code=404, detail="No resume found on file.")
 
-    file_path = ResumeParserService.get_resume_file_path(res.file_url)
+    file_path = ResumeParserService.get_resume_file_path(cast(Optional[str], res.file_url))
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="Original resume file not found on disk.")
 
@@ -554,7 +540,7 @@ async def download_candidate_resume(
 
     return FileResponse(
         path=str(file_path),
-        filename=res.file_name or file_path.name,
+        filename=str(res.file_name) if res.file_name else file_path.name,
         media_type=media_type,
     )
 
@@ -623,7 +609,7 @@ async def list_matched_jobs(
 
         # Check Privacy Shield: Hide from candidate's blocked companies
         if is_domain_or_company_blocked(
-            hide_from_companies=cand.hide_from_companies or [],
+            hide_from_companies=list(cast(Any, cand.hide_from_companies) or []),
             employer_domain=comp_dom,
             employer_name=comp_name,
         ):
@@ -698,13 +684,13 @@ async def apply_to_job(
 
     notice_sent_at = datetime.now(timezone.utc)
     updated_meta, notice_details = compliance_service.create_aedt_notice_record(
-        existing_meta=cand.meta_data,
+        existing_meta=cast(Optional[Dict[str, Any]], cand.meta_data),
         sent_at=notice_sent_at,
         required_business_days=10,
         method="candidate_portal_apply",
         job_id=str(job.id),
     )
-    cand.meta_data = updated_meta
+    setattr(cand, "meta_data", updated_meta)
 
     application = JobCandidate(
         job_id=job.id,
@@ -724,7 +710,7 @@ async def apply_to_job(
         try:
             email_sent = await email_service.send_email(
                 email_id=str(uuid.uuid4()),
-                to_address=cand.email,
+                to_address=str(cand.email),
                 subject=f"AEDT Notice for your {job.title} application at {company_name}",
                 body=(
                     f"Hello {cand.first_name or 'Candidate'},\n\n"
@@ -736,7 +722,7 @@ async def apply_to_job(
                     f"Bias Audit Summary: /api/v1/compliance/bias-audit-summary\n\n"
                     f"You may request an alternative selection process or reasonable accommodation."
                 ),
-                tenant_id=job.tenant_id,
+                tenant_id=cast(Optional[uuid.UUID], job.tenant_id),
             )
         except Exception as exc:
             log.warning("portal_apply_aedt_notice_email_failed", error=str(exc), candidate_id=str(cand.id))
@@ -748,7 +734,7 @@ async def apply_to_job(
         "recommendation": dimensions.recommendation,
         "aedt_notice": {
             **notice_details,
-            "email_notification_sent": bool(email_sent),
+            "email_notification_sent": email_sent,
             "qualifications_evaluated": ["skills", "experience_years", "role_alignment", "compensation_realism"],
             "bias_audit_summary_url": "/api/v1/compliance/bias-audit-summary",
             "alternative_process_notice": (
@@ -818,7 +804,8 @@ async def generate_interview_prep(
     comp_res = await db.execute(select(Company.name).where(Company.id == job.company_id))
     company_name = comp_res.scalar_one_or_none() or "Target Employer"
 
-    skills_text = ", ".join(cand.skills[:5]) if cand.skills else "Modern Software Engineering & Problem Solving"
+    cand_skills_list: List[str] = list(cast(Any, cand.skills) or [])
+    skills_text = ", ".join(cand_skills_list[:5]) if cand_skills_list else "Modern Software Engineering & Problem Solving"
     cand_title = cand.title or "Professional Engineer"
 
     # Deterministic High-Signal STAR cards adapted from career-ops story bank
@@ -856,7 +843,7 @@ async def generate_interview_prep(
     ]
 
     return InterviewPrepResponse(
-        job_title=job.title,
+        job_title=str(job.title),
         company_name=company_name,
         archetype="Technical Specialist / Builder",
         cards=cards,
@@ -884,8 +871,8 @@ async def generate_tailored_resume_advice(
     comp_res = await db.execute(select(Company.name).where(Company.id == job.company_id))
     company_name = comp_res.scalar_one_or_none() or "Target Employer"
 
-    cand_skills_lower = set(s.lower() for s in (cand.skills or []))
-    job_skills = job.skills_required or []
+    cand_skills_lower = set(s.lower() for s in (cast(Any, cand.skills) or []))
+    job_skills: List[str] = list(cast(Any, job.skills_required) or [])
     missing = [s for s in job_skills if s.lower() not in cand_skills_lower]
 
     ats_score = int(max(40, min(95, (1.0 - (len(missing) / max(1, len(job_skills)))) * 100)))
@@ -904,7 +891,7 @@ async def generate_tailored_resume_advice(
     })
 
     return TailorResumeResponse(
-        job_title=job.title,
+        job_title=str(job.title),
         company_name=company_name,
         ats_score=ats_score,
         missing_keywords=missing[:8],
@@ -926,7 +913,7 @@ async def candidate_self_erasure(
     cand = await get_or_create_candidate_for_user(current_user, db)
     from services.privacy_service import erase_candidate_personal_data
     return await erase_candidate_personal_data(
-        candidate_id=cand.id,
+        candidate_id=cast(uuid.UUID, cand.id),
         db=db,
         requesting_user=current_user,
     )

@@ -10,12 +10,13 @@ Regression test suite for full-codebase bug scan remediations:
 import base64
 import hashlib
 import hmac
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
-from agents.pydantic_config import _hash_key_id
+from agents.pydantic_config import AgentDeps, _hash_key_id
 from agents.sourcing_pydantic import fast_hybrid_candidate_search
 from api.routes.auth import hash_password, verify_password
 from api.routes.auth_social import _select_verified_primary_email
@@ -488,6 +489,7 @@ async def test_link_oauth_endpoint_consumes_single_use_token(client):
         collision_resp = await client.get("/api/v1/auth/callback/google", follow_redirects=False)
 
     assert collision_resp.status_code == 409
+    assert mock_mail.await_args is not None
     sent_body = mock_mail.await_args.kwargs["body"]
     match = re.search(r"Linking token:\s*(\S+)", sent_body)
     assert match, f"Confirmation token not found in email body: {sent_body}"
@@ -675,8 +677,8 @@ async def test_get_active_mediations_does_not_close_shared_redis():
     admin = SimpleNamespace(id=uuid.uuid4(), tenant_id=uuid.uuid4(), role=UserRole.ADMIN)
 
     with patch("api.routes.monitoring.get_redis_client", return_value=fake_redis):
-        res1 = await get_active_mediations(current_user=admin)
-        res2 = await get_active_mediations(current_user=admin)
+        res1 = await get_active_mediations(current_user=cast(User, admin))
+        res2 = await get_active_mediations(current_user=cast(User, admin))
 
     assert fake_redis.closed is False
     assert res1["active_locks"] == 1
@@ -706,7 +708,7 @@ async def test_get_recent_signals_filters_signals_with_missing_tenant_id():
 
     user_x = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_x, role=UserRole.RECRUITER)
     with patch("api.routes.monitoring.get_redis_client", return_value=FakeSignalRedis()):
-        signals = await get_recent_signals(limit=50, current_user=user_x)
+        signals = await get_recent_signals(limit=50, current_user=cast(User, user_x))
 
     assert [s["id"] for s in signals] == ["sig-tenant-x"]
 
@@ -935,12 +937,12 @@ async def test_byok_model_cache_isolates_same_key_across_tenants(monkeypatch):
 
     deps_a = SimpleNamespace(tenant_id="tenant-a", openai_key=shared_key, anthropic_key=None)
     deps_b = SimpleNamespace(tenant_id="tenant-b", openai_key=shared_key, anthropic_key=None)
-    model_a = pc.get_pydantic_model(deps=deps_a)
-    model_b = pc.get_pydantic_model(deps=deps_b)
+    model_a = pc.get_pydantic_model(deps=cast(AgentDeps, deps_a))
+    model_b = pc.get_pydantic_model(deps=cast(AgentDeps, deps_b))
     assert model_a is not model_b
 
     deps_anth = SimpleNamespace(tenant_id="tenant-c", openai_key=None, anthropic_key="sk-ant-isolated")
-    _ = pc.get_pydantic_model(deps=deps_anth)
+    _ = pc.get_pydantic_model(deps=cast(AgentDeps, deps_anth))
     assert "ANTHROPIC_API_KEY" not in os.environ
     assert "GROQ_API_KEY" not in os.environ
 
@@ -1262,7 +1264,7 @@ async def test_billing_plans_match_subscription_plan_out_schema(client):
 async def test_websocket_rejects_query_token_and_bad_origin_and_accepts_cookie(monkeypatch):
     """P0-11: WebSocket rejects ?token= query auth, disallowed Origins, and default/missing tenant_id; accepts dvt_token cookie."""
     from fastapi import WebSocketDisconnect, status
-    from jose import jwt
+    from jose import jwt  # pyrefly: ignore[untyped-import]
 
     from api.routes import websocket as ws_route
 

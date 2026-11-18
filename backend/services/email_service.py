@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import formataddr
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import httpx
 import structlog
@@ -67,7 +67,7 @@ async def _get_tenant_reply_to_identity(tenant_id: uuid.UUID) -> tuple[Optional[
         or (user.full_name if user and user.full_name else None)
         or (tenant.name if tenant else None)
     )
-    return recruiter_name, recruiter_email
+    return cast(Optional[str], recruiter_name), cast(Optional[str], recruiter_email)
 
 
 async def _get_tenant_oauth_sender(tenant_id: uuid.UUID) -> Optional[OAuthSenderConfig]:
@@ -100,12 +100,12 @@ async def _get_tenant_oauth_sender(tenant_id: uuid.UUID) -> Optional[OAuthSender
 
     return OAuthSenderConfig(
         provider=provider,
-        sender_name=tenant.sender_name or tenant.name or tenant.sender_email,
-        sender_email=tenant.sender_email,
+        sender_name=str(tenant.sender_name or tenant.name or tenant.sender_email),
+        sender_email=str(tenant.sender_email),
         access_token=access_token,
         refresh_token=refresh_token,
-        tenant_id=tenant.id,
-        reply_to_email=tenant.sender_email,
+        tenant_id=cast(Optional[uuid.UUID], tenant.id),
+        reply_to_email=str(tenant.sender_email),
     )
 
 
@@ -292,8 +292,6 @@ async def _deliver_oauth_message(
 
     return False
 
-    return False
-
 
 class EmailService:
     async def send_email(
@@ -362,7 +360,7 @@ class EmailService:
                 return False
 
             try:
-                email_uuid = uuid.UUID(str(email_id))
+                email_uuid = uuid.UUID(email_id)
             except ValueError:
                 email_uuid = None
 
@@ -371,9 +369,9 @@ class EmailService:
                     result = await session.execute(select(EmailSent).where(EmailSent.id == email_uuid))
                     email_obj = result.scalar_one_or_none()
                     if email_obj:
-                        email_obj.status = EmailStatus.SENT
-                        email_obj.sent_at = datetime.now(timezone.utc)
-                        email_obj.gmail_message_id = msg["Message-ID"]
+                        setattr(email_obj, "status", EmailStatus.SENT)
+                        setattr(email_obj, "sent_at", datetime.now(timezone.utc))
+                        setattr(email_obj, "gmail_message_id", msg["Message-ID"])
                         await session.commit()
 
             log.info(
@@ -478,7 +476,7 @@ class EmailService:
         """Send all pending draft emails for a given campaign."""
         from db.models import EmailCampaign
 
-        cid = uuid.UUID(str(campaign_id))
+        cid = uuid.UUID(campaign_id)
         sent, failed = 0, 0
         async with AsyncSessionLocal() as session:
             res = await session.execute(
@@ -490,7 +488,11 @@ class EmailService:
             emails = res.scalars().all()
             for em in emails:
                 ok = await self.send_email(
-                    str(em.id), em.to_email, em.subject, em.body, tenant_id=em.tenant_id
+                    str(em.id),
+                    str(em.to_email),
+                    str(em.subject),
+                    str(em.body),
+                    tenant_id=cast(Optional[uuid.UUID], em.tenant_id),
                 )
                 if ok:
                     sent += 1
@@ -499,7 +501,7 @@ class EmailService:
             if sent > 0:
                 camp = await session.get(EmailCampaign, cid)
                 if camp:
-                    camp.total_sent = (camp.total_sent or 0) + sent
+                    setattr(camp, "total_sent", int(cast(Any, camp.total_sent) or 0) + sent)
                     await session.commit()
         return {"sent": sent, "failed": failed}
 
@@ -542,8 +544,8 @@ class EmailService:
             )
             email_obj = result.scalar_one_or_none()
             if email_obj and email_obj.status != EmailStatus.REPLIED:
-                email_obj.status = EmailStatus.REPLIED
-                email_obj.replied_at = datetime.now(timezone.utc)
+                setattr(email_obj, "status", EmailStatus.REPLIED)
+                setattr(email_obj, "replied_at", datetime.now(timezone.utc))
                 await session.commit()
                 log.info("email_reply_tracked", email_id=email_obj.id)
                 return True

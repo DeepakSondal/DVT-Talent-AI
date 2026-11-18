@@ -2,6 +2,7 @@
 DVT Talent AI — Production Health Check Endpoints
 Provides deep health checks for all critical infrastructure components.
 """
+import inspect
 import time
 
 import structlog
@@ -56,7 +57,8 @@ async def health_redis():
         if not r:
             return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                                 content={"status": "unhealthy", "service": "redis", "error": "Client unavailable"})
-        pong = await r.ping()
+        ping_res = r.ping()
+        pong = await ping_res if inspect.isawaitable(ping_res) else ping_res
         latency_ms = round((time.monotonic() - t0) * 1000, 2)
         if pong:
             return {"status": "healthy", "service": "redis", "latency_ms": latency_ms}
@@ -86,7 +88,7 @@ async def health_llm(current_user: User = Depends(require_admin)):
             max_tokens=5,
         )
         latency_ms = round((time.monotonic() - t0) * 1000, 2)
-        content = resp.choices[0].message.content.strip()
+        content = (resp.choices[0].message.content or "").strip()
         return {
             "status": "healthy", "service": "llm",
             "model": settings.primary_llm_model,
@@ -115,7 +117,7 @@ async def health_all():
     def extract(r):
         if isinstance(r, JSONResponse):
             import json
-            return json.loads(r.body)
+            return json.loads(bytes(r.body))
         return r
 
     db_r = extract(db_result)

@@ -25,25 +25,19 @@ try:
 except ImportError:
     from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
 
+from .analytics_pydantic import analytics_agent
+from .critic_pydantic import critic_agent
+from .discovery_pydantic import discovery_agent
+from .outreach_pydantic import outreach_agent
+from .pydantic_config import AgentDeps, get_pydantic_model
+from .screening_pydantic import screening_agent
+from .sourcing_pydantic import prefetch_all_sourcing_signals, sourcing_agent
+
 try:
-    from backend.agents.analytics_pydantic import analytics_agent
-    from backend.agents.critic_pydantic import critic_agent
-    from backend.agents.discovery_pydantic import discovery_agent
-    from backend.agents.outreach_pydantic import outreach_agent
-    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
-    from backend.agents.screening_pydantic import screening_agent
-    from backend.agents.sourcing_pydantic import prefetch_all_sourcing_signals, sourcing_agent
     from backend.services.llm_guardrail_service import guardrail_service
     from backend.services.notification_service import notification_service
     from backend.services.sanitizer_service import sanitizer_service
 except ImportError:
-    from agents.analytics_pydantic import analytics_agent  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.critic_pydantic import critic_agent  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.discovery_pydantic import discovery_agent  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.outreach_pydantic import outreach_agent  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.screening_pydantic import screening_agent  # pyrefly: ignore[missing-import]  # type: ignore
-    from agents.sourcing_pydantic import prefetch_all_sourcing_signals, sourcing_agent  # pyrefly: ignore[missing-import]  # type: ignore
     from services.llm_guardrail_service import guardrail_service  # pyrefly: ignore[missing-import]  # type: ignore
     from services.notification_service import notification_service  # pyrefly: ignore[missing-import]  # type: ignore
     from services.sanitizer_service import sanitizer_service  # pyrefly: ignore[missing-import]  # type: ignore
@@ -129,13 +123,13 @@ def _trim_candidates_for_critic(candidates: List[Any]) -> List[Dict[str, Any]]:
 
 def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: Optional[str] = None, payload: Any = None):
     """Bridges telemetry to Celery & WebSocket bus (fast-skips if Redis broker is offline or tenant_id missing)."""
-    if not tenant_id or str(tenant_id).strip().lower() == "default":
+    if not tenant_id or tenant_id.strip().lower() == "default":
         return
     from workers.tasks import broadcast_signal as relay
     from workers.tasks import is_celery_broker_available
     if not is_celery_broker_available():
         return
-    relay(message, signal_type, str(tenant_id), payload=payload)
+    relay(message, signal_type, tenant_id, payload=payload)
 
 
 class AgentOrchestrator:
@@ -171,7 +165,7 @@ class AgentOrchestrator:
             return keys_dict
 
         try:
-            tenant_uuid = uuid.UUID(str(self.tenant_id)) if not isinstance(self.tenant_id, uuid.UUID) else self.tenant_id
+            tenant_uuid = uuid.UUID(self.tenant_id) if not isinstance(self.tenant_id, uuid.UUID) else self.tenant_id
         except (ValueError, TypeError):
             return keys_dict
 
@@ -198,11 +192,11 @@ class AgentOrchestrator:
                 keys = res_keys.scalar_one_or_none()
                 if keys:
                     if keys.openai_key:
-                        keys_dict["openai_key"] = decrypt_pii(keys.openai_key)
+                        keys_dict["openai_key"] = decrypt_pii(str(keys.openai_key))
                     if keys.serper_key:
-                        keys_dict["serper_key"] = decrypt_pii(keys.serper_key)
+                        keys_dict["serper_key"] = decrypt_pii(str(keys.serper_key))
                     if keys.anthropic_key:
-                        keys_dict["anthropic_key"] = decrypt_pii(keys.anthropic_key)
+                        keys_dict["anthropic_key"] = decrypt_pii(str(keys.anthropic_key))
             _TENANT_KEYS_CACHE[cache_key] = (now, dict(keys_dict))
         except Exception as e:
             log.warning("failed_to_resolve_tenant_keys", error=str(e), tenant_id=self.tenant_id)
@@ -280,14 +274,14 @@ class AgentOrchestrator:
         log.info("unified_pipeline_started", industry=safe_industry, location=safe_location)
         results: Dict[str, Any] = {"stages": {}}
 
-        if not self.tenant_id or str(self.tenant_id).strip().lower() == "default":
+        if not self.tenant_id or self.tenant_id.strip().lower() == "default":
             raise ValueError("A valid tenant_id is required for AgentOrchestrator.run_full_pipeline")
 
         async with httpx.AsyncClient() as client:
             t_keys = {} if mock_mode else await self._resolve_tenant_keys()
             deps = AgentDeps(
                 http_client=client,
-                tenant_id=str(self.tenant_id),
+                tenant_id=self.tenant_id,
                 serper_key=t_keys.get("serper_key") or settings.serper_api_key,
                 openai_key=t_keys.get("openai_key"),
                 anthropic_key=t_keys.get("anthropic_key"),
@@ -496,14 +490,14 @@ class AgentOrchestrator:
         log.info("swarm_phase_initiated", phase=phase, mode=mode, tenant_id=self.tenant_id)
         mock_mode = kwargs.get("mock_mode", False)
 
-        if not self.tenant_id or str(self.tenant_id).strip().lower() == "default":
+        if not self.tenant_id or self.tenant_id.strip().lower() == "default":
             raise ValueError("A valid tenant_id is required for AgentOrchestrator.run_full_pipeline")
 
         async with httpx.AsyncClient() as client:
             t_keys = {} if mock_mode else await self._resolve_tenant_keys()
             deps = AgentDeps(
                 http_client=client,
-                tenant_id=str(self.tenant_id),
+                tenant_id=self.tenant_id,
                 serper_key=t_keys.get("serper_key") or settings.serper_api_key,
                 openai_key=t_keys.get("openai_key"),
                 anthropic_key=t_keys.get("anthropic_key"),
@@ -758,7 +752,7 @@ class AgentOrchestrator:
         if not self.tenant_id or self.tenant_id == "default" or not candidates:
             return
         try:
-            tenant_uuid = uuid.UUID(str(self.tenant_id)) if not isinstance(self.tenant_id, uuid.UUID) else self.tenant_id
+            tenant_uuid = uuid.UUID(self.tenant_id) if not isinstance(self.tenant_id, uuid.UUID) else self.tenant_id
         except (ValueError, TypeError):
             return
 
@@ -772,7 +766,7 @@ class AgentOrchestrator:
             job_uuid = None
             if self.job_id:
                 try:
-                    job_uuid = uuid.UUID(str(self.job_id))
+                    job_uuid = uuid.UUID(self.job_id)
                 except (ValueError, TypeError):
                     job_uuid = None
 
@@ -850,7 +844,7 @@ class AgentOrchestrator:
                         model_name=getattr(settings, "llm_model", "llama-3.3-70b-versatile"),
                         prompt_version="v2.0",
                         input_data_hash=input_hash,
-                        qualification_score=int(round(score_val)),
+                        qualification_score=round(score_val),
                         confidence_level="HIGH" if score_val >= 85 else "MEDIUM",
                         evidence_signals={
                             "candidate_id": str(cand_row.id),
@@ -866,7 +860,7 @@ class AgentOrchestrator:
 
                 await session.commit()
         except Exception as e:
-            log.warning("persist_sourcing_and_ledger_failed", error=str(e), tenant_id=str(self.tenant_id))
+            log.warning("persist_sourcing_and_ledger_failed", error=str(e), tenant_id=self.tenant_id)
 
     async def _persist_outreach_campaign(
         self,
@@ -877,7 +871,7 @@ class AgentOrchestrator:
         if not self.tenant_id or self.tenant_id == "default" or not results:
             return
         try:
-            tenant_uuid = uuid.UUID(str(self.tenant_id)) if not isinstance(self.tenant_id, uuid.UUID) else self.tenant_id
+            tenant_uuid = uuid.UUID(self.tenant_id) if not isinstance(self.tenant_id, uuid.UUID) else self.tenant_id
         except (ValueError, TypeError):
             return
 
@@ -955,7 +949,7 @@ class AgentOrchestrator:
             email_srv = EmailService()
             await email_srv.send_campaign(campaign_id_str)
         except Exception as e:
-            log.warning("persist_outreach_campaign_failed", error=str(e), tenant_id=str(self.tenant_id))
+            log.warning("persist_outreach_campaign_failed", error=str(e), tenant_id=self.tenant_id)
 
     # ── Helpers ──────────────────────────────────────────────────────────────
     @staticmethod

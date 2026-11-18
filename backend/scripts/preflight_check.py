@@ -174,11 +174,12 @@ class PreflightCheck:
 
     async def check_stripe(self):
         """Test Stripe (Billing) connectivity."""
-        if not settings.stripe_secret_key:
+        stripe_key = getattr(settings, "stripe_secret_key", None)
+        if not stripe_key:
             return self.log_result("Stripe (Billing)", False, "No secret key found.")
         try:
             import stripe
-            stripe.api_key = settings.stripe_secret_key
+            stripe.api_key = str(stripe_key)
             stripe.Account.retrieve()
             self.log_result("Stripe (Billing)", True, "Billing gateway active.")
         except Exception as e:

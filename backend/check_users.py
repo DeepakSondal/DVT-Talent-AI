@@ -22,7 +22,7 @@ for db in glob.glob("*.db") + glob.glob("backend/*.db"):
 
 print("\n=== CHECKING POSTGRESQL ===")
 try:
-    import psycopg2
+    import psycopg2  # pyrefly: ignore[untyped-import]
 
     from config import settings
     # Try parsing postgres url

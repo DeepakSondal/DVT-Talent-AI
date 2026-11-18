@@ -5,7 +5,7 @@ adverse impact reports (EEOC 4/5ths Rule), and immutable AI Decision Ledger entr
 """
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
 import structlog
@@ -47,7 +47,7 @@ def _require_compliance_access(current_user: User, write: bool = False) -> uuid.
         raise HTTPException(status_code=403, detail="Workspace permissions required to access compliance governance.")
     if write and role_val not in ("admin", "recruiter", "manager"):
         raise HTTPException(status_code=403, detail="Recruiter, manager, or admin permissions required to override AI decisions.")
-    return current_user.tenant_id
+    return cast(uuid.UUID, current_user.tenant_id)
 
 
 @router.get("/bias-audit-summary")
@@ -163,7 +163,7 @@ async def get_adverse_impact_report(
             raise HTTPException(status_code=400, detail="Invalid min_sample_size") from exc
 
     if payload and "pool_a_applied" in payload and "pool_b_applied" in payload:
-        cohort = [
+        cohort: List[Dict[str, Any]] = [
             {"group": "Pool A", "total": int(payload.get("pool_a_applied") or 0), "selected": int(payload.get("pool_a_hired") or 0)},
             {"group": "Pool B", "total": int(payload.get("pool_b_applied") or 0), "selected": int(payload.get("pool_b_hired") or 0)},
         ]
@@ -236,7 +236,7 @@ async def send_aedt_advance_notice(
     required_days = payload.required_business_days if payload else 10
     sent_at = datetime.now(timezone.utc)
     updated_meta, notice_details = compliance_service.create_aedt_notice_record(
-        existing_meta=candidate.meta_data,
+        existing_meta=cast(Optional[Dict[str, Any]], candidate.meta_data),
         sent_at=sent_at,
         required_business_days=required_days,
         method="email",
@@ -244,7 +244,7 @@ async def send_aedt_advance_notice(
     )
 
     subject, body, bias_audit_summary_url = compliance_service.build_aedt_notice_email_content(
-        candidate_name=candidate.first_name,
+        candidate_name=cast(Optional[str], candidate.first_name),
         job_title=payload.job_title if payload else None,
         notice_details=notice_details,
         required_business_days=required_days,
@@ -255,7 +255,7 @@ async def send_aedt_advance_notice(
         try:
             email_sent = await email_service.send_email(
                 email_id=str(uuid.uuid4()),
-                to_address=candidate.email,
+                to_address=str(candidate.email),
                 subject=subject,
                 body=body,
                 tenant_id=tenant_id,
@@ -265,14 +265,14 @@ async def send_aedt_advance_notice(
             email_sent = False
 
     updated_meta["aedt_notice_delivery_status"] = "sent" if email_sent else "failed"
-    candidate.meta_data = updated_meta
+    setattr(candidate, "meta_data", updated_meta)
     await db.commit()
 
     return {
         "status": "SUCCESS",
         "candidate_id": str(candidate.id),
         "email": candidate.email,
-        "notification_sent": bool(email_sent),
+        "notification_sent": email_sent,
         "aedt_notice_sent_at": notice_details["aedt_notice_sent_at"],
         "screening_eligible_after": notice_details["screening_eligible_after"],
         "required_business_days": required_days,
@@ -351,7 +351,7 @@ async def get_decision_ledger(
             "model_provider": r.model_provider,
             "model_name": r.model_name,
             "qualification_score": r.qualification_score,
-            "confidence_score": round(r.qualification_score / 100.0, 2) if r.qualification_score is not None else None,
+            "confidence_score": round(float(cast(Any, r.qualification_score)) / 100.0, 2) if r.qualification_score is not None else None,
             "confidence_level": r.confidence_level,
             "evidence_signals": {
                 k: v for k, v in (r.evidence_signals.items() if isinstance(r.evidence_signals, dict) else [])
@@ -405,10 +405,10 @@ async def record_human_override(
     if not entry:
         raise HTTPException(status_code=404, detail="Decision ledger record not found")
 
-    entry.human_action = resolved_action
-    entry.is_override = True
-    entry.override_reason = resolved_reason
-    entry.reviewer_user_id = current_user.id
+    setattr(entry, "human_action", resolved_action)
+    setattr(entry, "is_override", True)
+    setattr(entry, "override_reason", resolved_reason)
+    setattr(entry, "reviewer_user_id", current_user.id)
 
     target_status = CandidateStatus.REJECTED if resolved_action == "REJECTED" else CandidateStatus.SCREENED
     updated_candidate_status = None
@@ -429,7 +429,7 @@ async def record_human_override(
                     cand,
                     enforce=False,
                 )
-            cand.status = target_status
+            setattr(cand, "status", target_status)
             updated_candidate_status = target_status.value
 
         if entry.job_id:
@@ -444,7 +444,7 @@ async def record_human_override(
             )
             jc = jc_res.scalar_one_or_none()
             if jc:
-                jc.status = target_status
+                setattr(jc, "status", target_status)
                 updated_job_candidate_status = target_status.value
 
     await db.commit()

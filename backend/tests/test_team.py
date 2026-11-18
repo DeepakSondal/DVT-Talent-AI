@@ -154,6 +154,6 @@ async def test_team_api_keys_encryption(db_session: AsyncSession):
     assert "sk-proj" not in db_keys.openai_key  # Must be encrypted/gibberish
 
     # 4. Decrypt and verify they match raw values
-    assert decrypt_pii(db_keys.openai_key) == raw_openai_key
-    assert decrypt_pii(db_keys.serper_key) == raw_serper_key
+    assert decrypt_pii(str(db_keys.openai_key)) == raw_openai_key
+    assert decrypt_pii(str(db_keys.serper_key)) == raw_serper_key
 

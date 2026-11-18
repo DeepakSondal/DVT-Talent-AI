@@ -50,8 +50,8 @@ async def create_admin():
         
         if existing:
             print("User admin@dvt.com already exists! Updating password from ADMIN_PASSWORD...")
-            existing.hashed_password = await hash_password(admin_password)
-            existing.is_active = True
+            setattr(existing, "hashed_password", await hash_password(admin_password))
+            setattr(existing, "is_active", True)
             await session.commit()
             print("Password for admin@dvt.com has been updated.")
             return

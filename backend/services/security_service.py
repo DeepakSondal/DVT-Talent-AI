@@ -13,6 +13,7 @@ try:
 except ImportError:
     from config import settings
     from db.models import AsyncSessionLocal, AuditLog
+from typing import Any, Optional
 import uuid
 
 import structlog
@@ -47,7 +48,7 @@ async def log_audit_event(
     action: str,
     entity_type: str,
     entity_id: uuid.UUID,
-    metadata: dict = None
+    metadata: Optional[dict[str, Any]] = None
 ):
     """Log a security event for compliance (SOC2/GDPR)"""
     async with AsyncSessionLocal() as session:

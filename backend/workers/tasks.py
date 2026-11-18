@@ -46,14 +46,14 @@ async def _mark_agent_task_failed(task_id: str, error_message: str) -> None:
     """Mark an AgentTask row FAILED cleanly on soft time limit or fatal termination."""
     from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
     try:
-        task_uuid = uuid.UUID(str(task_id))
+        task_uuid = uuid.UUID(task_id)
     except (ValueError, TypeError):
         return
     async with AsyncSessionLocal() as db:
         task = await db.get(AgentTask, task_uuid)
         if task:
-            task.status = AgentTaskStatus.FAILED
-            task.error_message = error_message[:500]
+            setattr(task, "status", AgentTaskStatus.FAILED)
+            setattr(task, "error_message", error_message[:500])
             await db.commit()
 
 
@@ -66,12 +66,12 @@ async def _mark_agent_task_failed_by_celery_id(celery_task_id: Optional[str], er
     from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         res = await db.execute(
-            select(AgentTask).where(AgentTask.celery_task_id == str(celery_task_id)).limit(1)
+            select(AgentTask).where(AgentTask.celery_task_id == celery_task_id).limit(1)
         )
         task = res.scalar_one_or_none()
         if task:
-            task.status = AgentTaskStatus.FAILED
-            task.error_message = error_message[:500]
+            setattr(task, "status", AgentTaskStatus.FAILED)
+            setattr(task, "error_message", error_message[:500])
             await db.commit()
 
 log = structlog.get_logger(__name__)
@@ -118,7 +118,7 @@ def _get_signal_redis():
     return redis.Redis(connection_pool=_signal_redis_pool)
 
 def _require_tenant_uuid(tenant_id: Optional[str]) -> str:
-    safe = str(tenant_id or "").strip()
+    safe = (tenant_id or "").strip()
     if not safe or safe.lower() == "default":
         raise ValueError("A valid UUID tenant_id is required")
     return str(uuid.UUID(safe))
@@ -126,7 +126,7 @@ def _require_tenant_uuid(tenant_id: Optional[str]) -> str:
 
 def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: Optional[str] = None, payload: Any = None):
     """Publish a signal to Redis for the WebSocket relay to pick up"""
-    if not tenant_id or str(tenant_id).strip().lower() == "default":
+    if not tenant_id or tenant_id.strip().lower() == "default":
         return
     try:
         r = _get_signal_redis()
@@ -145,7 +145,7 @@ def broadcast_signal(message: str, signal_type: str = "agent_info", tenant_id: O
 # ── Unified Runner ──────────────────────────────────────────────────────────
 
 @celery_app.task(bind=True, name="workers.tasks.run_agent_task", max_retries=3)
-def run_agent_task(self, agent_name: str, params: Dict[str, Any] = None, tenant_id: Optional[str] = None) -> Dict[str, Any]:
+def run_agent_task(self, agent_name: str, params: Optional[Dict[str, Any]] = None, tenant_id: Optional[str] = None) -> Dict[str, Any]:
     """Run any single agent by name (Discovery, Sourcing, Outreach, Analytics, Screening)"""
     safe_tenant_id = _require_tenant_uuid(tenant_id)
     log.info("celery_task_started", task="run_agent_task", agent=agent_name, tenant_id=safe_tenant_id)
@@ -212,8 +212,8 @@ def run_full_autonomous_pipeline(
 ) -> Dict[str, Any]:
     """Run the complete end-to-end 5-agent pipeline"""
     safe_tenant_id = _require_tenant_uuid(tenant_id)
-    safe_industry, _ = sanitizer_service.sanitize(str(industry or ""))
-    safe_location, _ = sanitizer_service.sanitize(str(location or ""))
+    safe_industry, _ = sanitizer_service.sanitize(industry or "")
+    safe_location, _ = sanitizer_service.sanitize(location or "")
     log.info("celery_task_started", task="full_pipeline", industry=safe_industry, tenant_id=safe_tenant_id)
     try:
         orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
@@ -258,8 +258,8 @@ def analyze_resume_task(
         file_bytes = base64.b64decode(file_content_b64)
         from db.models import sync_engine_db_url
         engine = create_engine(sync_engine_db_url)
-        clean_rid = str(resume_id).replace("-", "")
-        hyphen_rid = str(uuid.UUID(clean_rid)) if len(clean_rid) == 32 else str(resume_id)
+        clean_rid = resume_id.replace("-", "")
+        hyphen_rid = str(uuid.UUID(clean_rid)) if len(clean_rid) == 32 else resume_id
         with engine.connect() as conn:
             cand_check = conn.execute(
                 text("""
@@ -293,8 +293,8 @@ def analyze_resume_task(
             import httpx
             async with httpx.AsyncClient() as client:
                 deps = AgentDeps(http_client=client, tenant_id=resolved_tenant_id)
-                safe_jd, _ = sanitizer_service.sanitize(str(job_description or "Software Engineer"))
-                safe_resume, _ = sanitizer_service.sanitize(str(anonymized_text or ""))
+                safe_jd, _ = sanitizer_service.sanitize(job_description or "Software Engineer")
+                safe_resume, _ = sanitizer_service.sanitize(anonymized_text or "")
                 prompt = f"Analyze this resume against the JD: {safe_jd}. Resume text: {safe_resume}"
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
@@ -315,8 +315,8 @@ def score_candidate_task(self, candidate_id: str, job_id: Optional[str] = None) 
     try:
         from db.models import sync_engine_db_url
         engine = create_engine(sync_engine_db_url)
-        clean_cid = str(candidate_id).replace("-", "")
-        hyphen_cid = str(uuid.UUID(clean_cid)) if len(clean_cid) == 32 else str(candidate_id)
+        clean_cid = candidate_id.replace("-", "")
+        hyphen_cid = str(uuid.UUID(clean_cid)) if len(clean_cid) == 32 else candidate_id
         with engine.connect() as conn:
             cand_check = conn.execute(
                 text("SELECT pii_erased, tenant_id FROM candidates WHERE id = :cid OR id = :hcid LIMIT 1"),
@@ -409,7 +409,7 @@ def source_candidates_for_job(self, job_id: str, skills: list, location: Optiona
             async with httpx.AsyncClient() as client:
                 deps = AgentDeps(http_client=client, tenant_id=safe_tenant_id)
                 safe_skills, _ = sanitizer_service.sanitize(", ".join(str(s) for s in (skills or [])))
-                safe_location, _ = sanitizer_service.sanitize(str(location or "Remote"))
+                safe_location, _ = sanitizer_service.sanitize(location or "Remote")
                 prompt = f"Source qualified talent for Job ID {job_id}. Required skills: {safe_skills}. Location: {safe_location}."
                 res = await sourcing_agent.run(prompt, deps=deps)
                 return res.output.model_dump()
@@ -449,8 +449,8 @@ def send_campaign_emails(self, campaign_id: str, tenant_id: Optional[str] = None
 def copilot_discovery_task(self, task_id: str, industry: str, location: str, tenant_id: str):
     from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
     safe_tenant_id = _require_tenant_uuid(tenant_id)
-    safe_industry, _ = sanitizer_service.sanitize(str(industry or ""))
-    safe_location, _ = sanitizer_service.sanitize(str(location or ""))
+    safe_industry, _ = sanitizer_service.sanitize(industry or "")
+    safe_location, _ = sanitizer_service.sanitize(location or "")
 
     async def _run():
         orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
@@ -458,22 +458,22 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
             results = await orchestrator.run_swarm_phase(
                 "discovery", mode="copilot", industry=safe_industry, location=safe_location
             )
-            task_uuid = uuid.UUID(str(task_id))
+            task_uuid = uuid.UUID(task_id)
             async with AsyncSessionLocal() as db:
                 task = await db.get(AgentTask, task_uuid)
                 if task:
-                    task.output_data = results
-                    task.status = AgentTaskStatus.AWAITING_INPUT
-                    task.current_checkpoint = "discovery_complete"
+                    setattr(task, "output_data", results)
+                    setattr(task, "status", AgentTaskStatus.AWAITING_INPUT)
+                    setattr(task, "current_checkpoint", "discovery_complete")
                     await db.commit()
             broadcast_signal("Discovery phase completed.", "agent_success", safe_tenant_id)
         except Exception as e:
-            task_uuid = uuid.UUID(str(task_id))
+            task_uuid = uuid.UUID(task_id)
             async with AsyncSessionLocal() as db:
                 task = await db.get(AgentTask, task_uuid)
                 if task:
-                    task.status = AgentTaskStatus.FAILED
-                    task.error_message = str(e)
+                    setattr(task, "status", AgentTaskStatus.FAILED)
+                    setattr(task, "error_message", str(e))
                     await db.commit()
             raise
     try:
@@ -481,11 +481,11 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
     except SoftTimeLimitExceeded as exc:
         log.error("celery_task_soft_time_limit", task="copilot_discovery_task", task_id=task_id, error=str(exc))
         try:
-            asyncio.run(_mark_agent_task_failed(str(task_id), "Task exceeded soft execution time limit."))
+            asyncio.run(_mark_agent_task_failed(task_id, "Task exceeded soft execution time limit."))
         except Exception as mark_exc:
             log.warning("mark_agent_task_failed_error", error=str(mark_exc))
         broadcast_signal("Discovery phase exceeded execution time limit.", "agent_error", safe_tenant_id)
-        return {"status": "failed", "task_id": str(task_id), "error": "SoftTimeLimitExceeded"}
+        return {"status": "failed", "task_id": task_id, "error": "SoftTimeLimitExceeded"}
     except Exception as exc:
         # Rate Limit Backoff: 4, 8, 16, 32, 64 seconds
         raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
@@ -494,8 +494,8 @@ def copilot_discovery_task(self, task_id: str, industry: str, location: str, ten
 def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, tenant_id: str):
     from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
     safe_tenant_id = _require_tenant_uuid(tenant_id)
-    safe_approved_jd, _ = sanitizer_service.sanitize(str(approved_jd or ""))
-    safe_location, _ = sanitizer_service.sanitize(str(location or ""))
+    safe_approved_jd, _ = sanitizer_service.sanitize(approved_jd or "")
+    safe_location, _ = sanitizer_service.sanitize(location or "")
 
     async def _run():
         orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
@@ -503,22 +503,22 @@ def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, t
             results = await orchestrator.run_swarm_phase(
                 "sourcing", mode="copilot", job_description=safe_approved_jd, location=safe_location
             )
-            task_uuid = uuid.UUID(str(task_id))
+            task_uuid = uuid.UUID(task_id)
             async with AsyncSessionLocal() as db:
                 task = await db.get(AgentTask, task_uuid)
                 if task:
-                    task.output_data = results
-                    task.status = AgentTaskStatus.AWAITING_INPUT
-                    task.current_checkpoint = "sourcing_complete"
+                    setattr(task, "output_data", results)
+                    setattr(task, "status", AgentTaskStatus.AWAITING_INPUT)
+                    setattr(task, "current_checkpoint", "sourcing_complete")
                     await db.commit()
             broadcast_signal("Sourcing phase completed.", "agent_success", safe_tenant_id)
         except Exception as e:
-            task_uuid = uuid.UUID(str(task_id))
+            task_uuid = uuid.UUID(task_id)
             async with AsyncSessionLocal() as db:
                 task = await db.get(AgentTask, task_uuid)
                 if task:
-                    task.status = AgentTaskStatus.FAILED
-                    task.error_message = str(e)
+                    setattr(task, "status", AgentTaskStatus.FAILED)
+                    setattr(task, "error_message", str(e))
                     await db.commit()
             raise
     try:
@@ -526,11 +526,11 @@ def copilot_sourcing_task(self, task_id: str, approved_jd: str, location: str, t
     except SoftTimeLimitExceeded as exc:
         log.error("celery_task_soft_time_limit", task="copilot_sourcing_task", task_id=task_id, error=str(exc))
         try:
-            asyncio.run(_mark_agent_task_failed(str(task_id), "Task exceeded soft execution time limit."))
+            asyncio.run(_mark_agent_task_failed(task_id, "Task exceeded soft execution time limit."))
         except Exception as mark_exc:
             log.warning("mark_agent_task_failed_error", error=str(mark_exc))
         broadcast_signal("Sourcing phase exceeded execution time limit.", "agent_error", safe_tenant_id)
-        return {"status": "failed", "task_id": str(task_id), "error": "SoftTimeLimitExceeded"}
+        return {"status": "failed", "task_id": task_id, "error": "SoftTimeLimitExceeded"}
     except Exception as exc:
         raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
 
@@ -551,22 +551,22 @@ def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_con
                 job=safe_job_context,
                 enable_screening=enable_screening,
             )
-            task_uuid = uuid.UUID(str(task_id))
+            task_uuid = uuid.UUID(task_id)
             async with AsyncSessionLocal() as db:
                 task = await db.get(AgentTask, task_uuid)
                 if task:
-                    task.output_data = {"outreach_results": results}
-                    task.status = AgentTaskStatus.COMPLETED
-                    task.current_checkpoint = "pipeline_complete"
+                    setattr(task, "output_data", {"outreach_results": results})
+                    setattr(task, "status", AgentTaskStatus.COMPLETED)
+                    setattr(task, "current_checkpoint", "pipeline_complete")
                     await db.commit()
             broadcast_signal("Outreach pipeline completed.", "agent_success", safe_tenant_id)
         except Exception as e:
-            task_uuid = uuid.UUID(str(task_id))
+            task_uuid = uuid.UUID(task_id)
             async with AsyncSessionLocal() as db:
                 task = await db.get(AgentTask, task_uuid)
                 if task:
-                    task.status = AgentTaskStatus.FAILED
-                    task.error_message = str(e)
+                    setattr(task, "status", AgentTaskStatus.FAILED)
+                    setattr(task, "error_message", str(e))
                     await db.commit()
             raise
     try:
@@ -574,11 +574,11 @@ def copilot_outreach_task(self, task_id: str, approved_candidates: list, job_con
     except SoftTimeLimitExceeded as exc:
         log.error("celery_task_soft_time_limit", task="copilot_outreach_task", task_id=task_id, error=str(exc))
         try:
-            asyncio.run(_mark_agent_task_failed(str(task_id), "Task exceeded soft execution time limit."))
+            asyncio.run(_mark_agent_task_failed(task_id, "Task exceeded soft execution time limit."))
         except Exception as mark_exc:
             log.warning("mark_agent_task_failed_error", error=str(mark_exc))
         broadcast_signal("Outreach pipeline exceeded execution time limit.", "agent_error", safe_tenant_id)
-        return {"status": "failed", "task_id": str(task_id), "error": "SoftTimeLimitExceeded"}
+        return {"status": "failed", "task_id": task_id, "error": "SoftTimeLimitExceeded"}
     except Exception as exc:
         raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 2)) from exc
 
@@ -609,8 +609,8 @@ def _update_resume_in_db(resume_id: str, analysis: dict, raw_text: str = ""):
     try:
         from db.models import sync_engine_db_url
         engine = create_engine(sync_engine_db_url)
-        clean_rid = str(resume_id).replace("-", "")
-        hyphen_rid = str(uuid.UUID(clean_rid)) if len(clean_rid) == 32 else str(resume_id)
+        clean_rid = resume_id.replace("-", "")
+        hyphen_rid = str(uuid.UUID(clean_rid)) if len(clean_rid) == 32 else resume_id
         with engine.connect() as conn:
             cand_check = conn.execute(
                 text("""

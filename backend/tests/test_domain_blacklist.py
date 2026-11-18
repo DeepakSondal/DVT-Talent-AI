@@ -9,6 +9,7 @@ Validates:
 - Invalid, missing, or empty email and domain parameters
 """
 from types import SimpleNamespace
+from typing import Any, cast
 
 from services.privacy_service import (
     is_candidate_visible_to_recruiter,
@@ -38,7 +39,7 @@ class TestDomainNormalization:
         assert normalize_domain("") == ""
         assert normalize_domain("   ") == ""
         assert normalize_domain(None) == ""
-        assert normalize_domain(12345) == ""
+        assert normalize_domain(cast(Any, 12345)) == ""
 
 
 class TestBlacklistDomainMatching:
@@ -87,7 +88,7 @@ class TestBlacklistDomainMatching:
         assert is_domain_or_company_blocked(blacklist, employer_domain=None, employer_email=None) is False
         assert is_domain_or_company_blocked(blacklist, employer_domain="", employer_email="") is False
         assert is_domain_or_company_blocked([], employer_domain="google.com") is False
-        assert is_domain_or_company_blocked([None, ""], employer_domain="google.com") is False
+        assert is_domain_or_company_blocked(cast(Any, [None, ""]), employer_domain="google.com") is False
 
 
 class TestCandidateVisibilityGatekeeper:

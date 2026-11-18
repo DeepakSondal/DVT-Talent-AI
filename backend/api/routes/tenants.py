@@ -3,7 +3,7 @@ DVT Talent AI — Tenants API
 Manages enterprise client profiles, team members, and branding.
 """
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -95,9 +95,9 @@ async def update_my_tenant(
 
     for key, value in payload.model_dump(exclude_unset=True).items():
         if key == "settings" and isinstance(value, dict):
-            merged = dict(tenant.settings or {})
+            merged = dict(cast(Any, tenant.settings) or {})
             merged.update(value)
-            tenant.settings = merged
+            setattr(tenant, "settings", merged)
         else:
             setattr(tenant, key, value)
     
@@ -136,7 +136,7 @@ async def complete_onboarding(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
         
-    tenant.onboarded = True
+    setattr(tenant, "onboarded", True)
     await db.commit()
     return {"status": "success", "message": "Onboarding complete"}
 

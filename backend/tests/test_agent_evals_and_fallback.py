@@ -7,6 +7,7 @@ Covers:
 """
 from dataclasses import dataclass
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import patch
 
 import httpx
@@ -62,9 +63,9 @@ def test_get_pydantic_model_byok_isolates_from_system_keys():
         deps_b = SimpleNamespace(tenant_id="tenant-b", openai_key="sk-tenant-shared", anthropic_key=None)
         deps_both = SimpleNamespace(tenant_id="tenant-c", openai_key="sk-tenant-c", anthropic_key="sk-ant-c")
 
-        model_a = pc.get_pydantic_model(deps=deps_a)
-        model_b = pc.get_pydantic_model(deps=deps_b)
-        model_both = pc.get_pydantic_model(deps=deps_both)
+        model_a = pc.get_pydantic_model(deps=cast(AgentDeps, deps_a))
+        model_b = pc.get_pydantic_model(deps=cast(AgentDeps, deps_b))
+        model_both = pc.get_pydantic_model(deps=cast(AgentDeps, deps_both))
 
         assert not isinstance(model_a, FallbackModel)
         assert model_a is not model_b
@@ -163,7 +164,7 @@ async def test_critic_agent_pydantic_evals():
     report = await dataset.evaluate(run_critic, progress=False)
     assert len(report.cases) == 2
     for case in report.cases:
-        assert all(bool(v.value) for v in case.assertions.values())
+        assert all(v.value for v in case.assertions.values())
 
 
 @pytest.mark.asyncio
@@ -213,4 +214,4 @@ async def test_screening_agent_pydantic_evals():
     report = await dataset.evaluate(run_screening, progress=False)
     assert len(report.cases) == 2
     for case in report.cases:
-        assert all(bool(v.value) for v in case.assertions.values())
+        assert all(v.value for v in case.assertions.values())

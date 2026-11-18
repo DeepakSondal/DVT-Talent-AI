@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-import greenlet
+import greenlet  # pyrefly: ignore[untyped-import]
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -106,8 +106,7 @@ def test_ci_requirements_and_pyproject_declare_sqlalchemy_asyncio():
 def test_redis_circuit_breaker_respects_timeout_under_slow_dns():
     """Verify is_redis_available enforces its wall-clock deadline even when DNS lookup stalls."""
     prev_state = dict(redis_service._circuit_state)
-    redis_service._circuit_state["available"] = None
-    redis_service._circuit_state["last_checked"] = 0.0
+    redis_service._circuit_state.update({"available": None, "last_checked": 0.0})
 
     def slow_connect(*args, **kwargs):
         time.sleep(0.5)
@@ -124,7 +123,7 @@ def test_redis_circuit_breaker_respects_timeout_under_slow_dns():
 
         assert available is False
         assert elapsed < 0.1, f"Circuit breaker exceeded 100ms budget during DNS stall: {elapsed:.3f}s"
-        assert redis_service._circuit_state["available"] is False
+        assert redis_service._circuit_state.get("available") is False
     finally:
         redis_service._circuit_state.clear()
         redis_service._circuit_state.update(prev_state)

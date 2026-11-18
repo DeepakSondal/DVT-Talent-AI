@@ -204,14 +204,15 @@ class TestSecureTeamInvitations:
                         assert inv_record.tenant_id == data["tenant_a"].id
                         assert inv_record.team_id == data["team_a"].id
                         # Verify token_hash is a 64-char hex digest (SHA-256)
-                        assert len(inv_record.token_hash) == 64
-                        assert inv_record.token_hash.isalnum()
+                        assert len(str(inv_record.token_hash)) == 64
+                        assert str(inv_record.token_hash).isalnum()
                         # Ensure no raw token exists on the model
                         assert not hasattr(inv_record, "token")
                         assert not hasattr(inv_record, "raw_token")
 
                     # Verify email service was called with proper args
                     mock_send.assert_awaited_once()
+                    assert mock_send.await_args is not None
                     call_kwargs = mock_send.await_args.kwargs
                     assert call_kwargs["to_address"] == target_email
                     assert call_kwargs["tenant_id"] == data["tenant_a"].id
@@ -296,6 +297,7 @@ class TestSecureTeamInvitations:
                         json={"email": target_email, "role": "recruiter"},
                     )
                     assert inv_res.status_code == 200
+                    assert mock_send.await_args is not None
                     raw_token = mock_send.await_args.kwargs["invite_token"]
 
                 # Accept invitation as new team member (unauthenticated endpoint)
@@ -325,7 +327,7 @@ class TestSecureTeamInvitations:
                     user_stmt = select(User).where(User.email == target_email)
                     created_user = (await session.execute(user_stmt)).scalar_one()
                     assert created_user.hashed_password != "mock_password"
-                    assert await verify_password(chosen_password, created_user.hashed_password) is True
+                    assert await verify_password(chosen_password, str(created_user.hashed_password)) is True
                     assert created_user.is_active is True
                     assert created_user.is_verified is True
 
@@ -367,6 +369,7 @@ class TestSecureTeamInvitations:
                 mock_send.return_value = True
                 create_res = await client.post("/api/v1/team/invite", json={"email": target_email})
                 assert create_res.status_code == 200
+                assert mock_send.await_args is not None
                 raw_token = mock_send.await_args.kwargs["invite_token"]
                 uuid.UUID(create_res.json()["invitation"]["id"])
 
@@ -393,6 +396,7 @@ class TestSecureTeamInvitations:
             with patch("services.email_service.email_service.send_team_invitation_email", new_callable=AsyncMock) as mock_send:
                 mock_send.return_value = True
                 rev_res = await client.post("/api/v1/team/invite", json={"email": revoke_email})
+                assert mock_send.await_args is not None
                 revoke_token = mock_send.await_args.kwargs["invite_token"]
                 revoke_id = rev_res.json()["invitation"]["id"]
 
@@ -551,7 +555,7 @@ class TestSecureTeamInvitations:
                     inv = (await session.execute(
                         select(TeamInvitation).where(TeamInvitation.token_hash == token_hash)
                     )).scalar_one()
-                    inv.status = InvitationStatus.REVOKED
+                    setattr(inv, "status", InvitationStatus.REVOKED)
                     await session.commit()
 
                 rev_res = await client.get("/api/v1/team/invite/validate", params={"token": raw_token})
@@ -563,7 +567,7 @@ class TestSecureTeamInvitations:
                     inv = (await session.execute(
                         select(TeamInvitation).where(TeamInvitation.token_hash == token_hash)
                     )).scalar_one()
-                    inv.status = InvitationStatus.EXPIRED
+                    setattr(inv, "status", InvitationStatus.EXPIRED)
                     await session.commit()
 
                 exp_res = await client.get("/api/v1/team/invite/validate", params={"token": raw_token})
@@ -575,7 +579,7 @@ class TestSecureTeamInvitations:
                     inv = (await session.execute(
                         select(TeamInvitation).where(TeamInvitation.token_hash == token_hash)
                     )).scalar_one()
-                    inv.status = InvitationStatus.ACCEPTED
+                    setattr(inv, "status", InvitationStatus.ACCEPTED)
                     await session.commit()
 
                 used_res = await client.get("/api/v1/team/invite/validate", params={"token": raw_token})

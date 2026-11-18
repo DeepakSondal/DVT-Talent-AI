@@ -10,9 +10,10 @@ Executes after load generation ceases:
 import asyncio
 import json
 import sqlite3
+from typing import Any
 
 import httpx
-import psutil
+import psutil  # pyrefly: ignore[untyped-import]
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 HEALTH_URL = "http://127.0.0.1:8000/health"
@@ -32,7 +33,7 @@ async def run_recovery_check():
     cpu_pct = psutil.cpu_percent(interval=1.0)
     print(f"  CPU Utilization: {cpu_pct:.1f}% | Process RAM: {ram_mb:.1f} MB")
 
-    recovery_report = {
+    recovery_report: dict[str, Any] = {
         "scenario": "Test H: System Recovery",
         "cpu_idle_pct": cpu_pct,
         "ram_idle_mb": round(ram_mb, 2),

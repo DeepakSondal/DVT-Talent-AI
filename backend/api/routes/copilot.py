@@ -86,7 +86,7 @@ async def start_copilot_discovery(
 ):
     """Phase 1: Generates Market IQ and draft JD, then PAUSES for human review."""
     tenant_uuid = await _enforce_copilot_rate_limit(request, current_user)
-    if req.tenant_id and str(req.tenant_id) != str(tenant_uuid):
+    if req.tenant_id and req.tenant_id != str(tenant_uuid):
         raise HTTPException(status_code=403, detail="Cross-tenant task execution is forbidden.")
 
     task_id = uuid.uuid4()
@@ -122,7 +122,7 @@ async def start_copilot_sourcing(
 ):
     """Phase 2: Takes the MANUALLY EDITED Job Description and sources candidates."""
     tenant_uuid = await _enforce_copilot_rate_limit(request, current_user)
-    if req.tenant_id and str(req.tenant_id) != str(tenant_uuid):
+    if req.tenant_id and req.tenant_id != str(tenant_uuid):
         raise HTTPException(status_code=403, detail="Cross-tenant task execution is forbidden.")
 
     try:
@@ -134,8 +134,8 @@ async def start_copilot_sourcing(
     if not task or task.tenant_id != tenant_uuid:
         raise HTTPException(status_code=404, detail="Task not found")
         
-    task.status = AgentTaskStatus.RUNNING
-    task.current_checkpoint = "starting_sourcing"
+    setattr(task, "status", AgentTaskStatus.RUNNING)
+    setattr(task, "current_checkpoint", "starting_sourcing")
     await db.commit()
 
     # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion
@@ -157,7 +157,7 @@ async def start_copilot_outreach(
 ):
     """Phase 3: Takes the MANUALLY CURATED list of candidates and emails them."""
     tenant_uuid = await _enforce_copilot_rate_limit(request, current_user)
-    if req.tenant_id and str(req.tenant_id) != str(tenant_uuid):
+    if req.tenant_id and req.tenant_id != str(tenant_uuid):
         raise HTTPException(status_code=403, detail="Cross-tenant task execution is forbidden.")
 
     try:
@@ -169,8 +169,8 @@ async def start_copilot_outreach(
     if not task or task.tenant_id != tenant_uuid:
         raise HTTPException(status_code=404, detail="Task not found")
         
-    task.status = AgentTaskStatus.RUNNING
-    task.current_checkpoint = "starting_outreach"
+    setattr(task, "status", AgentTaskStatus.RUNNING)
+    setattr(task, "current_checkpoint", "starting_outreach")
     await db.commit()
 
     # [ENTERPRISE FIX] Dispatch to Redis/Celery queue to prevent RAM explosion

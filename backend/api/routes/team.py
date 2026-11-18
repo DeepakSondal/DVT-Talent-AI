@@ -2,7 +2,7 @@ import hashlib
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -77,7 +77,7 @@ async def invite_recruiter(
     Dispatches invitation link via configured email service.
     """
     raw_email = (payload.email if payload else email) or ""
-    clean_email = str(raw_email).strip().lower()
+    clean_email = raw_email.strip().lower()
     await enforce_endpoint_rate_limit(
         request,
         scope="invite_tenant",
@@ -159,7 +159,7 @@ async def invite_recruiter(
     )
     prior_invites = (await db.execute(prior_stmt)).scalars().all()
     for prior in prior_invites:
-        prior.status = InvitationStatus.REVOKED
+        setattr(prior, "status", InvitationStatus.REVOKED)
 
     # Generate cryptographically secure single-use token; store ONLY the SHA-256 hash
     raw_token = secrets.token_urlsafe(32)
@@ -186,21 +186,21 @@ async def invite_recruiter(
     # Look up tenant display name for email
     tenant_res = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
     tenant = tenant_res.scalar_one_or_none()
-    tenant_name = tenant.name if tenant else "Your Organization"
+    tenant_name = str(tenant.name) if tenant else "Your Organization"
 
     # Dispatch email through established EmailService
     email_delivered = await email_service.send_team_invitation_email(
         to_address=clean_email,
         tenant_name=tenant_name,
-        inviter_name=manager.full_name or "Team Administrator",
+        inviter_name=str(manager.full_name) if manager.full_name else "Team Administrator",
         invite_token=raw_token,
         role=target_role.value if hasattr(target_role, "value") else str(target_role),
-        tenant_id=tenant_id,
+        tenant_id=cast(Optional[uuid.UUID], tenant_id),
     )
 
-    invitation.email_sent = email_delivered
+    setattr(invitation, "email_sent", email_delivered)
     if not email_delivered:
-        invitation.email_error = "SMTP unconfigured or message delivery failed"
+        setattr(invitation, "email_error", "SMTP unconfigured or message delivery failed")
     await db.commit()
 
     log.info(
@@ -288,7 +288,7 @@ async def revoke_team_invitation(
             detail=f"Cannot revoke invitation with status '{invitation.status.value}'."
         )
 
-    invitation.status = InvitationStatus.REVOKED
+    setattr(invitation, "status", InvitationStatus.REVOKED)
     await db.commit()
     return {"message": "Invitation revoked successfully", "id": str(invitation_id)}
 
@@ -342,12 +342,12 @@ async def validate_team_invitation(
         )
 
     now = datetime.now(timezone.utc)
-    expires_at = invitation.expires_at
+    expires_at = cast(datetime, invitation.expires_at)
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
     if expires_at < now:
-        invitation.status = InvitationStatus.EXPIRED
+        setattr(invitation, "status", InvitationStatus.EXPIRED)
         await db.commit()
         raise HTTPException(
             status_code=400,
@@ -406,7 +406,7 @@ async def accept_team_invitation(
         )
 
     now = datetime.now(timezone.utc)
-    expires_at = invitation.expires_at
+    expires_at = cast(datetime, invitation.expires_at)
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
@@ -491,7 +491,7 @@ async def accept_team_invitation(
         .execution_options(synchronize_session=False)
     )
     consume_res = await db.execute(consume_stmt)
-    if consume_res.rowcount == 0:
+    if getattr(consume_res, "rowcount", 0) == 0:
         await db.rollback()
         raise HTTPException(
             status_code=400,
@@ -502,7 +502,7 @@ async def accept_team_invitation(
     if invitation.tenant_id:
         tenant_obj = await db.get(Tenant, invitation.tenant_id)
         if tenant_obj:
-            tenant_obj.credits_balance = (tenant_obj.credits_balance or 0) + 15
+            setattr(tenant_obj, "credits_balance", int(cast(Any, tenant_obj.credits_balance) or 0) + 15)
             team_bonus_tx = CreditTransaction(
                 tenant_id=invitation.tenant_id,
                 amount=15,
@@ -633,7 +633,7 @@ async def set_user_quota(user_id: str, limit: int, db: AsyncSession = Depends(ge
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found in this organization")
 
-    target_user.monthly_credit_limit = limit
+    setattr(target_user, "monthly_credit_limit", limit)
     await db.commit()
     return {"message": f"Quota for {user_id} set to {limit} credits.", "monthly_credit_limit": limit}
 
@@ -669,11 +669,11 @@ class TeamApiKeysOut(BaseModel):
     anthropic_key_hint: Optional[str] = None
     configured: bool
 
-def _mask_api_key(encrypted: Optional[str]) -> Optional[str]:
+def _mask_api_key(encrypted: Any) -> Optional[str]:
     if not encrypted:
         return None
     try:
-        plain = decrypt_pii(encrypted)
+        plain = decrypt_pii(str(encrypted))
         if len(plain) > 8:
             return f"{plain[:4]}{'•' * (len(plain) - 8)}{plain[-4:]}"
         return "••••"
@@ -738,11 +738,11 @@ async def save_team_api_keys(
         db.add(keys)
         
     if payload.openai_key is not None:
-        keys.openai_key = encrypt_pii(payload.openai_key) if payload.openai_key.strip() else None
+        setattr(keys, "openai_key", encrypt_pii(payload.openai_key) if payload.openai_key.strip() else None)
     if payload.serper_key is not None:
-        keys.serper_key = encrypt_pii(payload.serper_key) if payload.serper_key.strip() else None
+        setattr(keys, "serper_key", encrypt_pii(payload.serper_key) if payload.serper_key.strip() else None)
     if payload.anthropic_key is not None:
-        keys.anthropic_key = encrypt_pii(payload.anthropic_key) if payload.anthropic_key.strip() else None
+        setattr(keys, "anthropic_key", encrypt_pii(payload.anthropic_key) if payload.anthropic_key.strip() else None)
         
     await db.commit()
     return {"status": "saved", "message": "Team API keys saved and encrypted successfully"}

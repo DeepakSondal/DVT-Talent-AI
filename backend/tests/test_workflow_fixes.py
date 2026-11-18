@@ -79,7 +79,7 @@ def test_compliance_routes_expose_both_ledger_paths():
     """Verify /compliance/ledgers and /compliance/decision-ledger routes are registered."""
     from api.routes.compliance import router
 
-    paths = {route.path for route in router.routes}
+    paths = {getattr(route, "path", None) for route in router.routes}
     assert "/compliance/decision-ledger" in paths
     assert "/compliance/ledgers" in paths
     assert "/compliance/decision-ledger/{ledger_id}/override" in paths
@@ -119,7 +119,7 @@ def test_email_sender_exposes_oauth_routes():
     """Verify /email-sender/oauth/{provider}/connect and /callback routes are registered."""
     from api.routes.email_sender import router
 
-    paths = {route.path for route in router.routes}
+    paths = {getattr(route, "path", None) for route in router.routes}
     assert "/email-sender/oauth/{provider}/connect" in paths
     assert "/email-sender/oauth/{provider}/callback" in paths
 
@@ -157,7 +157,7 @@ def test_auth_exposes_forgot_password_route():
     """Verify /auth/forgot-password route is registered on auth router."""
     from api.routes.auth import router
 
-    paths = {route.path for route in router.routes}
+    paths = {getattr(route, "path", None) for route in router.routes}
     assert "/forgot-password" in paths
 
 
@@ -246,7 +246,7 @@ def test_compliance_override_rejects_viewer_and_candidate():
 async def test_oauth_sender_callback_rejects_non_oauth_state_jwt():
     """Verify oauth_sender_callback rejects tokens without type='oauth_state' or matching provider."""
     from fastapi import HTTPException
-    from jose import jwt
+    from jose import jwt  # pyrefly: ignore[untyped-import]
 
     from api.routes.email_sender import oauth_sender_callback
     from config import settings
@@ -302,7 +302,7 @@ def test_company_multi_tenant_domain_isolation():
     """Verify Company model schema supports per-tenant domain composite index."""
     from db.models import Company
 
-    index_names = [idx.name for idx in Company.__table__.indexes]
+    index_names = [idx.name for idx in getattr(Company.__table__, "indexes", ())]
     assert "uq_companies_tenant_domain" in index_names
     # Verify domain column is not globally unique
     assert Company.__table__.c.domain.unique is not True

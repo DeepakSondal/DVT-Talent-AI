@@ -31,9 +31,37 @@ export interface CreditStatus {
   transactions: CreditTransaction[];
 }
 
+export type PaymentMethodType = "google_pay" | "apple_pay" | "credit" | "debit" | "upi_intent";
+
+export interface UpiCheckoutDetails {
+  upi_id: string;
+  upi_number: string;
+  payee_name: string;
+  plan_id: string;
+  plan_name: string;
+  credits: number;
+  amount_usd: number;
+  amount_inr: number;
+  upi_uri: string;
+  gpay_uri: string;
+  reference_id: string;
+}
+
 export interface CheckoutResponse {
   checkout_url: string;
   session_id: string;
+  provider?: string;
+  allowed_payment_method_types?: PaymentMethodType[];
+  upi_details?: UpiCheckoutDetails;
+}
+
+export interface UpiConfirmResponse {
+  status: "confirmed" | "pending_verification" | string;
+  plan: string;
+  credits_added: number;
+  credits_balance: number;
+  utr_number: string;
+  message?: string;
 }
 
 export interface PortalResponse {

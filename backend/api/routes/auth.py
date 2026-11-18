@@ -13,7 +13,7 @@ import structlog
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
+from jose import JWTError, jwt  # pyrefly: ignore[untyped-import]
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -169,7 +169,7 @@ async def get_current_user(
 
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_obj_id: str = payload.get("sub")
+        user_obj_id: Optional[str] = payload.get("sub")
         if user_obj_id is None or payload.get("type") != "access":
             raise credentials_exception
     except JWTError as exc:
@@ -368,12 +368,12 @@ async def register(
         first_name = name_parts[0]
         last_name = name_parts[1] if len(name_parts) > 1 else ""
 
-        if existing_cand and existing_cand.user_id is None:
-            existing_cand.user_id = user.id
+        if existing_cand is not None and getattr(existing_cand, "user_id", None) is None:
+            setattr(existing_cand, "user_id", user.id)
             if not existing_cand.first_name:
-                existing_cand.first_name = first_name
+                setattr(existing_cand, "first_name", first_name)
             if not existing_cand.last_name:
-                existing_cand.last_name = last_name
+                setattr(existing_cand, "last_name", last_name)
         else:
             new_candidate = Candidate(
                 user_id=user.id,
@@ -467,7 +467,7 @@ async def login(
         await verify_password(form_data.password or "", _DUMMY_BCRYPT_HASH)
         password_ok = False
     else:
-        password_ok = await verify_password(form_data.password, user.hashed_password)
+        password_ok = await verify_password(form_data.password, str(user.hashed_password))
 
     if not user or not password_ok:
         if not bypass:
@@ -490,7 +490,7 @@ async def login(
     if not bypass:
         await reset_rate_limit(email_fail_key, window_seconds=900)
 
-    user.last_login = datetime.now(timezone.utc)
+    setattr(user, "last_login", datetime.now(timezone.utc))
     await db.commit()
 
     token_data = {
@@ -556,7 +556,7 @@ async def refresh_token_route(
 
     try:
         payload = jwt.decode(dvt_refresh_token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id_val: str = payload.get("sub")
+        user_id_val: Optional[str] = payload.get("sub")
         if not user_id_val or payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid refresh token")
     except JWTError as exc:
@@ -689,7 +689,7 @@ async def forgot_password(
         window_seconds=600,
         detail="Too many password reset requests. Please try again later.",
     )
-    clean_email = str(payload.email).strip().lower()
+    clean_email = payload.email.strip().lower()
     user = (await db.execute(select(User).where(func.lower(User.email) == clean_email))).scalar_one_or_none()
     if user and user.is_active:
         reset_code = f"{secrets.randbelow(900000) + 100000:06d}"
@@ -731,14 +731,14 @@ async def reset_password(
     )
     if len(payload.new_password or "") < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-    clean_email = str(payload.email).strip().lower()
+    clean_email = payload.email.strip().lower()
     otp_valid = await verify_email_otp(f"reset:{clean_email}", payload.otp)
     if not otp_valid:
         raise HTTPException(status_code=400, detail="Invalid or expired password reset code")
     user = (await db.execute(select(User).where(func.lower(User.email) == clean_email))).scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=400, detail="Invalid or expired password reset code")
-    user.hashed_password = await hash_password(payload.new_password)
+    setattr(user, "hashed_password", await hash_password(payload.new_password))
     await db.commit()
     await revoke_user_tokens(str(user.id))
     return {"status": "success", "message": "Password has been reset successfully."}

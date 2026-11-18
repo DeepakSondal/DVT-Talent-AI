@@ -264,8 +264,8 @@ def create_tar_gz_with_files(dest_path: Path, entries: dict):
 def run_restore_script_with_mocks(
     tmp_path: Path,
     db_backup: Path,
-    storage_backup: Path = None,
-    fail_on: str = None,  # 'docker_tar', 'docker_psql', 'reconcile', 'health'
+    storage_backup: Path | None = None,
+    fail_on: str | None = None,  # 'docker_tar', 'docker_psql', 'reconcile', 'health'
 ):
     """
     Executes scripts/restore_db.sh under Bash with mock docker executable that logs calls.
@@ -546,7 +546,7 @@ def test_17_sql_error_halts_restore_and_leaves_ingress_blocked(tmp_path):
     assert "start caddy" not in calls
 
 
-def run_backup_script_with_mocks(tmp_path: Path, fail_on: str = None):
+def run_backup_script_with_mocks(tmp_path: Path, fail_on: str | None = None):
     """
     Executes scripts/backup_db.sh under Bash with mock docker executable.
     fail_on: 'pg_dump', 'tar'

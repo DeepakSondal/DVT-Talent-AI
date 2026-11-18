@@ -6,13 +6,13 @@ import json
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import structlog
-from authlib.integrations.starlette_client import OAuth
+from authlib.integrations.starlette_client import OAuth  # pyrefly: ignore[untyped-import]
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from jose import JWTError, jwt
+from jose import JWTError, jwt  # pyrefly: ignore[untyped-import]
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -231,12 +231,12 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
             raise HTTPException(status_code=400, detail="Account is disabled")
         if user.provider != provider:
             # Never auto-link colliding accounts (whether password-only provider=None or another OAuth provider)
-            link_token = await _issue_oauth_link_token(user.id, provider, provider_id, email)
+            link_token = await _issue_oauth_link_token(cast(uuid.UUID, user.id), provider, provider_id, email)
             link_url = f"{settings.frontend_url}/auth/link-oauth?token={link_token}"
             try:
                 await email_service.send_email(
                     email_id=f"oauth_link_{uuid.uuid4().hex[:12]}",
-                    to_address=user.email,
+                    to_address=str(user.email),
                     subject="DVT Talent AI — Confirm OAuth Sign-In Linking",
                     body=(
                         f"Hello {user.full_name},\n\n"
@@ -246,7 +246,7 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
                         f"Linking token: {link_token}\n\n"
                         f"If you did not request this, ignore this message and your existing sign-in method remains unchanged."
                     ),
-                    tenant_id=user.tenant_id,
+                    tenant_id=cast(Optional[uuid.UUID], user.tenant_id),
                 )
             except Exception as exc:
                 log.error("oauth_link_confirmation_email_failed", user_id=str(user.id), error=str(exc))
@@ -261,7 +261,7 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
                 detail="An account with this email already exists. Check your email to confirm linking this provider.",
             )
         if not user.provider_id:
-            user.provider_id = provider_id
+            setattr(user, "provider_id", provider_id)
 
     await db.commit()
     await db.refresh(user)
@@ -284,10 +284,10 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
                 "sender_email": email,
                 "sender_name": user.full_name,
             }
-            tenant_obj.settings = t_settings
-            tenant_obj.sender_email = email
-            tenant_obj.sender_name = user.full_name
-            tenant_obj.sender_verified = True
+            setattr(tenant_obj, "settings", t_settings)
+            setattr(tenant_obj, "sender_email", email)
+            setattr(tenant_obj, "sender_name", user.full_name)
+            setattr(tenant_obj, "sender_verified", True)
             await db.commit()
 
     role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
@@ -373,8 +373,8 @@ async def link_oauth_provider(
     if not user or not user.is_active:
         raise HTTPException(status_code=404, detail="Account not found or disabled")
 
-    user.provider = provider
-    user.provider_id = str(provider_id)
+    setattr(user, "provider", provider)
+    setattr(user, "provider_id", str(provider_id))
     await db.commit()
     log.info("oauth_provider_linked", user_id=str(user.id), provider=provider)
     return {"status": "linked", "provider": provider}

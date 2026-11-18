@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { SubscriptionPlan, CreditStatus } from "@/types/billing";
+import { SubscriptionPlan, CreditStatus, UpiCheckoutDetails } from "@/types/billing";
 import { billingService } from "@/services/billing.service";
 
 const PLAN_ICONS: Record<string, any> = {
@@ -78,33 +78,48 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState<string | null>(null);
   const [openingPortal, setOpeningPortal] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"google_pay" | "all">("google_pay");
+  const [upiModal, setUpiModal] = useState<UpiCheckoutDetails | null>(null);
+  const [utrInput, setUtrInput] = useState("");
+  const [confirmingUtr, setConfirmingUtr] = useState(false);
+
+  const fetchBillingData = async () => {
+    try {
+      const [plansData, statusData] = await Promise.all([
+        billingService.getPlans(),
+        billingService.getCredits(),
+      ]);
+      if (plansData && plansData.length > 0) {
+        setPlans(plansData);
+      }
+      setStatus(statusData);
+    } catch (err) {
+      console.error("Billing fetch failed:", err);
+      toast.error("Failed to load billing details");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [plansData, statusData] = await Promise.all([
-          billingService.getPlans(),
-          billingService.getCredits(),
-        ]);
-        if (plansData && plansData.length > 0) {
-          setPlans(plansData);
-        }
-        setStatus(statusData);
-      } catch (err) {
-        console.error("Billing fetch failed:", err);
-        toast.error("Failed to load billing details");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+    fetchBillingData();
   }, []);
 
-  const handleUpgrade = async (planId: string) => {
-    setCheckingOut(planId);
+  const handleUpgrade = async (planId: string, methodOverride?: "google_pay" | "all") => {
+    const activeMethod = methodOverride || selectedPaymentMethod;
+    setCheckingOut(`${planId}:${activeMethod}`);
     try {
-      const res = await billingService.createCheckout(planId);
-      if (res?.checkout_url) {
+      const res = await billingService.createCheckout(
+        planId,
+        undefined,
+        undefined,
+        activeMethod === "google_pay" ? "google_pay" : undefined
+      );
+      if (res?.provider === "upi_direct" && res?.upi_details) {
+        setUpiModal(res.upi_details);
+        setUtrInput("");
+        setCheckingOut(null);
+      } else if (res?.checkout_url) {
         window.location.href = res.checkout_url;
       } else {
         toast.error("Checkout Error", {
@@ -114,9 +129,42 @@ export default function BillingPage() {
       }
     } catch (err: any) {
       toast.error("Checkout Error", {
-        description: err?.response?.data?.detail || "Unable to initialize Dodo Payments checkout."
+        description: err?.response?.data?.detail || "Unable to initialize checkout."
       });
       setCheckingOut(null);
+    }
+  };
+
+  const handleConfirmUpi = async () => {
+    if (!upiModal) return;
+    const cleanUtr = utrInput.replace(/\s+/g, "");
+    if (!/^\d{12}$/.test(cleanUtr)) {
+      toast.error("Invalid UTR Number", {
+        description: "Please enter the exact 12-digit UPI Ref / UTR number from Google Pay or your UPI app."
+      });
+      return;
+    }
+    setConfirmingUtr(true);
+    try {
+      const res = await billingService.confirmUpiPayment(upiModal.plan_id, cleanUtr, upiModal.reference_id);
+      if (res.status === "pending_verification") {
+        toast.info("UTR Submitted for Verification", {
+          description: res.message || `UTR ${res.utr_number} recorded. Credits will activate once verified.`
+        });
+      } else {
+        toast.success("Google Pay / UPI Payment Confirmed", {
+          description: `Added ${res.credits_added.toLocaleString()} credits (${res.plan} Plan).`
+        });
+      }
+      setUpiModal(null);
+      setUtrInput("");
+      await fetchBillingData();
+    } catch (err: any) {
+      toast.error("UPI Verification Failed", {
+        description: err?.response?.data?.detail || "Could not verify UTR number."
+      });
+    } finally {
+      setConfirmingUtr(false);
     }
   };
 
@@ -232,9 +280,39 @@ export default function BillingPage() {
 
       {/* Subscription Grid */}
       <div className="space-y-6">
-          <div className="flex items-center gap-4">
-              <h2 className="text-xs font-bold font-semibold text-muted-foreground whitespace-nowrap break-words">Plan Allocation &amp; Capacity</h2>
-              <div className="h-px w-full bg-border" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-1">
+                  <h2 className="text-xs font-bold font-semibold text-muted-foreground whitespace-nowrap break-words">Plan Allocation &amp; Capacity</h2>
+                  <div className="h-px w-full bg-border" />
+              </div>
+              <div className="flex items-center gap-2 bg-muted/60 p-1 rounded-xl border border-border self-start sm:self-auto">
+                  <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethod("google_pay")}
+                      className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5",
+                          selectedPaymentMethod === "google_pay"
+                              ? "bg-card text-foreground shadow-sm border border-border"
+                              : "text-muted-foreground hover:text-foreground"
+                      )}
+                  >
+                      <Wallet className="w-3.5 h-3.5 text-blue-600" />
+                      Google Pay
+                  </button>
+                  <button
+                      type="button"
+                      onClick={() => setSelectedPaymentMethod("all")}
+                      className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5",
+                          selectedPaymentMethod === "all"
+                              ? "bg-card text-foreground shadow-sm border border-border"
+                              : "text-muted-foreground hover:text-foreground"
+                      )}
+                  >
+                      <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+                      Cards / UPI / Apple Pay
+                  </button>
+              </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -292,25 +370,41 @@ export default function BillingPage() {
                                   </div>
                               </div>
 
-                              <Button 
-                                  onClick={() => handleUpgrade(plan.id)}
-                                  disabled={isCurrent || checkingOut === plan.id}
-                                  variant={isCurrent ? "outline" : "primary"}
-                                  className={cn(
-                                      "mt-6 w-full h-10 rounded-lg font-semibold text-xs transition-colors duration-150",
-                                      isCurrent 
-                                          ? "border-border text-muted-foreground bg-muted/40 cursor-default" 
-                                          : "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                              <div className="mt-6 space-y-2">
+                                  <Button 
+                                      onClick={() => handleUpgrade(plan.id, "google_pay")}
+                                      disabled={isCurrent || checkingOut !== null}
+                                      variant={isCurrent ? "outline" : "primary"}
+                                      className={cn(
+                                          "w-full h-10 rounded-lg font-semibold text-xs transition-colors duration-150",
+                                          isCurrent 
+                                              ? "border-border text-muted-foreground bg-muted/40 cursor-default" 
+                                              : "bg-slate-900 text-white hover:bg-black shadow-sm"
+                                      )}
+                                  >
+                                      {checkingOut === `${plan.id}:google_pay` ? (
+                                          <RefreshCcw className="w-4 h-4 animate-spin" />
+                                      ) : isCurrent ? (
+                                          "Current Active Plan"
+                                      ) : (
+                                          <>Pay with Google Pay <ArrowUpRight className="w-4 h-4 ml-1.5" /></>
+                                      )}
+                                  </Button>
+                                  {!isCurrent && (
+                                      <Button 
+                                          onClick={() => handleUpgrade(plan.id, "all")}
+                                          disabled={checkingOut !== null}
+                                          variant="outline"
+                                          className="w-full h-9 rounded-lg font-semibold text-xs border-border hover:bg-muted"
+                                      >
+                                          {checkingOut === `${plan.id}:all` ? (
+                                              <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+                                          ) : (
+                                              <>Upgrade with Card / UPI / Apple Pay</>
+                                          )}
+                                      </Button>
                                   )}
-                              >
-                                  {checkingOut === plan.id ? (
-                                      <RefreshCcw className="w-4 h-4 animate-spin" />
-                                  ) : isCurrent ? (
-                                      "Current Active Plan"
-                                  ) : (
-                                      <>Upgrade to {plan.name} <ArrowUpRight className="w-4 h-4 ml-1.5" /></>
-                                  )}
-                              </Button>
+                              </div>
                           </Card>
                       </motion.div>
                   );
@@ -339,12 +433,12 @@ export default function BillingPage() {
                           <span className="text-xl font-black break-words">${Math.floor(plan.price_usd_cents / 100)}</span>
                           <Button 
                             onClick={() => handleUpgrade(plan.id)}
-                            disabled={checkingOut === plan.id}
+                            disabled={checkingOut !== null}
                             variant="secondary" 
                             size="icon" 
                             className="h-12 w-12 rounded-xl bg-slate-900 text-white hover:bg-black group-hover:scale-110 transition-colors duration-150"
                           >
-                            {checkingOut === plan.id ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <ArrowUpRight className="w-4 h-4" />}
+                            {checkingOut?.startsWith(`${plan.id}:`) ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <ArrowUpRight className="w-4 h-4" />}
                           </Button>
                       </div>
                   </Card>
@@ -404,6 +498,127 @@ export default function BillingPage() {
               </div>
           </Card>
       </div>
+
+      {/* Direct Google Pay / UPI Modal */}
+      <AnimatePresence mode="wait">
+        {upiModal && (
+          <motion.div
+            key="upi-checkout-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={shouldReduceMotion ? { opacity: 1 } : { scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={shouldReduceMotion ? { opacity: 0 } : { scale: 0.96, opacity: 0 }}
+              transition={shouldReduceMotion ? { duration: 0 } : { type: "spring", stiffness: 300, damping: 28 }}
+              className="bg-card border border-border rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5"
+            >
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <Badge className="bg-blue-600 text-white text-[10px] font-bold">
+                    Google Pay / Direct UPI
+                  </Badge>
+                  <h3 className="text-lg font-extrabold tracking-tight">
+                    Upgrade to {upiModal.plan_name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    ${upiModal.amount_usd} USD (₹{upiModal.amount_inr.toLocaleString()} INR) • {upiModal.credits.toLocaleString()} Credits
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUpiModal(null)}
+                  className="text-xs font-semibold text-muted-foreground hover:text-foreground px-2 py-1"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="space-y-3 bg-muted/50 border border-border rounded-xl p-4 text-xs">
+                {upiModal.upi_id && (
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground">Google Pay / UPI ID</p>
+                      <p className="font-mono font-bold text-foreground">{upiModal.upi_id}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(upiModal.upi_id);
+                        toast.success("UPI ID copied");
+                      }}
+                      className="h-7 px-2.5 text-[11px]"
+                    >
+                      Copy ID
+                    </Button>
+                  </div>
+                )}
+                {upiModal.upi_number && (
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground">UPI Mobile Number</p>
+                      <p className="font-mono font-bold text-foreground">{upiModal.upi_number}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(upiModal.upi_number);
+                        toast.success("UPI number copied");
+                      }}
+                      className="h-7 px-2.5 text-[11px]"
+                    >
+                      Copy Number
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <a
+                  href={upiModal.gpay_uri}
+                  className="flex-1 inline-flex items-center justify-center h-9 rounded-lg bg-slate-900 text-white hover:bg-black text-xs font-semibold px-3"
+                >
+                  Open Google Pay
+                </a>
+                <a
+                  href={upiModal.upi_uri}
+                  className="flex-1 inline-flex items-center justify-center h-9 rounded-lg border border-border hover:bg-muted text-xs font-semibold px-3"
+                >
+                  Open Any UPI App
+                </a>
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-border">
+                <label className="text-xs font-semibold text-foreground block">
+                  Enter 12-Digit UPI Ref / UTR Number after payment
+                </label>
+                <input
+                  type="text"
+                  maxLength={14}
+                  value={utrInput}
+                  onChange={(e) => setUtrInput(e.target.value)}
+                  placeholder="e.g. 432187654321"
+                  className="w-full h-10 px-3 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-600"
+                />
+                <Button
+                  onClick={handleConfirmUpi}
+                  disabled={confirmingUtr}
+                  className="w-full h-10 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-semibold text-xs"
+                >
+                  {confirmingUtr ? (
+                    <RefreshCcw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>Verify UTR &amp; Activate {upiModal.credits.toLocaleString()} Credits</>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -120,7 +120,7 @@ async def seed():
         # 3. Ensure Credit Injection
         # Only inject if balance is low or new tenant
         if tenant.credits_balance < 5000:
-            tenant.credits_balance = 5000
+            setattr(tenant, "credits_balance", 5000)
             transaction = CreditTransaction(
                 id=uuid.uuid4(),
                 tenant_id=tenant_id,

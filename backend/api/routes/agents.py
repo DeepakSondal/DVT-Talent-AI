@@ -130,9 +130,9 @@ async def trigger_agent(
 @router.get("/trigger-dag")
 async def trigger_dag(
     request: Request,
+    background_tasks: BackgroundTasks,
     industry: str = "AI",
     location: str = "SF",
-    background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -190,13 +190,13 @@ async def run_swarm_pipeline(
         async with AsyncSessionLocal() as session:
             t_row = await session.get(AgentTask, task_id)
             if t_row:
-                t_row.output_data = res
-                t_row.completed_at = datetime.now(timezone.utc)
+                setattr(t_row, "output_data", res)
+                setattr(t_row, "completed_at", datetime.now(timezone.utc))
                 if res.get("error"):
-                    t_row.status = AgentTaskStatus.FAILED
-                    t_row.error_message = str(res["error"])
+                    setattr(t_row, "status", AgentTaskStatus.FAILED)
+                    setattr(t_row, "error_message", str(res["error"]))
                 else:
-                    t_row.status = AgentTaskStatus.COMPLETED
+                    setattr(t_row, "status", AgentTaskStatus.COMPLETED)
                 await session.commit()
 
     from workers.tasks import (
@@ -263,7 +263,7 @@ async def run_swarm_phase(
     phase: str,
     request: Request,
     mode: str = "copilot",
-    params: Dict[str, Any] = None,
+    params: Optional[Dict[str, Any]] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

@@ -15,18 +15,19 @@ except ImportError:
     def FileLock(path, timeout=10):  # noqa: N802
         try:
             import fcntl
+            flock = getattr(fcntl, "flock")
             f = open(path, "a+")
             try:
-                fcntl.flock(f, fcntl.LOCK_EX)
+                flock(f, getattr(fcntl, "LOCK_EX"))
                 yield
             finally:
-                fcntl.flock(f, fcntl.LOCK_UN)
+                flock(f, getattr(fcntl, "LOCK_UN"))
                 f.close()
         except Exception:
             yield
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import structlog
 from fastapi import HTTPException, status
@@ -256,7 +257,7 @@ async def delete_candidate_from_pinecone(
     import httpx
     target_ids = [
         f"ats_{tenant_id}_{candidate_id}",
-        str(candidate_id),
+        candidate_id,
         f"cand_{candidate_id}",
     ]
     if extra_embedding_ids:
@@ -298,14 +299,14 @@ async def delete_candidate_from_pinecone(
                 res_tenant = await http.post(
                     f"{pinecone_host}/vectors/delete",
                     headers={"Api-Key": pinecone_key},
-                    json={"ids": target_ids, "namespace": str(tenant_id)}
+                    json={"ids": target_ids, "namespace": tenant_id}
                 )
                 res_tenant.raise_for_status()
 
                 fetch_tenant_res = await http.get(
                     f"{pinecone_host}/vectors/fetch",
                     headers={"Api-Key": pinecone_key},
-                    params=[("ids", tid) for tid in target_ids] + [("namespace", str(tenant_id))],
+                    params=[("ids", tid) for tid in target_ids] + [("namespace", tenant_id)],
                 )
                 if fetch_tenant_res.status_code == 200:
                     found_tenant_vectors = fetch_tenant_res.json().get("vectors", {})
@@ -322,6 +323,37 @@ async def delete_candidate_from_pinecone(
     except Exception as e:
         log.warning("pinecone_vector_delete_failed", error=str(e), candidate_id=candidate_id)
         raise e
+
+
+def _scrub_candidate_pii(candidate: Any, now: datetime) -> None:
+    """Atomically nullify all personal fields on a Candidate ORM row for GDPR Article 17 erasure."""
+    candidate.first_name = "Erased"
+    candidate.last_name = "Candidate"
+    candidate.email = f"erased_{candidate.id}@erased.local"
+    candidate.phone = None
+    candidate.title = None
+    candidate.location = None
+    candidate.linkedin_url = None
+    candidate.github_url = None
+    candidate.portfolio_url = None
+    candidate.skills = []
+    candidate.experience_years = 0
+    candidate.current_company = None
+    candidate.current_salary = None
+    candidate.expected_salary = None
+    candidate.availability = None
+    candidate.source = None
+    candidate.score = 0.0
+    candidate.embedding_id = None
+    candidate.ai_summary = "[Personal data permanently erased per GDPR Article 17 request]"
+    candidate.do_not_contact = True
+    candidate.is_searchable = False
+    candidate.hide_from_companies = []
+    candidate.scoring_reasoning = {}
+    candidate.integrity_reasoning = {}
+    candidate.meta_data = {}
+    candidate.pii_erased = True
+    candidate.pii_erased_at = candidate.pii_erased_at or now
 
 
 async def erase_candidate_personal_data(
@@ -379,10 +411,10 @@ async def erase_candidate_personal_data(
     # 5. Collect resume file paths and embedding IDs before DB removal
     resumes_stmt = select(Resume).where(Resume.candidate_id == candidate.id)
     resumes = (await db.execute(resumes_stmt)).scalars().all()
-    file_urls_to_delete = [r.file_url for r in resumes if r.file_url]
-    embedding_ids_to_delete = [r.embedding_id for r in resumes if r.embedding_id]
+    file_urls_to_delete: List[str] = [str(r.file_url) for r in resumes if r.file_url]
+    embedding_ids_to_delete: List[str] = [str(r.embedding_id) for r in resumes if r.embedding_id]
     if candidate.embedding_id:
-        embedding_ids_to_delete.append(candidate.embedding_id)
+        embedding_ids_to_delete.append(str(candidate.embedding_id))
 
     # If retrying from an existing cleanup task, augment targets
     if target_cleanup_task:
@@ -398,33 +430,7 @@ async def erase_candidate_personal_data(
 
     # 6. Database Transaction (Atomic Nullification)
     now = datetime.now(timezone.utc)
-    candidate.first_name = "Erased"
-    candidate.last_name = "Candidate"
-    candidate.email = f"erased_{candidate.id}@erased.local"
-    candidate.phone = None
-    candidate.title = None
-    candidate.location = None
-    candidate.linkedin_url = None
-    candidate.github_url = None
-    candidate.portfolio_url = None
-    candidate.skills = []
-    candidate.experience_years = 0
-    candidate.current_company = None
-    candidate.current_salary = None
-    candidate.expected_salary = None
-    candidate.availability = None
-    candidate.source = None
-    candidate.score = 0.0
-    candidate.embedding_id = None
-    candidate.ai_summary = "[Personal data permanently erased per GDPR Article 17 request]"
-    candidate.do_not_contact = True
-    candidate.is_searchable = False
-    candidate.hide_from_companies = []
-    candidate.scoring_reasoning = {}
-    candidate.integrity_reasoning = {}
-    candidate.meta_data = {}
-    candidate.pii_erased = True
-    candidate.pii_erased_at = candidate.pii_erased_at or now
+    _scrub_candidate_pii(candidate, now)
 
     # Remove resume records
     for r in resumes:
@@ -434,11 +440,11 @@ async def erase_candidate_personal_data(
     apps_stmt = select(JobCandidate).where(JobCandidate.candidate_id == candidate.id)
     applications = (await db.execute(apps_stmt)).scalars().all()
     for app in applications:
-        app.notes = None
-        app.ai_reasoning = None
-        app.career_ops_scoring = {}
-        app.match_score = 0.0
-        app.status = CandidateStatus.REJECTED
+        setattr(app, "notes", None)
+        setattr(app, "ai_reasoning", None)
+        setattr(app, "career_ops_scoring", {})
+        setattr(app, "match_score", 0.0)
+        setattr(app, "status", CandidateStatus.REJECTED)
 
     # Scrub AI Decision Ledger PII signals and reasoning for this candidate
     ledgers_stmt = select(AIDecisionLedger).where(AIDecisionLedger.candidate_id == candidate.id)
@@ -448,16 +454,16 @@ async def erase_candidate_personal_data(
         sig.pop("candidate_name", None)
         sig.pop("candidate_email", None)
         sig["pii_erased"] = True
-        ledger_row.evidence_signals = sig
-        ledger_row.reasoning_summary = "[Personal data erased per GDPR Article 17 request]"
+        setattr(ledger_row, "evidence_signals", sig)
+        setattr(ledger_row, "reasoning_summary", "[Personal data erased per GDPR Article 17 request]")
 
     # Deactivate linked candidate portal User account if present
     if candidate.user_id:
         linked_user = await db.get(User, candidate.user_id)
         if linked_user and getattr(linked_user.role, "value", str(linked_user.role)) == "candidate":
-            linked_user.is_active = False
-            linked_user.full_name = "Erased Candidate"
-            linked_user.email = f"erased_user_{linked_user.id}@erased.local"
+            setattr(linked_user, "is_active", False)
+            setattr(linked_user, "full_name", "Erased Candidate")
+            setattr(linked_user, "email", f"erased_user_{linked_user.id}@erased.local")
 
     # Cancel pending background tasks
     if candidate.tenant_id:
@@ -469,8 +475,8 @@ async def erase_candidate_personal_data(
         for t in running_tasks:
             inp = t.input_data or {}
             if str(inp.get("candidate_id")) == str(candidate.id) or str(inp.get("cid")) == str(candidate.id):
-                t.status = AgentTaskStatus.FAILED
-                t.error_message = "Cancelled: candidate personal data erased per GDPR request."
+                setattr(t, "status", AgentTaskStatus.FAILED)
+                setattr(t, "error_message", "Cancelled: candidate personal data erased per GDPR request.")
 
     # In-transaction crash recovery: persist cleanup task before commit!
     if not target_cleanup_task:
@@ -505,9 +511,9 @@ async def erase_candidate_personal_data(
         candidate.pii_erased_at.isoformat() if candidate.pii_erased_at else None,
     )
     if target_cleanup_task:
-        cur_input = dict(target_cleanup_task.input_data or {})
+        cur_input = dict(cast(Any, target_cleanup_task.input_data) or {})
         cur_input["retry_tombstone"] = not tombstone_ok
-        target_cleanup_task.input_data = cur_input
+        setattr(target_cleanup_task, "input_data", cur_input)
         await db.commit()
 
     # 7. File System Deletion
@@ -589,19 +595,25 @@ async def erase_candidate_personal_data(
 
     # 9. Handle Incomplete / Retryable Cleanup
     if not vector_erased or file_errors or not tombstone_ok:
-        target_cleanup_task.retries = (target_cleanup_task.retries or 0) + 1
-        target_cleanup_task.error_message = (
-            f"Retry required: vector_err={vector_error}; file_errs={len(file_errors)}; tombstone_ok={tombstone_ok}"
+        setattr(target_cleanup_task, "retries", int(cast(Any, target_cleanup_task.retries) or 0) + 1)
+        setattr(
+            target_cleanup_task,
+            "error_message",
+            f"Retry required: vector_err={vector_error}; file_errs={len(file_errors)}; tombstone_ok={tombstone_ok}",
         )
-        target_cleanup_task.input_data = {
-            "candidate_id": str(candidate.id),
-            "tenant_id": str(candidate.tenant_id),
-            "embedding_ids": embedding_ids_to_delete,
-            "file_urls": file_urls_to_delete,
-            "retry_vector": not vector_erased,
-            "retry_files": bool(file_errors),
-            "retry_tombstone": not tombstone_ok,
-        }
+        setattr(
+            target_cleanup_task,
+            "input_data",
+            {
+                "candidate_id": str(candidate.id),
+                "tenant_id": str(candidate.tenant_id),
+                "embedding_ids": embedding_ids_to_delete,
+                "file_urls": file_urls_to_delete,
+                "retry_vector": not vector_erased,
+                "retry_files": bool(file_errors),
+                "retry_tombstone": not tombstone_ok,
+            },
+        )
         await db.commit()
 
         # Dispatch background retry worker automatically
@@ -630,8 +642,8 @@ async def erase_candidate_personal_data(
         }
 
     # 10. Success: Finalize cleanup task
-    target_cleanup_task.status = AgentTaskStatus.COMPLETED
-    target_cleanup_task.completed_at = now
+    setattr(target_cleanup_task, "status", AgentTaskStatus.COMPLETED)
+    setattr(target_cleanup_task, "completed_at", now)
     await db.commit()
 
     log.info(
@@ -674,8 +686,8 @@ def record_erasure_tombstone(candidate_id: str, tenant_id: Optional[str] = None,
     try:
         ERASURE_TOMBSTONE_LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
         entry = {
-            "candidate_id": str(candidate_id),
-            "tenant_id": str(tenant_id) if tenant_id else None,
+            "candidate_id": candidate_id,
+            "tenant_id": tenant_id if tenant_id else None,
             "erased_at": erased_at or datetime.now(timezone.utc).isoformat(),
         }
         lock = FileLock(str(ERASURE_TOMBSTONE_LOCK_PATH), timeout=10)
@@ -743,33 +755,7 @@ async def reconcile_post_restore_erasures(db: AsyncSession) -> Dict[str, Any]:
         if candidate and not candidate.pii_erased:
             resurrected_count += 1
             log.warning("resurrected_candidate_detected_from_backup_restore", candidate_id=str(candidate.id))
-            candidate.first_name = "Erased"
-            candidate.last_name = "Candidate"
-            candidate.email = f"erased_{candidate.id}@erased.local"
-            candidate.phone = None
-            candidate.title = None
-            candidate.location = None
-            candidate.linkedin_url = None
-            candidate.github_url = None
-            candidate.portfolio_url = None
-            candidate.skills = []
-            candidate.experience_years = 0
-            candidate.current_company = None
-            candidate.current_salary = None
-            candidate.expected_salary = None
-            candidate.availability = None
-            candidate.source = None
-            candidate.score = 0.0
-            candidate.embedding_id = None
-            candidate.ai_summary = "[Personal data permanently erased per GDPR Article 17 request]"
-            candidate.do_not_contact = True
-            candidate.is_searchable = False
-            candidate.hide_from_companies = []
-            candidate.scoring_reasoning = {}
-            candidate.integrity_reasoning = {}
-            candidate.meta_data = {}
-            candidate.pii_erased = True
-            candidate.pii_erased_at = candidate.pii_erased_at or now
+            _scrub_candidate_pii(candidate, now)
 
             # Delete any restored resumes
             resumes_stmt = select(Resume).where(Resume.candidate_id == candidate.id)
@@ -888,7 +874,7 @@ async def sweep_and_process_gdpr_cleanups(db: AsyncSession) -> Dict[str, Any]:
         await db.commit()
 
         # If another worker concurrently claimed this task, skip it safely
-        if claim_res.rowcount == 0:
+        if getattr(claim_res, "rowcount", 0) == 0:
             continue
 
         inp = task.input_data or {}
@@ -965,7 +951,7 @@ async def sweep_and_process_gdpr_cleanups(db: AsyncSession) -> Dict[str, Any]:
                 )
                 complete_res = await db.execute(complete_stmt)
                 await db.commit()
-                if complete_res.rowcount > 0:
+                if getattr(complete_res, "rowcount", 0) > 0:
                     succeeded += 1
                 else:
                     log.warning("gdpr_cleanup_expired_worker_suppressed", task_id=str(task.id), lease=lease_token)
@@ -987,7 +973,7 @@ async def sweep_and_process_gdpr_cleanups(db: AsyncSession) -> Dict[str, Any]:
                 )
                 fail_res = await db.execute(fail_stmt)
                 await db.commit()
-                if fail_res.rowcount > 0:
+                if getattr(fail_res, "rowcount", 0) > 0:
                     failed += 1
         except Exception as task_exc:
             log.error("gdpr_cleanup_task_unhandled_failure", task_id=str(task.id), error=str(task_exc))

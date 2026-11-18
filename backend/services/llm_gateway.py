@@ -60,7 +60,7 @@ class LLMGateway:
         """
         Executes asynchronous completion with resilient fallback handling.
         """
-        if not LITELLM_AVAILABLE:
+        if not LITELLM_AVAILABLE or litellm is None:
             log.warning("litellm_not_installed_mock_fallback")
             return {
                 "content": "LiteLLM is not installed. Running in graceful mock mode.",
@@ -81,17 +81,19 @@ class LLMGateway:
                 fallbacks=backup_models,
                 **kwargs,
             )
-            content = response.choices[0].message.content or ""
+            choices = getattr(response, "choices", None) or []
+            content = (choices[0].message.content or "") if choices else ""
+            model_name = getattr(response, "model", None) or chosen_model
             usage = getattr(response, "usage", None)
             usage_dict = {
                 "prompt_tokens": getattr(usage, "prompt_tokens", 0) if usage else 0,
                 "completion_tokens": getattr(usage, "completion_tokens", 0) if usage else 0,
                 "total_tokens": getattr(usage, "total_tokens", 0) if usage else 0,
             }
-            log.info("llm_gateway_completion_success", model=response.model, tokens=usage_dict["total_tokens"])
+            log.info("llm_gateway_completion_success", model=model_name, tokens=usage_dict["total_tokens"])
             return {
                 "content": content,
-                "model": response.model,
+                "model": model_name,
                 "usage": usage_dict,
             }
         except Exception as exc:

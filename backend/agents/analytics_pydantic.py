@@ -14,10 +14,7 @@ from typing import List
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import Agent
 
-try:
-    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
-except ImportError:
-    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
+from .pydantic_config import AgentDeps, get_pydantic_model
 
 class PerformanceMetrics(BaseModel):
     model_config = ConfigDict(extra="allow")

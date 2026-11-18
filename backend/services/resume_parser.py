@@ -161,7 +161,7 @@ class ResumeParserService:
         try:
             import tempfile
 
-            from docling.document_converter import DocumentConverter
+            from docling.document_converter import DocumentConverter  # pyrefly: ignore[missing-import]
             ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ".pdf"
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
                 tmp.write(content_bytes)

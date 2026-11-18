@@ -7,7 +7,7 @@ Provider-agnostic orchestration layer:
 """
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import structlog
 from sqlalchemy import select
@@ -32,7 +32,7 @@ SUPPORTED_PROVIDERS = ["greenhouse", "ceipal"]
 # ── Factory ──────────────────────────────────────────────────────────────────
 def get_ats_client(conn: "IntegrationConnection"):
     """Return the correct ATS client for a given IntegrationConnection record."""
-    api_key = decrypt_pii(conn.api_key_encrypted)
+    api_key = decrypt_pii(str(conn.api_key_encrypted))
 
     if conn.provider == "greenhouse":
         return GreenhouseClient(api_key=api_key, tenant_id=str(conn.tenant_id))
@@ -73,24 +73,29 @@ async def sync_jobs(tenant_id: str, provider: str) -> Dict[str, Any]:
             existing: Optional[Job] = result.scalar_one_or_none()
 
             if existing:
-                existing.title = job_data["title"]
-                existing.location = job_data.get("location", "")
-                existing.meta_data = {**(existing.meta_data or {}), "external_id": external_id, "raw": job_data.get("raw", {})}
+                setattr(existing, "title", job_data["title"])
+                setattr(existing, "location", job_data.get("location", ""))
+                if hasattr(existing, "meta_data"):
+                    existing_meta = getattr(existing, "meta_data", None)
+                    base_meta = existing_meta if isinstance(existing_meta, dict) else {}
+                    setattr(existing, "meta_data", {**base_meta, "external_id": external_id, "raw": job_data.get("raw", {})})
                 updated_count += 1
             else:
-                new_job = Job(
-                    tenant_id=uuid.UUID(tenant_id),
-                    title=job_data["title"],
-                    location=job_data.get("location", ""),
-                    remote=False,
-                    source_url=job_data.get("source_url", ""),
-                    meta_data={"external_id": external_id, "source": provider, "raw": job_data.get("raw", {})},
-                )
+                job_kwargs: Dict[str, Any] = {
+                    "tenant_id": uuid.UUID(tenant_id),
+                    "title": job_data["title"],
+                    "location": job_data.get("location", ""),
+                    "remote": False,
+                    "source_url": job_data.get("source_url", ""),
+                }
+                if hasattr(Job, "meta_data"):
+                    job_kwargs["meta_data"] = {"external_id": external_id, "source": provider, "raw": job_data.get("raw", {})}
+                new_job = Job(**job_kwargs)
                 session.add(new_job)
                 created_count += 1
 
         # Update last_sync_at
-        conn.last_sync_at = datetime.now(timezone.utc)
+        setattr(conn, "last_sync_at", datetime.now(timezone.utc))
         await session.commit()
 
     summary = {"provider": provider, "synced": len(jobs_raw), "created": created_count, "updated": updated_count}
@@ -119,14 +124,15 @@ async def export_candidate(
 
         # Fetch candidate (strictly scoped to tenant_id)
         candidate: Optional[Candidate] = await session.get(Candidate, uuid.UUID(candidate_id))
-        if not candidate or str(candidate.tenant_id) != str(tenant_id):
+        if not candidate or str(candidate.tenant_id) != tenant_id:
             return {"error": f"Candidate {candidate_id} not found"}
 
         # Get the external job_id from the Job's metadata (strictly scoped to tenant_id)
         job: Optional[Job] = await session.get(Job, uuid.UUID(job_id))
-        if job and str(job.tenant_id) != str(tenant_id):
+        if job and str(job.tenant_id) != tenant_id:
             return {"error": f"Job {job_id} not found"}
-        external_job_id = str(job.meta_data.get("external_id", job_id)) if (job and job.meta_data) else job_id
+        job_meta = getattr(job, "meta_data", None) if job else None
+        external_job_id = str(job_meta.get("external_id", job_id)) if isinstance(job_meta, dict) else job_id
 
         resume_url_val = getattr(candidate, "resume_url", None) or (
             candidate.meta_data.get("resume_url", "") if isinstance(candidate.meta_data, dict) else ""
@@ -144,7 +150,7 @@ async def export_candidate(
         result = await client.create_candidate(
             candidate_data=candidate_data,
             job_id=external_job_id,
-            ai_score=candidate.score,
+            ai_score=float(cast(Any, candidate.score)) if candidate.score is not None else None,
         )
 
         # Log export
@@ -198,4 +204,4 @@ async def get_all_enabled_connections(tenant_id: str) -> List["IntegrationConnec
                 IntegrationConnection.is_active.is_(True),
             )
         )
-        return result.scalars().all()
+        return list(result.scalars().all())

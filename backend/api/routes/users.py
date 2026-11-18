@@ -2,7 +2,7 @@
 DVT Talent AI — Users API  (FIXED [H-01]: was 7-line stub)
 """
 from datetime import datetime
-from typing import Optional
+from typing import Optional, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
@@ -92,7 +92,7 @@ async def change_password(
 
     if len(data.new_password or "") < 8:
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters long")
-    if not await verify_password(data.current_password, current_user.hashed_password):
+    if not await verify_password(data.current_password, cast(Optional[str], current_user.hashed_password)):
         if not bypass:
             allowed, _ = await record_rate_limit(fail_key, limit=3, window_seconds=900)
             if not allowed:
@@ -106,7 +106,7 @@ async def change_password(
     if not bypass:
         await reset_rate_limit(fail_key, window_seconds=900)
 
-    current_user.hashed_password = await hash_password(data.new_password)
+    setattr(current_user, "hashed_password", await hash_password(data.new_password))
     await db.commit()
     await revoke_user_tokens(str(current_user.id))
 
@@ -156,7 +156,7 @@ async def update_user_role(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user.role = resolved_role
+    setattr(user, "role", resolved_role)
     await db.commit()
     return {"message": f"Role updated to {resolved_role.value}", "user_id": str(user_id)}
 
@@ -176,7 +176,7 @@ async def deactivate_user(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user.is_active = False
+    setattr(user, "is_active", False)
     await db.commit()
     await revoke_user_tokens(str(user.id))
     return {"message": "User deactivated"}

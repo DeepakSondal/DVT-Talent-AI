@@ -8,6 +8,7 @@ ignore = [
     "E501",    # Line length handled by formatter
     "E402",    # Intentional sys.path / sys.modules aliasing before package imports
     "B008",    # FastAPI Depends(...) / Query(...) / File(...) in endpoint signatures
+    "B010",    # Intentional setattr() for SQLAlchemy 1.x Column[...] ORM mutations under Pyrefly
     "PLC0415", # Intentional lazy / local imports to reduce cold-start overhead and avoid cycles
     "PLW0603", # Intentional module-level lazy singletons (_redis_pool, _storage_driver, etc.)
     "PLR0911", # Endpoint / service return count pragmatism

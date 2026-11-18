@@ -369,20 +369,20 @@ class TestCandidatePrivacyAndExport:
 
                 # Check that hidden candidate's PII is completely absent from CSV
                 hidden_cand = data["cand_hidden_from_acme"]
-                assert hidden_cand.first_name not in csv_text
-                assert hidden_cand.last_name not in csv_text
-                assert hidden_cand.email not in csv_text
-                assert hidden_cand.phone not in csv_text
-                assert hidden_cand.linkedin_url not in csv_text
+                assert str(hidden_cand.first_name) not in csv_text
+                assert str(hidden_cand.last_name) not in csv_text
+                assert str(hidden_cand.email) not in csv_text
+                assert str(hidden_cand.phone) not in csv_text
+                assert str(hidden_cand.linkedin_url) not in csv_text
 
                 # Check stealth candidate is absent
                 stealth_cand = data["cand_stealth"]
-                assert stealth_cand.first_name not in csv_text
-                assert stealth_cand.email not in csv_text
+                assert str(stealth_cand.first_name) not in csv_text
+                assert str(stealth_cand.email) not in csv_text
 
                 # Check authorized candidates ARE present
-                assert data["cand_open_1"].email in csv_text
-                assert data["cand_open_2"].email in csv_text
+                assert str(data["cand_open_1"].email) in csv_text
+                assert str(data["cand_open_2"].email) in csv_text
         finally:
             app.dependency_overrides.pop(get_current_user, None)
 
@@ -408,7 +408,7 @@ class TestCandidatePrivacyAndExport:
                 assert res.status_code == 200
                 csv_text = res.text
                 # Candidate belonging to Allowed Tenant is exported
-                assert data["cand_allowed_tenant_cand"].email in csv_text
+                assert str(data["cand_allowed_tenant_cand"].email) in csv_text
         finally:
             app.dependency_overrides.pop(get_current_user, None)
 

@@ -11,7 +11,7 @@ import socket
 import threading
 import time
 import urllib.parse
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import redis.asyncio as aioredis
 import structlog
@@ -21,7 +21,7 @@ from config import settings
 log = structlog.get_logger(__name__)
 
 # Circuit breaker state
-_circuit_state = {
+_circuit_state: Dict[str, Any] = {
     "available": None,
     "last_checked": 0.0,
     "check_interval": 15.0,  # Re-check after 15 seconds if failed
@@ -176,7 +176,7 @@ async def revoke_user_tokens(user_id: str, expire_seconds: int = 30 * 86400) -> 
     Supports both Redis and in-memory dev/test fallback without requiring a DB migration.
     """
     now = time.time()
-    uid = str(user_id)
+    uid = user_id
     if len(_in_memory_user_revoked_at) > 10000:
         to_del = [k for k, (_, exp) in _in_memory_user_revoked_at.items() if now >= exp]
         for k in to_del:
@@ -199,7 +199,7 @@ async def is_user_token_revoked(user_id: str, iat: Optional[float]) -> bool:
     Fails closed when Redis errors or when Redis is unavailable in production.
     """
     now = time.time()
-    uid = str(user_id)
+    uid = user_id
 
     entry = _in_memory_user_revoked_at.get(uid)
     if entry:
@@ -253,7 +253,7 @@ async def record_rate_limit(
     Returns (is_allowed, effective_count).
     Works in Redis (atomic pipeline) or thread-safe in-memory fallback.
     """
-    window_seconds = max(1, int(window_seconds))
+    window_seconds = max(1, window_seconds)
     now = now_override if now_override is not None else time.time()
     curr_bucket = int(now // window_seconds)
     prev_bucket = curr_bucket - 1
@@ -311,7 +311,7 @@ async def get_rate_limit_count(
     """
     Returns current sliding-window count for a key without incrementing it.
     """
-    window_seconds = max(1, int(window_seconds))
+    window_seconds = max(1, window_seconds)
     now = now_override if now_override is not None else time.time()
     curr_bucket = int(now // window_seconds)
     prev_bucket = curr_bucket - 1
@@ -347,7 +347,7 @@ async def reset_rate_limit(key: str, window_seconds: int = 60) -> None:
     """
     Resets rate-limit counters for a key in both Redis and in-memory store.
     """
-    window_seconds = max(1, int(window_seconds))
+    window_seconds = max(1, window_seconds)
     now = time.time()
     curr_bucket = int(now // window_seconds)
     prev_bucket = curr_bucket - 1

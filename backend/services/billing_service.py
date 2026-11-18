@@ -43,7 +43,7 @@ async def deduct_credits(
         from db.models import AsyncSessionLocal, CreditTransaction, CreditTransactionType, Tenant
 
         async with AsyncSessionLocal() as session:
-            t_uuid = uuid.UUID(str(tenant_id))
+            t_uuid = uuid.UUID(tenant_id)
             result = await session.execute(
                 select(Tenant).where(Tenant.id == t_uuid).with_for_update()
             )
@@ -65,7 +65,8 @@ async def deduct_credits(
                 )
 
             # Deduct and log
-            tenant.credits_balance -= amount
+            current_balance = int(getattr(tenant, "credits_balance", 0) or 0)
+            setattr(tenant, "credits_balance", current_balance - amount)
             tx = CreditTransaction(
                 tenant_id=tenant.id,
                 amount=-amount,  # Negative = debit

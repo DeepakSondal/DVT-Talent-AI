@@ -17,13 +17,13 @@ import urllib.parse
 import uuid
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from typing import Optional
+from typing import Any, Optional, cast
 
 import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
-from jose import jwt
+from jose import jwt  # pyrefly: ignore[untyped-import]
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,7 +73,7 @@ class LegacySenderPayload(BaseModel):
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-async def _get_tenant(tenant_id: uuid.UUID, db: AsyncSession) -> Tenant:
+async def _get_tenant(tenant_id: Any, db: AsyncSession) -> Tenant:
     tenant = (await db.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one_or_none()
     if not tenant:
         raise HTTPException(404, "Tenant not found")
@@ -153,16 +153,16 @@ def _store_tenant_oauth(
         "sender_email": sender_email,
         "sender_name": sender_name,
     }
-    tenant.settings = current_settings
-    tenant.sender_name = sender_name
-    tenant.sender_email = sender_email
-    tenant.sender_verified = True
+    setattr(tenant, "settings", current_settings)
+    setattr(tenant, "sender_name", sender_name)
+    setattr(tenant, "sender_email", sender_email)
+    setattr(tenant, "sender_verified", True)
     # Clear any legacy SMTP columns
-    tenant.smtp_host = None
-    tenant.smtp_port = None
-    tenant.smtp_user = None
-    tenant.smtp_password_encrypted = None
-    tenant.sender_verification_token = None
+    setattr(tenant, "smtp_host", None)
+    setattr(tenant, "smtp_port", None)
+    setattr(tenant, "smtp_user", None)
+    setattr(tenant, "smtp_password_encrypted", None)
+    setattr(tenant, "sender_verification_token", None)
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -181,8 +181,8 @@ async def get_email_sender(
     return EmailSenderOut(
         oauth_provider=provider,
         connection_mode="oauth",
-        sender_name=tenant.sender_name or current_user.full_name,
-        sender_email=tenant.sender_email or current_user.email,
+        sender_name=cast(Optional[str], tenant.sender_name or current_user.full_name),
+        sender_email=cast(Optional[str], tenant.sender_email or current_user.email),
         sender_verified=bool(configured and tenant.sender_verified),
         configured=configured,
         connected_at=oauth_cfg.get("connected_at"),
@@ -341,7 +341,7 @@ async def connect_oauth_sender(
     )
 
     tenant = await _get_tenant(current_user.tenant_id, db)
-    sender_name = (payload.sender_name if payload and payload.sender_name else None) or current_user.full_name or tenant.name
+    sender_name = str((payload.sender_name if payload and payload.sender_name else None) or current_user.full_name or tenant.name)
     sender_email = str((payload.sender_email if payload and payload.sender_email else None) or current_user.email)
 
     state_token = jwt.encode(
@@ -416,7 +416,7 @@ async def oauth_sender_callback(
     code: str = Query(...),
     state: str = Query(...),
     db: AsyncSession = Depends(get_db),
-    request: Request = None,
+    request: Request = cast(Any, None),
 ):
     """Exchanges the OAuth 2.0 authorization code, verifies send capability, and persists encrypted tokens."""
     if request is not None:
@@ -445,8 +445,8 @@ async def oauth_sender_callback(
         provider=provider_clean,
         code=code,
         redirect_uri=redirect_uri,
-        fallback_email=claims.get("sender_email") or tenant.sender_email or "",
-        fallback_name=claims.get("sender_name") or tenant.sender_name or tenant.name,
+        fallback_email=str(claims.get("sender_email") or tenant.sender_email or ""),
+        fallback_name=str(claims.get("sender_name") or tenant.sender_name or tenant.name),
     )
 
     _store_tenant_oauth(
@@ -533,14 +533,14 @@ async def test_email_sender(
 
     sender_cfg = OAuthSenderConfig(
         provider=provider,
-        sender_name=tenant.sender_name or current_user.full_name,
-        sender_email=tenant.sender_email,
+        sender_name=str(tenant.sender_name or current_user.full_name),
+        sender_email=str(tenant.sender_email),
         access_token=access_token,
         refresh_token=refresh_token,
-        tenant_id=tenant.id,
+        tenant_id=cast(Optional[uuid.UUID], tenant.id),
     )
 
-    to_addr = current_user.email
+    to_addr = str(current_user.email)
     subject = "✅ DVT Talent AI — OAuth 2.0 email sender test successful"
     body = (
         f"Hi {current_user.full_name},\n\n"
@@ -576,15 +576,15 @@ async def delete_email_sender(
     tenant = await _get_tenant(current_user.tenant_id, db)
     current_settings = dict(tenant.settings) if isinstance(tenant.settings, dict) else {}
     current_settings.pop("email_oauth", None)
-    tenant.settings = current_settings
-    tenant.smtp_host = None
-    tenant.smtp_port = None
-    tenant.smtp_user = None
-    tenant.smtp_password_encrypted = None
-    tenant.sender_name = None
-    tenant.sender_email = None
-    tenant.sender_verified = False
-    tenant.sender_verification_token = None
+    setattr(tenant, "settings", current_settings)
+    setattr(tenant, "smtp_host", None)
+    setattr(tenant, "smtp_port", None)
+    setattr(tenant, "smtp_user", None)
+    setattr(tenant, "smtp_password_encrypted", None)
+    setattr(tenant, "sender_name", None)
+    setattr(tenant, "sender_email", None)
+    setattr(tenant, "sender_verified", False)
+    setattr(tenant, "sender_verification_token", None)
     await db.commit()
     log.info("email_sender_removed", tenant_id=str(tenant.id))
     return {"status": "removed"}

@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     dodo_payments_webhook_key: str = ""
     dodo_payments_environment: str = "test"
     internal_service_secret: str = ""
+    merchant_upi_id: str = ""
+    merchant_upi_number: str = ""
+    merchant_upi_payee_name: str = "DVT Talent AI"
+    usd_to_inr_rate: int = 86
 
     # AI — Anthropic (High Intelligence)
     anthropic_api_key: str = ""

@@ -88,14 +88,15 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                         return True
                     return any(frag in normalized_k for frag in sensitive_fragments)
 
-                sanitized_params = {}
+                sanitized_params: dict[str, str | list[str]] = {}
                 for k, v in request.query_params.multi_items():
                     val = "[REDACTED]" if _is_sensitive_key(k) else v
                     if k in sanitized_params:
-                        if isinstance(sanitized_params[k], list):
-                            sanitized_params[k].append(val)
+                        existing = sanitized_params[k]
+                        if isinstance(existing, list):
+                            existing.append(val)
                         else:
-                            sanitized_params[k] = [sanitized_params[k], val]
+                            sanitized_params[k] = [existing, val]
                     else:
                         sanitized_params[k] = val
 

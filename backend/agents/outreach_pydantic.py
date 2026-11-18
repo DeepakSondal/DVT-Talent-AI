@@ -15,13 +15,13 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import Agent, RunContext
 
+from .pydantic_config import AgentDeps, get_pydantic_model
+
 try:
-    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
     from backend.config import settings
     from backend.services.sanitizer_service import sanitizer_service
     from backend.services.validation_service import validation_service
 except ImportError:
-    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
     from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
     from services.sanitizer_service import sanitizer_service  # pyrefly: ignore[missing-import]  # type: ignore
     from services.validation_service import validation_service  # pyrefly: ignore[missing-import]  # type: ignore
@@ -57,7 +57,7 @@ async def _verify_tenant_candidate_ownership(tenant_id: str, clean_email: str) -
     """Verify candidate belongs to the tenant workspace; fail closed in prod or on cross-tenant/erased match."""
     is_prod = bool(getattr(settings, "is_production", False))
     try:
-        tenant_uuid = uuid.UUID(str(tenant_id))
+        tenant_uuid = uuid.UUID(tenant_id)
     except (ValueError, TypeError):
         if is_prod:
             return False, "Valid UUID tenant_id is required for Smartlead campaign outreach"
@@ -70,7 +70,7 @@ async def _verify_tenant_candidate_ownership(tenant_id: str, clean_email: str) -
         except ImportError:
             from db.models import AsyncSessionLocal, Candidate  # pyrefly: ignore[missing-import]  # type: ignore
 
-        normalized_email = str(clean_email or "").strip().lower()
+        normalized_email = (clean_email or "").strip().lower()
         async with AsyncSessionLocal() as session:
             owned = (
                 await session.execute(
@@ -138,8 +138,8 @@ async def push_to_smartlead_campaign(
             "error": ownership_err or "Candidate ownership verification failed",
         }
 
-    safe_subject, _ = sanitizer_service.sanitize(str(subject or ""))
-    safe_body, _ = sanitizer_service.sanitize(str(body or ""))
+    safe_subject, _ = sanitizer_service.sanitize(subject or "")
+    safe_body, _ = sanitizer_service.sanitize(body or "")
 
     webhook_url = "https://api.smartlead.ai/v1/campaigns/dynamic-webhook"
     payload = {

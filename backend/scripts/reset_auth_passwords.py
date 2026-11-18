@@ -84,11 +84,11 @@ async def reset_passwords():
             new_hash = hash_pw(acc["password"])
 
             if user:
-                user.hashed_password = new_hash
-                user.is_active = True
-                user.is_verified = True
-                user.role = acc["role"]
-                user.tenant_id = tenant.id
+                setattr(user, "hashed_password", new_hash)
+                setattr(user, "is_active", True)
+                setattr(user, "is_verified", True)
+                setattr(user, "role", acc["role"])
+                setattr(user, "tenant_id", tenant.id)
                 print(f"  ✅ Updated password for: {acc['email']}")
             else:
                 user = User(

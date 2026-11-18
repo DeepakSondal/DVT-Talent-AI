@@ -50,8 +50,8 @@ from services.redis_service import (
 def _make_dummy_request(
     path: str = "/api/v1/auth/login",
     client_host: str = "203.0.113.42",
-    headers: dict = None,
-    cookies: dict = None,
+    headers: dict | None = None,
+    cookies: dict | None = None,
 ) -> Request:
     raw_headers = []
     for k, v in (headers or {}).items():
@@ -206,6 +206,7 @@ async def test_endpoint_rate_limit_enforcement_and_lockout():
         await enforce_endpoint_rate_limit(req, scope=scope, identifier="user_1", limit=2, window_seconds=120)
 
     assert exc_info.value.status_code == 429
+    assert exc_info.value.headers is not None
     assert exc_info.value.headers.get("Retry-After") == "120"
 
 

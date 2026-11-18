@@ -14,10 +14,7 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import Agent, RunContext
 
-try:
-    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
-except ImportError:
-    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
+from .pydantic_config import AgentDeps, get_pydantic_model
 import structlog
 
 log = structlog.get_logger(__name__)

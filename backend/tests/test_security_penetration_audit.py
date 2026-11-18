@@ -310,7 +310,8 @@ class TestAdversarialSecurityPenetrationSuite:
             # 4. Deactivated user cannot refresh session
             async with AsyncSessionLocal() as session:
                 u = await session.get(User, env["recruiter_a"].id)
-                u.is_active = False
+                assert u is not None
+                setattr(u, "is_active", False)
                 await session.commit()
 
             deactivated_refresh = create_refresh_token({"sub": str(env["recruiter_a"].id)})
@@ -321,7 +322,8 @@ class TestAdversarialSecurityPenetrationSuite:
             # Re-enable recruiter_a
             async with AsyncSessionLocal() as session:
                 u = await session.get(User, env["recruiter_a"].id)
-                u.is_active = True
+                assert u is not None
+                setattr(u, "is_active", True)
                 await session.commit()
 
             # 5. Password change works properly (async hash_password awaited)
@@ -337,7 +339,8 @@ class TestAdversarialSecurityPenetrationSuite:
             assert pw_resp.status_code == 200
             async with AsyncSessionLocal() as session:
                 updated_admin = await session.get(User, env["admin_a"].id)
-                assert await verify_password("NewSecurePassword!2026", updated_admin.hashed_password)
+                assert updated_admin is not None
+                assert await verify_password("NewSecurePassword!2026", str(updated_admin.hashed_password))
 
     # ── 2. Cross-Tenant Resume Intake Hijack Prevention ─────────────────────
     async def test_cross_tenant_resume_upload_cannot_hijack_other_tenant_candidate(self, tmp_path, monkeypatch):
@@ -371,6 +374,7 @@ class TestAdversarialSecurityPenetrationSuite:
 
         async with AsyncSessionLocal() as session:
             untouched_victim = await session.get(Candidate, victim_id)
+            assert untouched_victim is not None
             assert untouched_victim.tenant_id == env["tenant_a"].id
             assert untouched_victim.skills == ["Rust", "Kubernetes"]
             assert untouched_victim.ai_summary == "Confidential Alpha executive assessment."

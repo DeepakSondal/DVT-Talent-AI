@@ -7,11 +7,12 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional, cast
+from urllib.parse import quote, urlparse
 
 import httpx
 import structlog
@@ -59,11 +60,95 @@ def _get_dodo_base_url() -> str:
     return "https://api.dodopayments.com" if env == "live" else "https://test.dodopayments.com"
 
 
+def _get_merchant_upi_config() -> Dict[str, Any]:
+    upi_id = (getattr(settings, "merchant_upi_id", "") or os.getenv("MERCHANT_UPI_ID", "")).strip()
+    upi_number = (getattr(settings, "merchant_upi_number", "") or os.getenv("MERCHANT_UPI_NUMBER", "")).strip()
+    payee_name = (getattr(settings, "merchant_upi_payee_name", "") or os.getenv("MERCHANT_UPI_PAYEE_NAME", "DVT Talent AI")).strip() or "DVT Talent AI"
+    rate = int(getattr(settings, "usd_to_inr_rate", 86) or 86)
+    return {
+        "upi_id": upi_id,
+        "upi_number": upi_number,
+        "payee_name": payee_name,
+        "usd_to_inr_rate": rate,
+    }
+
+
+def _build_upi_checkout_details(plan: SubscriptionPlan, session_id: str) -> Optional[Dict[str, Any]]:
+    cfg = _get_merchant_upi_config()
+    if not cfg["upi_id"] and not cfg["upi_number"]:
+        return None
+    price_cents = getattr(plan, "price_usd_cents", 0) or 0
+    credits_per_month = getattr(plan, "credits_per_month", 0) or 0
+    amount_usd = round(price_cents / 100.0, 2)
+    amount_inr = max(1, int(round(amount_usd * cfg["usd_to_inr_rate"])))
+    pa = cfg["upi_id"] or f"{cfg['upi_number']}@upi"
+    note = f"DVT {plan.name} ({credits_per_month} credits)"
+    query = (
+        f"pa={quote(pa, safe='@._-')}"
+        f"&pn={quote(cfg['payee_name'])}"
+        f"&am={amount_inr:.2f}"
+        f"&cu=INR"
+        f"&tn={quote(note)}"
+        f"&tr={quote(session_id)}"
+    )
+    return {
+        "upi_id": cfg["upi_id"],
+        "upi_number": cfg["upi_number"],
+        "payee_name": cfg["payee_name"],
+        "plan_id": str(plan.id),
+        "plan_name": plan.name,
+        "credits": credits_per_month,
+        "amount_usd": amount_usd,
+        "amount_inr": amount_inr,
+        "upi_uri": f"upi://pay?{query}",
+        "gpay_uri": f"tez://upi/pay?{query}",
+        "reference_id": session_id,
+    }
+
+
+SUPPORTED_PAYMENT_METHOD_TYPES = ("google_pay", "apple_pay", "credit", "debit", "upi_intent")
+DEFAULT_PAYMENT_METHOD_TYPES = ["google_pay", "apple_pay", "credit", "debit", "upi_intent"]
+
+
 # ── Schemas ──────────────────────────────────────────────────────────────────
 class CheckoutRequest(BaseModel):
     plan_id: str
     success_url: Optional[str] = None
     cancel_url: Optional[str] = None
+    payment_method: Optional[str] = None
+    allowed_payment_method_types: Optional[List[str]] = None
+
+
+class UpiConfirmRequest(BaseModel):
+    plan_id: str
+    utr_number: str
+    session_id: Optional[str] = None
+
+
+def _resolve_allowed_payment_methods(req: CheckoutRequest) -> List[str]:
+    if req.allowed_payment_method_types is not None:
+        if not req.allowed_payment_method_types:
+            raise HTTPException(status_code=400, detail="allowed_payment_method_types cannot be empty")
+        resolved: List[str] = []
+        for raw_m in req.allowed_payment_method_types:
+            m = (raw_m or "").strip().lower()
+            if m not in SUPPORTED_PAYMENT_METHOD_TYPES:
+                raise HTTPException(status_code=400, detail=f"Unsupported payment method type: {raw_m}")
+            if m not in resolved:
+                resolved.append(m)
+        return resolved
+
+    if req.payment_method:
+        pm = req.payment_method.strip().lower()
+        if pm not in SUPPORTED_PAYMENT_METHOD_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported payment_method: {req.payment_method}")
+        if pm == "google_pay":
+            return ["google_pay", "credit", "debit"]
+        if pm in ("credit", "debit"):
+            return ["credit", "debit"]
+        return [pm, "credit", "debit"]
+
+    return list(DEFAULT_PAYMENT_METHOD_TYPES)
 
 
 class PortalRequest(BaseModel):
@@ -140,13 +225,13 @@ async def create_checkout(
     # Get plan (support UUID or fallback slug/stripe_price_id)
     plan: Optional[SubscriptionPlan] = None
     try:
-        plan_uuid = uuid.UUID(str(req.plan_id))
+        plan_uuid = uuid.UUID(req.plan_id)
         plan_result = await db.execute(
             select(SubscriptionPlan).where(SubscriptionPlan.id == plan_uuid, SubscriptionPlan.is_active.is_(True))
         )
         plan = plan_result.scalar_one_or_none()
     except (ValueError, TypeError):
-        slug_name = str(req.plan_id).removeprefix("plan_").replace("_", " ").strip()
+        slug_name = req.plan_id.removeprefix("plan_").replace("_", " ").strip()
         plan_result = await db.execute(
             select(SubscriptionPlan).where(
                 SubscriptionPlan.is_active.is_(True),
@@ -160,6 +245,8 @@ async def create_checkout(
     success_url = _resolve_safe_return_url(req.success_url, "/dashboard/billing?success=1")
     if req.cancel_url:
         _resolve_safe_return_url(req.cancel_url, "/dashboard/billing")
+    allowed_methods = _resolve_allowed_payment_methods(req)
+    preferred_method = (req.payment_method or allowed_methods[0]).strip().lower()
     
     # If Dodo API key is configured, create real checkout session via Dodo Payments API
     dodo_api_key = _get_dodo_api_key()
@@ -175,6 +262,7 @@ async def create_checkout(
                     },
                     json={
                         "product_cart": [{"product_id": plan.stripe_price_id or str(plan.id), "quantity": 1}],
+                        "allowed_payment_method_types": allowed_methods,
                         "customer": {
                             "email": current_user.email,
                             "name": tenant.name
@@ -183,14 +271,22 @@ async def create_checkout(
                         "metadata": {
                             "tenant_id": str(tenant.id),
                             "plan_id": str(plan.id),
-                            "type": "one_time" if plan.is_one_time else "subscription"
+                            "type": "one_time" if plan.is_one_time else "subscription",
+                            "preferred_payment_method": preferred_method,
                         }
                     }
                 )
                 if resp.status_code in (200, 201):
                     data = resp.json()
                     checkout_url = data.get("checkout_url") or data.get("payment_link")
-                    return {"checkout_url": checkout_url, "session_id": data.get("session_id", str(uuid.uuid4()))}
+                    sess_id = data.get("session_id", str(uuid.uuid4()))
+                    upi_details = _build_upi_checkout_details(plan, sess_id)
+                    return {
+                        "checkout_url": checkout_url,
+                        "session_id": sess_id,
+                        "allowed_payment_method_types": allowed_methods,
+                        **({"upi_details": upi_details} if upi_details else {}),
+                    }
                 else:
                     log.error("dodo_checkout_api_error", status_code=resp.status_code, body=resp.text)
                     if settings.is_production:
@@ -201,17 +297,196 @@ async def create_checkout(
             log.error("dodo_checkout_exception", error=str(e))
             if settings.is_production:
                 raise HTTPException(status_code=502, detail="Payment provider checkout creation failed") from e
-    elif settings.is_production:
+
+    session_id = f"dodo_sess_{uuid.uuid4().hex[:12]}"
+    upi_details = _build_upi_checkout_details(plan, session_id)
+    if settings.is_production and not upi_details:
         raise HTTPException(status_code=503, detail="Payment provider is not configured")
 
-    # Dev / Simulation mode when Dodo API key is not yet set in environment
-    simulated_url = f"{settings.frontend_url}/dashboard/billing?session_id=sim_dodo_{uuid.uuid4().hex[:12]}&success=1"
-    log.info("dodo_checkout_simulated", tenant_id=str(tenant.id), plan=plan.name)
+    # Direct UPI / Google Pay fallback or Dev Simulation mode when Dodo API key is not yet configured
+    simulated_url = f"{settings.frontend_url}/dashboard/billing?session_id=sim_dodo_{uuid.uuid4().hex[:12]}&payment_method={preferred_method}&success=1"
+    log.info("dodo_checkout_simulated", tenant_id=str(tenant.id), plan=plan.name, allowed_methods=allowed_methods, has_upi=bool(upi_details))
     return {
         "checkout_url": simulated_url,
-        "session_id": f"dodo_sess_{uuid.uuid4().hex[:12]}",
-        "provider": "dodopayments",
-        "note": "Dodo Payments test session generated."
+        "session_id": session_id,
+        "provider": "upi_direct" if upi_details else "dodopayments",
+        "allowed_payment_method_types": allowed_methods,
+        **({"upi_details": upi_details} if upi_details else {}),
+        "note": "Direct UPI / Google Pay checkout initialized." if upi_details else "Dodo Payments test session generated.",
+    }
+
+
+async def _verify_utr_with_payment_provider(utr_clean: str, session_id: Optional[str] = None) -> bool:
+    """Query Dodo Payments API to verify whether a UPI UTR / session_id is settled."""
+    dodo_api_key = _get_dodo_api_key()
+    if not dodo_api_key:
+        return False
+    lookup_id = (session_id or utr_clean).strip()
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{_get_dodo_base_url()}/payments/{quote(lookup_id, safe='')}",
+                headers={"Authorization": f"Bearer {dodo_api_key}"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                status_val = str(data.get("status") or "").lower()
+                provider_utr = str(data.get("utr") or data.get("upi_transaction_id") or data.get("reference_id") or "").strip()
+                if status_val in ("succeeded", "paid", "completed", "active"):
+                    if not provider_utr or provider_utr == utr_clean:
+                        return True
+    except Exception as exc:
+        log.warning("upi_provider_verification_failed", error=str(exc), utr=utr_clean)
+    return False
+
+
+@router.post("/upi-confirm", summary="Confirm a direct Google Pay / UPI payment by 12-digit UTR")
+async def confirm_upi_payment(
+    req: UpiConfirmRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Verifies a 12-digit UPI UTR reference number via provider API or queues it for admin verification in production."""
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="billing_upi_confirm_user",
+        identifier=str(current_user.id),
+        limit=10,
+        window_seconds=60,
+        detail="Too many UPI confirmation attempts. Please wait a minute.",
+    )
+    utr_clean = re.sub(r"\s+", "", req.utr_number or "")
+    if not re.fullmatch(r"\d{12}", utr_clean):
+        raise HTTPException(status_code=400, detail="Invalid UTR / UPI Reference ID: must be an exact 12-digit number.")
+
+    tenant: Optional[Tenant] = await db.get(Tenant, current_user.tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    plan: Optional[SubscriptionPlan] = None
+    try:
+        plan_uuid = uuid.UUID(req.plan_id)
+        plan_result = await db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.id == plan_uuid, SubscriptionPlan.is_active.is_(True))
+        )
+        plan = plan_result.scalar_one_or_none()
+    except (ValueError, TypeError):
+        slug_name = req.plan_id.removeprefix("plan_").replace("_", " ").strip()
+        plan_result = await db.execute(
+            select(SubscriptionPlan).where(
+                SubscriptionPlan.is_active.is_(True),
+                (SubscriptionPlan.stripe_price_id == req.plan_id) | (SubscriptionPlan.name.ilike(slug_name)),
+            )
+        )
+        plan = plan_result.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    dedup_tag = f"[upi_utr:{utr_clean}]"
+    existing_tx = await db.execute(
+        select(CreditTransaction).where(CreditTransaction.description.contains(dedup_tag))
+    )
+    if existing_tx.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="This UPI UTR reference number has already been submitted or claimed.")
+
+    provider_verified = await _verify_utr_with_payment_provider(utr_clean, req.session_id)
+    if not provider_verified and settings.is_production:
+        pending_tx = CreditTransaction(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            amount=0,
+            type=CreditTransactionType.CREDIT,
+            description=f"PENDING_VERIFICATION Google Pay / UPI ({plan.name}) [plan_id:{plan.id}] {dedup_tag}",
+        )
+        db.add(pending_tx)
+        await db.commit()
+        log.info("upi_payment_queued_for_verification", tenant_id=str(tenant.id), plan=plan.name, utr=utr_clean)
+        return {
+            "status": "pending_verification",
+            "plan": plan.name,
+            "credits_added": 0,
+            "credits_balance": tenant.credits_balance or 0,
+            "utr_number": utr_clean,
+            "message": "UTR recorded for merchant bank verification. Credits will activate upon verification.",
+        }
+
+    credits_to_add = int(cast(Any, plan.credits_per_month) or 0)
+    setattr(tenant, "credits_balance", int(cast(Any, tenant.credits_balance) or 0) + credits_to_add)
+    if not plan.is_one_time:
+        setattr(tenant, "subscription_plan_id", plan.id)
+        setattr(tenant, "credits_last_reset_at", datetime.now(timezone.utc))
+
+    tx = CreditTransaction(
+        id=uuid.uuid4(),
+        tenant_id=tenant.id,
+        amount=credits_to_add,
+        type=CreditTransactionType.CREDIT,
+        description=f"Google Pay / UPI Payment ({plan.name}) {dedup_tag}",
+    )
+    db.add(tx)
+    await db.commit()
+    log.info("upi_payment_confirmed", tenant_id=str(tenant.id), plan=plan.name, utr=utr_clean, credits=credits_to_add)
+    return {
+        "status": "confirmed",
+        "plan": plan.name,
+        "credits_added": credits_to_add,
+        "credits_balance": tenant.credits_balance,
+        "utr_number": utr_clean,
+    }
+
+
+@router.post("/upi-approve", summary="Admin approval of a pending direct UPI UTR payment")
+async def approve_upi_payment(
+    req: UpiConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Allows an admin to approve a pending 12-digit UPI UTR after verifying bank receipt."""
+    role_val = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if role_val.lower() != "admin":
+        raise HTTPException(status_code=403, detail="Admin permissions required to approve UPI payments.")
+
+    utr_clean = re.sub(r"\s+", "", req.utr_number or "")
+    if not re.fullmatch(r"\d{12}", utr_clean):
+        raise HTTPException(status_code=400, detail="Invalid UTR / UPI Reference ID: must be an exact 12-digit number.")
+
+    dedup_tag = f"[upi_utr:{utr_clean}]"
+    tx_res = await db.execute(
+        select(CreditTransaction).where(CreditTransaction.description.contains(dedup_tag))
+    )
+    tx = tx_res.scalar_one_or_none()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Pending UPI transaction not found for this UTR.")
+    if not (tx.description or "").startswith("PENDING_VERIFICATION"):
+        raise HTTPException(status_code=409, detail="This UPI UTR has already been approved.")
+
+    plan_res = await db.execute(
+        select(SubscriptionPlan).where(SubscriptionPlan.id == uuid.UUID(req.plan_id), SubscriptionPlan.is_active.is_(True))
+    )
+    plan = plan_res.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    tenant = await db.get(Tenant, tx.tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    credits_to_add = int(cast(Any, plan.credits_per_month) or 0)
+    setattr(tenant, "credits_balance", int(cast(Any, tenant.credits_balance) or 0) + credits_to_add)
+    if not plan.is_one_time:
+        setattr(tenant, "subscription_plan_id", plan.id)
+        setattr(tenant, "credits_last_reset_at", datetime.now(timezone.utc))
+
+    setattr(tx, "amount", credits_to_add)
+    setattr(tx, "description", f"Google Pay / UPI Payment Approved ({plan.name}) {dedup_tag}")
+    await db.commit()
+    return {
+        "status": "confirmed",
+        "plan": plan.name,
+        "credits_added": credits_to_add,
+        "credits_balance": tenant.credits_balance,
+        "utr_number": utr_clean,
     }
 
 
@@ -282,14 +557,14 @@ async def _process_webhook_sync(req: WebhookSyncRequest, db: AsyncSession) -> Di
             log.warning("dodo_sync_invalid_plan_id", plan_id=str(plan_id_str), error=str(exc))
 
     # Default to 500 credits if no specific plan was attached to metadata
-    credits_to_grant = plan.credits_per_month if plan else 500
+    credits_to_grant = int(cast(Any, plan.credits_per_month) or 0) if plan else 500
     plan_name = plan.name if plan else "Dodo Subscription"
 
     if req.event_type in ("payment.succeeded", "subscription.active"):
-        tenant.credits_balance = (tenant.credits_balance or 0) + credits_to_grant
-        tenant.credits_last_reset_at = datetime.now(timezone.utc)
+        setattr(tenant, "credits_balance", int(cast(Any, tenant.credits_balance) or 0) + credits_to_grant)
+        setattr(tenant, "credits_last_reset_at", datetime.now(timezone.utc))
         if plan:
-            tenant.subscription_plan_id = plan.id
+            setattr(tenant, "subscription_plan_id", plan.id)
 
         tx = CreditTransaction(
             tenant_id=tenant.id,

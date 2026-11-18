@@ -81,11 +81,11 @@ async def seed():
             session.add(user)
             print("Created new user: admin@dvt.com with role=ADMIN")
         else:
-            user.hashed_password = hashed_pwd
-            user.role = UserRole.ADMIN
-            user.is_active = True
-            user.is_verified = True
-            user.tenant_id = tenant.id
+            setattr(user, "hashed_password", hashed_pwd)
+            setattr(user, "role", UserRole.ADMIN)
+            setattr(user, "is_active", True)
+            setattr(user, "is_verified", True)
+            setattr(user, "tenant_id", tenant.id)
             print("Updated existing user: admin@dvt.com with role=ADMIN and reset password")
 
         # 3. Check or create Company

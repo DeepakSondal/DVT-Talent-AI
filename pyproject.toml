@@ -3,5 +3,8 @@ include = ["backend"]
 extraPaths = ["backend"]
 
 [tool.pyrefly]
+project-includes = ["backend", "scripts"]
+project-excludes = ["backend/venv/**", "backend/backend/**", "frontend/**"]
 search-path = ["backend"]
+python-interpreter-path = "backend/venv/Scripts/python.exe"
 

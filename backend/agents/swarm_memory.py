@@ -41,7 +41,7 @@ def _get_redis():
 
 
 def _require_tenant_id(tenant_id: Optional[str]) -> str:
-    safe_tenant = str(tenant_id or "").strip()
+    safe_tenant = (tenant_id or "").strip()
     if not safe_tenant or safe_tenant.lower() == "default":
         raise ValueError("A non-empty, non-default tenant_id is required for swarm_memory operations")
     return safe_tenant
@@ -52,7 +52,11 @@ def _get_cache(query_hash: str, tenant_id: str) -> Optional[str]:
     try:
         r = _get_redis()
         val = r.get(f"swarm_cache:{safe_tenant}:{query_hash}")
-        return val.decode("utf-8") if val else None
+        if isinstance(val, bytes):
+            return val.decode("utf-8") if val else None
+        if isinstance(val, str):
+            return val or None
+        return None
     except Exception:
         return None
 
@@ -136,10 +140,11 @@ async def _get_local_calibration_reasons(tenant_id: str) -> List[str]:
     try:
         r = _get_redis()
         members = r.smembers(f"swarm_rules:{tenant_id}")
-        for m in members or []:
-            decoded = m.decode("utf-8") if isinstance(m, bytes) else str(m)
-            if decoded and decoded not in reasons:
-                reasons.append(decoded)
+        if isinstance(members, (set, list, tuple)):
+            for m in members:
+                decoded = m.decode("utf-8") if isinstance(m, bytes) else str(m)
+                if decoded and decoded not in reasons:
+                    reasons.append(decoded)
     except Exception as exc:
         log.debug("swarm_rules_redis_read_skipped", error=str(exc), tenant_id=tenant_id)
 
@@ -148,7 +153,7 @@ async def _get_local_calibration_reasons(tenant_id: str) -> List[str]:
 
         from db.models import AIDecisionLedger, AsyncSessionLocal
 
-        t_uuid = _uuid.UUID(str(tenant_id))
+        t_uuid = _uuid.UUID(tenant_id)
         async with AsyncSessionLocal() as session:
             stmt = (
                 select(AIDecisionLedger.override_reason)

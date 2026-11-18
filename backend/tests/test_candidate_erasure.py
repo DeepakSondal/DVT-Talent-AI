@@ -19,6 +19,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -473,9 +474,9 @@ class TestCandidatePersonalDataErasure:
             db_user = (await session.execute(
                 select(User).where(User.id == candidate_user.id)
             )).scalar_one()
-            db_user.is_verified = True
+            setattr(db_user, "is_verified", True)
             await session.commit()
-            candidate_user.is_verified = True
+            setattr(candidate_user, "is_verified", True)
 
         app.dependency_overrides[get_current_user] = lambda: candidate_user
         try:
@@ -658,7 +659,7 @@ class TestCandidatePersonalDataErasure:
             stale_res = await session.execute(stale_fail_stmt)
             await session.commit()
             # Stale update was safely blocked
-            assert stale_res.rowcount == 0
+            assert getattr(stale_res, "rowcount", None) == 0
 
         # Verify task status remains COMPLETED with Worker 2's timestamp
         async with AsyncSessionLocal() as session:
@@ -714,7 +715,7 @@ class TestCandidatePersonalDataErasure:
                 with patch("services.privacy_service.delete_candidate_from_pinecone", return_value=False):
                     async with AsyncSessionLocal() as session:
                         res = await erase_candidate_personal_data(
-                            candidate_id=data["candidate_a"].id,
+                            candidate_id=cast(uuid.UUID, data["candidate_a"].id),
                             db=session,
                             requesting_user=data["admin_a"],
                         )

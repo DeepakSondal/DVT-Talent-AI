@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import structlog
 from fastapi import HTTPException, Request, Response
-from jose import JWTError, jwt
+from jose import JWTError, jwt  # pyrefly: ignore[untyped-import]
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 

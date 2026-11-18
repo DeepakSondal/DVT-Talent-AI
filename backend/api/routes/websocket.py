@@ -6,7 +6,7 @@ from typing import Dict, List, Set
 import redis.asyncio as redis
 import structlog
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
-from jose import JWTError, jwt
+from jose import JWTError, jwt  # pyrefly: ignore[untyped-import]
 
 from config import settings
 from services.redis_service import is_token_revoked
@@ -138,7 +138,7 @@ async def _verify_ws_token(token: str | None) -> tuple[str, str] | tuple[None, N
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         user_id: str | None = payload.get("sub")
-        tenant_id: str = payload.get("tenant_id", "")
+        tenant_id: str = str(payload.get("tenant_id") or "")
         if not user_id or payload.get("type") != "access":
             return None, None
         if not tenant_id or tenant_id == "default":

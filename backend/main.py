@@ -190,6 +190,7 @@ async def track_email_open(tracking_id: _uuid.UUID, request: Request, db=Depends
     Returns a 1x1 transparent GIF. Debounces DB writes per tracking_id and IP.
     """
     from datetime import datetime as _dt
+    from datetime import timezone as _tz
 
     from sqlalchemy import update
 
@@ -206,7 +207,7 @@ async def track_email_open(tracking_id: _uuid.UUID, request: Request, db=Depends
                 update(EmailSent)
                 .where(EmailSent.tracking_id == str(tracking_id))
                 .where(EmailSent.opened_at.is_(None))
-                .values(opened_at=_dt.utcnow(), status=EmailStatus.OPENED)
+                .values(opened_at=_dt.now(_tz.utc), status=EmailStatus.OPENED)
             )
             await db.commit()
         except Exception as exc:

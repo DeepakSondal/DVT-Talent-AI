@@ -99,4 +99,5 @@ def test_dodo_webhook_sync_payload_schema():
     assert sync_payload.provider == "dodopayments"
     assert sync_payload.event_type == "payment.succeeded"
     assert sync_payload.amount == 14900
+    assert sync_payload.metadata is not None
     assert "tenant_id" in sync_payload.metadata

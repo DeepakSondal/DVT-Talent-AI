@@ -24,7 +24,7 @@ def sync_all_ats_jobs(self, tenant_id: str):
         results = []
         for conn in connections:
             try:
-                summary = await sync_jobs(tenant_id, conn.provider)
+                summary = await sync_jobs(tenant_id, str(conn.provider))
                 results.append(summary)
                 log.info("ats_sync_completed", provider=conn.provider, tenant_id=tenant_id, result=summary)
             except Exception as e:

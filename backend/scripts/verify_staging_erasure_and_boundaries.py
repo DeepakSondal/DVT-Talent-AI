@@ -44,6 +44,7 @@ async def run_verification():
     async with AsyncSessionLocal() as session:
         result = await session.execute(text("SELECT current_database(), current_user, version();"))
         row = result.fetchone()
+        assert row is not None, "Failed to query PostgreSQL metadata"
         db_name, db_user, db_version = row[0], row[1], row[2]
         print(f"  Connected to Database: {db_name}")
         print(f"  Connected User: {db_user}")
@@ -58,7 +59,8 @@ async def run_verification():
     ping_res = r.ping()
     test_key = f"staging_verify_test_{uuid.uuid4().hex}"
     r.set(test_key, "active_staging_boundary", ex=30)
-    read_val = r.get(test_key).decode("utf-8")
+    raw_val = r.get(test_key)
+    read_val = raw_val.decode("utf-8") if isinstance(raw_val, bytes) else str(raw_val or "")
     assert ping_res is True and read_val == "active_staging_boundary"
     r.delete(test_key)
     print(f"  Redis PING: {ping_res}, test key roundtrip succeeded.")

@@ -53,12 +53,13 @@ except ImportError:
     def FileLock(path, timeout=10):  # noqa: N802
         try:
             import fcntl
+            flock = getattr(fcntl, "flock")
             f = open(path, "a+")
             try:
-                fcntl.flock(f, fcntl.LOCK_EX)
+                flock(f, getattr(fcntl, "LOCK_EX"))
                 yield
             finally:
-                fcntl.flock(f, fcntl.LOCK_UN)
+                flock(f, getattr(fcntl, "LOCK_UN"))
                 f.close()
         except Exception:
             yield

@@ -118,10 +118,10 @@ async def connect_integration(
     encrypted_key = encrypt_pii(req.api_key)
 
     if conn:
-        conn.api_key_encrypted = encrypted_key
-        conn.base_url = validated_base_url
-        conn.auto_export_enabled = req.auto_export_enabled
-        conn.is_active = True
+        setattr(conn, "api_key_encrypted", encrypted_key)
+        setattr(conn, "base_url", validated_base_url)
+        setattr(conn, "auto_export_enabled", req.auto_export_enabled)
+        setattr(conn, "is_active", True)
     else:
         conn = IntegrationConnection(
             tenant_id=current_user.tenant_id,
@@ -154,7 +154,7 @@ async def disconnect_integration(
     conn = result.scalar_one_or_none()
     if not conn:
         raise HTTPException(status_code=404, detail=f"No {provider} connection found")
-    conn.is_active = False
+    setattr(conn, "is_active", False)
     await db.commit()
     return {"status": "disconnected", "provider": provider}
 
@@ -194,19 +194,24 @@ async def get_synced_jobs(
     """Returns jobs that were last pulled from the ATS (cached in Job table)."""
     _require_integration_access(current_user, admin_only=False)
     from db.models import Job
-    result = await db.execute(
-        select(Job).where(
-            Job.tenant_id == current_user.tenant_id,
-            Job.meta_data["source"].astext == provider,
-        ).order_by(Job.created_at.desc()).limit(limit)
-    )
+    meta_col = getattr(Job, "meta_data", None)
+    stmt = select(Job).where(Job.tenant_id == current_user.tenant_id)
+    if meta_col is not None:
+        stmt = stmt.where(meta_col["source"].astext == provider)
+    else:
+        stmt = stmt.where(Job.source_url.ilike(f"%{provider}%"))
+    result = await db.execute(stmt.order_by(Job.created_at.desc()).limit(limit))
     jobs = result.scalars().all()
     return [
         {
             "id": str(j.id),
             "title": j.title,
             "location": j.location,
-            "external_id": j.meta_data.get("external_id") if j.meta_data else None,
+            "external_id": (
+                meta.get("external_id")
+                if isinstance((meta := getattr(j, "meta_data", None)), dict)
+                else None
+            ),
             "source_url": j.source_url,
         }
         for j in jobs

@@ -131,7 +131,7 @@ async def toggle_campaign(
     campaign = result.scalar_one_or_none()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    campaign.is_active = not campaign.is_active
+    setattr(campaign, "is_active", not bool(campaign.is_active))
     await db.commit()
     return {"is_active": campaign.is_active, "campaign_id": str(campaign_id)}
 

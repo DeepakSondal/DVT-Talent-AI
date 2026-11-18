@@ -82,7 +82,7 @@ class LLMGuardrailService:
 
     @staticmethod
     def _circuit_keys(provider: str, tenant_id: Optional[str] = None) -> Tuple[str, str]:
-        safe_tenant = str(tenant_id or "").strip()
+        safe_tenant = (tenant_id or "").strip()
         prefix = f"circuit:{provider}:{safe_tenant}" if safe_tenant else f"circuit:{provider}"
         return f"{prefix}:state", f"{prefix}:errors"
 

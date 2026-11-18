@@ -13,9 +13,9 @@ log = structlog.get_logger(__name__)
 
 # Optional Presidio Engine Integration
 try:
-    from presidio_analyzer import AnalyzerEngine
-    from presidio_anonymizer import AnonymizerEngine
-    from presidio_anonymizer.entities import OperatorConfig
+    from presidio_analyzer import AnalyzerEngine  # pyrefly: ignore[missing-import]
+    from presidio_anonymizer import AnonymizerEngine  # pyrefly: ignore[missing-import]
+    from presidio_anonymizer.entities import OperatorConfig  # pyrefly: ignore[missing-import]
     PRESIDIO_AVAILABLE = True
     _analyzer = AnalyzerEngine()
     _anonymizer = AnonymizerEngine()

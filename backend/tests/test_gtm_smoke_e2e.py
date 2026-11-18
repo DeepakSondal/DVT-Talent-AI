@@ -12,10 +12,11 @@ import types
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import yaml
+import yaml  # pyrefly: ignore[untyped-import]
 from sqlalchemy import select
 
 from api.middleware.audit_log import drain_audit_log_tasks
@@ -85,7 +86,7 @@ async def _register_and_login_user(
     *,
     role: str = "recruiter",
     company_name: str | None = None,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Register a user via OTP + /register, then sign in and return auth context."""
     email = f"gtm-{role}-{uuid.uuid4().hex[:10]}@dvttest.example"
     password = _make_runtime_secret()
@@ -662,7 +663,7 @@ async def test_gtm_5_compliance_adverse_impact_aedt_notice_and_override(client, 
     )
     assert reject_resp.status_code == 200, reject_resp.text
     cand_status, jc_status = await _fetch_candidate_and_job_status(
-        db_session, target_cand_id, job_a_id
+        db_session, cast(uuid.UUID, target_cand_id), job_a_id
     )
     assert cand_status == CandidateStatus.REJECTED
     assert jc_status == CandidateStatus.REJECTED
@@ -674,7 +675,7 @@ async def test_gtm_5_compliance_adverse_impact_aedt_notice_and_override(client, 
     )
     assert approve_resp.status_code == 200, approve_resp.text
     cand_status, jc_status = await _fetch_candidate_and_job_status(
-        db_session, target_cand_id, job_a_id
+        db_session, cast(uuid.UUID, target_cand_id), job_a_id
     )
     assert cand_status == CandidateStatus.SCREENED
     assert jc_status == CandidateStatus.SCREENED
@@ -797,6 +798,7 @@ def test_gtm_7_sprint1_infra_vector_store_and_celery_hardening():
                 await s.commit()
                 return t.id, row.id
             row = await s.get(AgentTask, tid)
+            assert row is not None
             return row.status, row.error_message
 
     tenant_uuid, task_uuid = asyncio.run(_seed_and_check_task(True))

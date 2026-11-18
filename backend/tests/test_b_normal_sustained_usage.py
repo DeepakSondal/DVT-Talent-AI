@@ -25,7 +25,7 @@ import statistics
 import time
 
 import httpx
-import psutil
+import psutil  # pyrefly: ignore[untyped-import]
 
 BASE_URL = "http://127.0.0.1:8000/api/v1"
 PASSWORD = "PerfPass123!"

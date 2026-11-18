@@ -13,14 +13,8 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import Agent, RunContext
 
-try:
-    from backend.agents.pydantic_config import AgentDeps, get_pydantic_model
-except ImportError:
-    from agents.pydantic_config import AgentDeps, get_pydantic_model  # pyrefly: ignore[missing-import]  # type: ignore
-try:
-    from backend.agents.swarm_memory import query_memory_tree
-except ImportError:
-    from agents.swarm_memory import query_memory_tree  # pyrefly: ignore[missing-import]  # type: ignore
+from .pydantic_config import AgentDeps, get_pydantic_model
+from .swarm_memory import query_memory_tree
 try:
     from backend.services.sanitizer_service import sanitizer_service
 except ImportError:
@@ -59,7 +53,7 @@ async def consult_swarm_memory(ctx: RunContext[AgentDeps], candidate_summary: st
     if not tenant_id or tenant_id.lower() == "default":
         raise ValueError("A valid tenant_id is required for consult_swarm_memory.")
 
-    safe_summary, _ = sanitizer_service.sanitize(str(candidate_summary or "")[:2000])
+    safe_summary, _ = sanitizer_service.sanitize((candidate_summary or "")[:2000])
     memory_result = await query_memory_tree(safe_summary[:2000], tenant_id=tenant_id)
     
     if memory_result == "NO_CONFLICT":
