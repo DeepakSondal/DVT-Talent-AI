@@ -53,6 +53,7 @@ opentelemetry-exporter-otlp>=1.45.2
 pytest>=9.0.0
 pytest-asyncio>=1.4.1
 pytest-httpx>=0.36.0
+pydantic-evals==1.107.7
 pyyaml>=6.0.2
 psutil>=5.9.0
 aiosqlite>=0.20.0
