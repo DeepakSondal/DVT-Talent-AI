@@ -139,42 +139,58 @@ async def _issue_oauth_link_token(
 
 # ── Routes ───────────────────────────────────────────────────────────────
 
+_SOCIAL_PROVIDERS = {
+    "google": "google",
+    "github": "github",
+    "microsoft": "microsoft",
+}
+
+
 def _resolve_frontend_origin(request: Request) -> str:
-    """Return the validated frontend origin from Referer when in cors_origins, else settings.frontend_url."""
+    """Return the matching configured origin from settings.cors_origins, else settings.frontend_url."""
     referer = request.headers.get("referer", "")
     if referer:
         parsed = urlparse(referer)
         if parsed.scheme in ("http", "https") and parsed.netloc:
-            origin = f"{parsed.scheme}://{parsed.netloc}"
-            if origin in settings.cors_origins:
-                return origin
+            candidate = f"{parsed.scheme}://{parsed.netloc}".lower()
+            for allowed in settings.cors_origins:
+                clean_allowed = allowed.rstrip("/")
+                if clean_allowed.lower() == candidate:
+                    return clean_allowed
     return settings.frontend_url.rstrip("/")
 
 
 @router.get("/login/{provider}")
 async def social_login(provider: str, request: Request):
     """Initiate social login redirect"""
-    client = oauth.create_client(provider)
+    safe_provider = _SOCIAL_PROVIDERS.get(provider.strip().lower())
+    if not safe_provider:
+        raise HTTPException(status_code=400, detail="Invalid provider")
+    client = oauth.create_client(safe_provider)
     if not client:
         raise HTTPException(status_code=400, detail="Invalid provider")
 
-    client_id = str(getattr(settings, f"{provider}_client_id", "") or "").strip()
-    client_secret = str(getattr(settings, f"{provider}_client_secret", "") or "").strip()
+    client_id = str(getattr(settings, f"{safe_provider}_client_id", "") or "").strip()
+    client_secret = str(getattr(settings, f"{safe_provider}_client_secret", "") or "").strip()
     if not client_id or not client_secret:
-        log.warning("oauth_provider_not_configured", provider=provider)
+        log.warning("oauth_provider_not_configured", provider=safe_provider)
         frontend_origin = _resolve_frontend_origin(request)
         return RedirectResponse(
-            url=f"{frontend_origin}/auth/login?error=oauth_not_configured&provider={provider}",
+            url=f"{frontend_origin}/auth/login?error=oauth_not_configured&provider={safe_provider}",
             status_code=302,
         )
 
-    redirect_uri = f"{settings.app_base_url}/api/v1/auth/callback/{provider}"
+    redirect_uri = f"{settings.app_base_url}/api/v1/auth/callback/{safe_provider}"
     return await client.authorize_redirect(request, redirect_uri)
 
 
 @router.get("/callback/{provider}")
 async def social_callback(provider: str, request: Request, db: AsyncSession = Depends(get_db)):
     """Handle social login callback"""
+    safe_provider = _SOCIAL_PROVIDERS.get(provider.strip().lower())
+    if not safe_provider:
+        raise HTTPException(status_code=400, detail="Invalid provider")
+    provider = safe_provider
     client = oauth.create_client(provider)
     if not client:
         raise HTTPException(status_code=400, detail="Invalid provider")

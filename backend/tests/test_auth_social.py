@@ -38,6 +38,24 @@ async def test_social_login_unconfigured_redirects_with_error():
                 "http://localhost:3000/auth/login?error=oauth_not_configured&provider=microsoft"
             )
 
+
+@pytest.mark.asyncio
+async def test_social_login_unconfigured_ignores_untrusted_referer():
+    with (
+        patch("api.routes.auth_social.settings.microsoft_client_id", ""),
+        patch("api.routes.auth_social.settings.microsoft_client_secret", ""),
+        patch("api.routes.auth_social.settings.frontend_url", "http://localhost:3000"),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.get(
+                "/api/v1/auth/login/microsoft",
+                headers={"referer": "https://evil.attacker.com/auth/login"},
+            )
+            assert response.status_code == 302
+            assert response.headers["location"] == (
+                "http://localhost:3000/auth/login?error=oauth_not_configured&provider=microsoft"
+            )
+
 @pytest.mark.asyncio
 async def test_social_login_invalid_provider():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
