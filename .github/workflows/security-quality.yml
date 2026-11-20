@@ -1,0 +1,99 @@
+name: Security & Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-security-lint:
+    name: Python Security Lint (Ruff)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install Ruff
+        run: python -m pip install --upgrade pip && pip install ruff
+
+      - name: Run Ruff Default & Bandit Security Rules
+        run: |
+          ruff check backend
+          ruff check backend --select S
+
+  frontend-security-audit:
+    name: Frontend Dependency Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: npm --prefix frontend ci --legacy-peer-deps
+
+      - name: Run npm audit (moderate+)
+        run: npm --prefix frontend audit --audit-level=moderate
+
+  trivy-security-scan:
+    name: Trivy FS, Container & Secret Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run Trivy Filesystem & IaC Scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          scanners: "vuln,misconfig,secret"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          ignore-unfixed: true
+          format: "sarif"
+          output: "trivy-results.sarif"
+          skip-dirs: "backend/venv,frontend/node_modules,frontend/.next"
+
+      - name: Upload Trivy SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: "trivy-results.sarif"
+          category: "trivy-fs"
+
+  dependency-review:
+    name: PR Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run Dependency Review
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
