@@ -269,18 +269,15 @@ async def run_e2e_audit():
         except Exception as e:
             record(wf, "Vector Store Singleton Architecture", "FAILED", f"Vector store initialization error: {e}")
 
-        # 7.2 In-memory / ChromaDB Search Query & Embedding Generation
+        # 7.2 In-memory / pgvector Search Query & Embedding Generation
         try:
             vs = VectorStore()
             emb = vs.embed_text("Senior Full Stack Engineer Python TypeScript")
             has_valid_dim = isinstance(emb, list) and len(emb) in [384, 1536]
             record(wf, "Vector Embedding Generation", "PASSED" if has_valid_dim else "PARTIAL", f"Generated vector embedding of length {len(emb) if isinstance(emb, list) else 0}")
-            
-            if vs.client:
-                match_results = vs.search_resumes(tenant_id=str(uuid.uuid4()), query_text="Python FastAPI Engineer", limit=3)
-                record(wf, "Vector Search Tenant-Scoped Query", "PASSED", "ChromaDB vector search executed with tenant scoping", f"Results: {len(match_results)}")
-            else:
-                record(wf, "Vector Search Tenant-Scoped Query", "PASSED", "Vector store fallback safely handled without crash when ChromaDB server offline", "ChromaDB offline fallback verified")
+
+            match_results = vs.search_resumes(tenant_id=str(uuid.uuid4()), query_text="Python FastAPI Engineer", limit=3)
+            record(wf, "Vector Search Tenant-Scoped Query", "PASSED", "Vector search executed with tenant scoping", f"Results: {len(match_results)}")
         except Exception as e:
             record(wf, "Vector Search Tenant-Scoped Query", "FAILED", f"Query crashed: {e}")
 

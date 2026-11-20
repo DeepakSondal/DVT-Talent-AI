@@ -1,7 +1,7 @@
 """
 DVT Talent AI — Vector Store & Semantic Search Service
 Provides FastEmbed ONNX vector embeddings, batch processing, BM25 hybrid search,
-and native PostgreSQL pgvector storage with zero ChromaDB hard dependency.
+and native PostgreSQL pgvector storage with a local JSON fallback index.
 """
 import sys
 
@@ -21,15 +21,6 @@ from typing import Any, Dict, List, Optional
 import structlog
 
 log = structlog.get_logger(__name__)
-
-# Optional ChromaDB integration (Legacy — decommissioned as primary)
-try:
-    import chromadb  # pyrefly: ignore[missing-import]  # type: ignore
-    from chromadb.config import Settings as ChromaSettings  # pyrefly: ignore[missing-import]  # type: ignore
-    CHROMA_AVAILABLE = True
-except ImportError:
-    CHROMA_AVAILABLE = False
-    ChromaSettings = object
 
 # Modern Embedding Engine: FastEmbed (ONNX, CPU-optimized) — probe without eager heavy import
 FASTEMBED_AVAILABLE = importlib.util.find_spec("fastembed") is not None
@@ -58,40 +49,20 @@ class VectorStore:
         return cls._instance
 
     def _init_store(self):
-        """Initialize persistent local fallback index and optional Chroma connection"""
+        """Initialize persistent local fallback index for non-PostgreSQL environments."""
         self._local_index = {
             "resumes": {},
             "jobs": {}
         }
         self._query_cache: Dict[str, List[float]] = {}
-        self.client = None
-        self.resumes = None
-        self.jobs = None
-        self._index_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "chroma_db", "vector_index.json")
+        storage_root = getattr(
+            settings,
+            "storage_dir",
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "storage"),
+        )
+        self._index_file = os.path.join(str(storage_root), "vector_index.json")
         self._load_local_index()
-
-        if not CHROMA_AVAILABLE:
-            log.info("vector_store_mode", backend="native_fastembed_pgvector", chroma="decommissioned")
-            return
-
-        try:
-            self.client = chromadb.HttpClient(
-                host=getattr(settings, "chroma_host", "localhost"),
-                port=getattr(settings, "chroma_port", 8000),
-                # pyrefly: ignore[unexpected-keyword]
-                settings=ChromaSettings(allow_reset=False)
-            )
-            self._ensure_collections()
-        except Exception:
-            # Fallback to local persistent if in development
-            if not getattr(settings, "is_production", False):
-                try:
-                    self.client = chromadb.PersistentClient(path="./chroma_db")
-                    self._ensure_collections()
-                except Exception:
-                    self.client = None
-            else:
-                self.client = None
+        log.info("vector_store_mode", backend="native_fastembed_pgvector")
 
     def _load_local_index(self):
         """Load persisted vector index from disk when not running isolated unit tests."""
@@ -117,23 +88,6 @@ class VectorStore:
                 json.dump(self._local_index, f)
         except Exception as e:
             log.warning("local_vector_index_persist_failed", error=str(e))
-
-    def _ensure_collections(self):
-        """Create collections if Chroma client is online"""
-        if not self.client:
-            return
-        try:
-            self.resumes = self.client.get_or_create_collection(
-                name=getattr(settings, "chroma_collection_resumes", "resumes"),
-                metadata={"hnsw:space": "cosine"}
-            )
-            self.jobs = self.client.get_or_create_collection(
-                name=getattr(settings, "chroma_collection_jobs", "jobs"),
-                metadata={"hnsw:space": "cosine"}
-            )
-        except Exception as e:
-            log.warning("chroma_collection_init_failed", error=str(e))
-            self.client = None
 
     def _get_model(self):
         """Lazy load the embedding model with FastEmbed (ONNX) priority"""
@@ -327,19 +281,6 @@ class VectorStore:
         extended_metadata["tenant_id"] = tenant_id
         embedding = self.embed_text(text)
 
-        # 1. Update Chroma if client is active
-        if CHROMA_AVAILABLE and self.client and getattr(self, "resumes", None):
-            try:
-                self.resumes.upsert(
-                    ids=[resume_id],
-                    embeddings=[embedding],
-                    documents=[text[:2000]],
-                    metadatas=[extended_metadata]
-                )
-            except Exception as exc:
-                log.warning("chroma_upsert_failed", error=str(exc))
-
-        # 2. Update local index for in-memory and test consistency
         self._local_index["resumes"][resume_id] = {
             "id": resume_id,
             "tenant_id": tenant_id,
@@ -361,26 +302,6 @@ class VectorStore:
         texts = [item.get("text", "") for item in items]
         embeddings = self.embed_batch(texts)
 
-        # 1. Chroma batch upsert if available
-        if CHROMA_AVAILABLE and self.client and getattr(self, "resumes", None):
-            ids = [str(item["id"]) for item in items]
-            documents = [t[:2000] for t in texts]
-            metadatas = []
-            for item in items:
-                m = {k: str(v) for k, v in item.get("metadata", {}).items()}
-                m["tenant_id"] = tenant_id
-                metadatas.append(m)
-            try:
-                self.resumes.upsert(
-                    ids=ids,
-                    embeddings=embeddings,
-                    documents=documents,
-                    metadatas=metadatas
-                )
-            except Exception as e:
-                log.warning("chroma_batch_upsert_failed", error=str(e))
-
-        # 2. Sync to local index
         for item, emb in zip(items, embeddings, strict=True):
             rid = str(item["id"])
             m = {k: str(v) for k, v in item.get("metadata", {}).items()}
@@ -401,37 +322,11 @@ class VectorStore:
         """Find most similar resumes ONLY within the specified tenant space"""
         query_embedding = self.embed_text(query_text)
 
-        # 1. Query Chroma if online
-        if CHROMA_AVAILABLE and self.client and getattr(self, "resumes", None):
-            where_clause = {"tenant_id": tenant_id}
-            if filters:
-                user_filters = {k: str(v) for k, v in filters.items()}
-                where_clause = {"$and": [where_clause, user_filters]}
-
-            try:
-                results = self.resumes.query(
-                    query_embeddings=[query_embedding],
-                    n_results=limit,
-                    where=where_clause
-                )
-                formatted = []
-                if results.get("ids") and results["ids"][0]:
-                    for i in range(len(results["ids"][0])):
-                        dist = results["distances"][0][i] if "distances" in results else 0.0
-                        formatted.append({
-                            "id": results["ids"][0][i],
-                            "document": results["documents"][0][i],
-                            "metadata": results["metadatas"][0][i],
-                            "score": 1.0 - dist
-                        })
-                    return formatted
-            except Exception as e:
-                log.warning("chroma_query_failed_using_local_fallback", error=str(e))
-
-        # 2. Local in-memory search fallback (guarantees tests pass with Chroma decommissioned)
         matching = []
         for r in self._local_index["resumes"].values():
             if r.get("tenant_id") == tenant_id:
+                if filters and not all(str(r.get("metadata", {}).get(k)) == str(v) for k, v in filters.items()):
+                    continue
                 score = self.cosine_similarity(query_embedding, r["embedding"])
                 matching.append({
                     "id": r["id"],
@@ -452,7 +347,7 @@ class VectorStore:
         limit: int = 10
     ) -> List[Dict[str, Any]]:
         """
-        Direct PostgreSQL pgvector async search with zero ChromaDB dependency.
+        Direct PostgreSQL pgvector async search.
         Executes native cosine distance query on the Resume model.
         """
         from sqlalchemy import select
@@ -529,7 +424,7 @@ class VectorStore:
         candidate_id: Optional[str] = None
     ) -> bool:
         """
-        Delete resume vector embeddings from ChromaDB and local stores.
+        Delete resume vector embeddings from local fallback store.
         Strictly scoped to tenant_id and candidate_id / resume_ids.
         """
         # Purge from local store
@@ -547,29 +442,6 @@ class VectorStore:
             for k in to_del:
                 del self._local_index["resumes"][k]
 
-        # Purge from Chroma if connected
-        if CHROMA_AVAILABLE and self.client and getattr(self, "resumes", None):
-            ids_to_delete = [i for i in (resume_ids or []) if i]
-            if ids_to_delete:
-                try:
-                    self.resumes.delete(ids=ids_to_delete, where={"tenant_id": tenant_id})
-                except Exception as e:
-                    log.warning("chroma_delete_by_ids_failed", error=str(e), ids=ids_to_delete)
-                    raise
-
-            if candidate_id:
-                try:
-                    where_filter = {
-                        "$and": [
-                            {"tenant_id": tenant_id},
-                            {"candidate_id": candidate_id}
-                        ]
-                    }
-                    self.resumes.delete(where=where_filter)
-                except Exception as e:
-                    log.warning("chroma_delete_by_filter_failed", error=str(e), candidate_id=candidate_id)
-                    raise
-
         self._persist_local_index()
         return True
 
@@ -580,17 +452,6 @@ class VectorStore:
         if tenant_id:
             extended_metadata["tenant_id"] = tenant_id
         embedding = self.embed_text(text)
-
-        if CHROMA_AVAILABLE and self.client and getattr(self, "jobs", None):
-            try:
-                self.jobs.upsert(
-                    ids=[job_id],
-                    embeddings=[embedding],
-                    documents=[text[:2000]],
-                    metadatas=[extended_metadata]
-                )
-            except Exception as e:
-                log.warning("chroma_job_upsert_failed", error=str(e))
 
         self._local_index["jobs"][job_id] = {
             "id": job_id,
@@ -612,28 +473,6 @@ class VectorStore:
             raise ValueError("A valid UUID tenant_id is required for VectorStore.search_jobs.") from exc
 
         query_embedding = self.embed_text(query_text)
-
-        if CHROMA_AVAILABLE and self.client and getattr(self, "jobs", None):
-            query_kwargs: Dict[str, Any] = {
-                "query_embeddings": [query_embedding],
-                "n_results": limit,
-                "where": {"tenant_id": normalized_tenant},
-            }
-            try:
-                results = self.jobs.query(**query_kwargs)
-                formatted = []
-                if results.get("ids") and results["ids"][0]:
-                    for i in range(len(results["ids"][0])):
-                        dist = results["distances"][0][i] if "distances" in results else 0.0
-                        formatted.append({
-                            "id": results["ids"][0][i],
-                            "document": results["documents"][0][i],
-                            "metadata": results["metadatas"][0][i],
-                            "score": 1.0 - dist
-                        })
-                    return formatted
-            except Exception as e:
-                log.warning("chroma_job_query_failed", error=str(e))
 
         matching = []
         for j in self._local_index["jobs"].values():

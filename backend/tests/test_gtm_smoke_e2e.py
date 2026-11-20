@@ -747,7 +747,8 @@ def test_gtm_7_sprint1_infra_vector_store_and_celery_hardening():
         assert "CHROMA_HOST" not in env_text and "CHROMA_PORT" not in env_text, svc_name
 
     vector_src = (REPO_ROOT / "backend" / "db" / "vector_store.py").read_text(encoding="utf-8")
-    assert "allow_reset=False" in vector_src
+    assert "chromadb" not in vector_src
+    assert "CHROMA_AVAILABLE" not in vector_src
     vs = VectorStore()
     with pytest.raises(ValueError):
         vs.search_jobs("Senior Python Engineer", tenant_id=None)
