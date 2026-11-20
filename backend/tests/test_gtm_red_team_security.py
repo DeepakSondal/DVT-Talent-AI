@@ -412,7 +412,6 @@ async def test_tenant_isolation_swarm_memory_vector_store_and_hybrid_search(tmp_
         assert res_b == "NO_CONFLICT"
 
     vs = VectorStore()
-    vs.client = None
     rid_a = f"res-{uuid.uuid4().hex[:8]}"
     cid_a = f"cand-{uuid.uuid4().hex[:8]}"
     vs.upsert_resume(
@@ -1017,7 +1016,6 @@ async def test_sprint1_rr12_multitenant_search_jobs_circuits_signals_and_jobs_bg
 
     # 1. VectorStore.search_jobs requires valid UUID and isolates jobs
     vs = VectorStore()
-    vs.client = None
     for bad_tid in (None, "", "default", "not-a-uuid"):
         with pytest.raises(ValueError):
             vs.search_jobs("Backend Python", tenant_id=bad_tid)

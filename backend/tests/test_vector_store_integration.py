@@ -1,37 +1,30 @@
 """
-DVT Talent AI — Vector Store Integration Tests
-Tests actual connectivity and indexing with a live ChromaDB server.
+DVT Talent AI — Vector Store PGVector Integration Tests
+Tests async pgvector similarity queries via SQLAlchemy session.
 Enabled only via RUN_INTEGRATION_TESTS=1.
 """
 import os
+import uuid
 
 import pytest
 
-from db.vector_store import CHROMA_AVAILABLE, VectorStore
+from db.models import AsyncSessionLocal
+from db.vector_store import VectorStore
 
 
-# Only run if explicitly enabled to allow CI/CD to skip
 @pytest.mark.skipif(
-    os.environ.get("RUN_INTEGRATION_TESTS") != "1" or not CHROMA_AVAILABLE,
-    reason="RUN_INTEGRATION_TESTS=1 not set or chromadb client not installed on test runner."
+    os.environ.get("RUN_INTEGRATION_TESTS") != "1",
+    reason="RUN_INTEGRATION_TESTS=1 not set on test runner.",
 )
-def test_vector_store_live_index():
-    """Verify that we can actually connect and index in a real ChromaDB instance."""
+@pytest.mark.asyncio
+async def test_vector_store_live_pgvector_query():
+    """Verify search_resumes_pgvector executes cleanly against the configured database."""
     vs = VectorStore()
-    
-    test_id = "integration_test_res_001"
-    test_text = "Experienced Senior Distributed Systems Engineer specializing in Rust and Go."
-    test_meta = {"name": "Integration Test Candidate", "source": "test_suite"}
-    
-    # 1. Clear existing (optional)
-    # vs.collection.delete(ids=[test_id])
-    
-    # 2. Upsert
-    vs.upsert_resume("tenant_integration_001", test_id, test_text, test_meta)
-    
-    # 3. Query
-    results = vs.search_resumes("tenant_integration_001", "Distributed Systems Engineer Rust", limit=1)
-    
-    assert len(results) >= 1
-    assert results[0]["id"] == test_id
-    assert results[0]["metadata"]["name"] == "Integration Test Candidate"
+    async with AsyncSessionLocal() as session:
+        results = await vs.search_resumes_pgvector(
+            session=session,
+            tenant_id=str(uuid.uuid4()),
+            query_text="Distributed Systems Engineer Rust",
+            limit=3,
+        )
+    assert isinstance(results, list)

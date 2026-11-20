@@ -563,7 +563,7 @@ async def erase_candidate_personal_data(
         )
     except Exception as ve:
         vector_erased = False
-        vector_error = f"chroma: {type(ve).__name__}"
+        vector_error = f"vector_store: {type(ve).__name__}"
         log.warning("vector_store_deletion_failed", error_type=type(ve).__name__, candidate_id=str(candidate.id))
 
     try:
@@ -907,7 +907,7 @@ async def sweep_and_process_gdpr_cleanups(db: AsyncSession) -> Dict[str, Any]:
                 )
             except Exception as ve:
                 vector_erased = False
-                vector_error = f"chroma: {type(ve).__name__}"
+                vector_error = f"vector_store: {type(ve).__name__}"
 
             try:
                 pinecone_ok = await delete_candidate_from_pinecone(
