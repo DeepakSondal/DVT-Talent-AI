@@ -10,7 +10,7 @@ Regression test suite for full-codebase bug scan remediations:
 import base64
 import hashlib
 import hmac
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -1592,3 +1592,55 @@ async def test_track_click_and_oauth_callback_block_open_redirects_and_invalid_p
             follow_redirects=False,
         )
         assert oauth_resp.status_code == 400
+
+
+def test_upi_checkout_details_rounds_typed_price():
+    """Verify _build_upi_checkout_details handles integer price_usd_cents cleanly."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from api.routes.billing import _build_upi_checkout_details
+
+    plan = SimpleNamespace(id="plan_pro", name="Pro", price_usd_cents=4999, credits_per_month=500)
+    with patch(
+        "api.routes.billing._get_merchant_upi_config",
+        return_value={"upi_id": "dvt@upi", "upi_number": "", "payee_name": "DVT", "usd_to_inr_rate": 85.0},
+    ):
+        details = _build_upi_checkout_details(cast(Any, plan), "sess_123")
+    assert details is not None
+    assert details["amount_usd"] == 49.99
+
+
+def test_is_celery_broker_available_caches_bool_state():
+    """Verify is_celery_broker_available stores and returns boolean cache entries."""
+    from unittest.mock import patch
+
+    from workers import tasks
+
+    tasks._broker_status_cache["available"] = None
+    tasks._broker_status_cache["last_checked"] = 0.0
+    with patch("workers.tasks.socket.create_connection", side_effect=OSError("no redis")):
+        assert tasks.is_celery_broker_available() is False
+        assert tasks._broker_status_cache["available"] is False
+        assert tasks.is_celery_broker_available() is False
+
+
+def test_get_ats_client_ceipal_coerces_base_url_to_str():
+    """Verify get_ats_client resolves Ceipal base_url as a string."""
+    import uuid
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from integrations.ceipal.client import CeipalClient
+    from integrations.unified_ats import get_ats_client
+
+    conn = SimpleNamespace(
+        provider="ceipal",
+        api_key_encrypted="enc",
+        tenant_id=uuid.uuid4(),
+        base_url="https://custom.ceipal.example.com/v1",
+    )
+    with patch("integrations.unified_ats.decrypt_pii", return_value="plain-key"):
+        client = get_ats_client(cast(Any, conn))
+    assert isinstance(client, CeipalClient)
+    assert client.base_url == "https://custom.ceipal.example.com/v1"

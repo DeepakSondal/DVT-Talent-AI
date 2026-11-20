@@ -76,13 +76,13 @@ async def _mark_agent_task_failed_by_celery_id(celery_task_id: Optional[str], er
 
 log = structlog.get_logger(__name__)
 
-_broker_status_cache = {"available": None, "last_checked": 0.0}
+_broker_status_cache: Dict[str, Any] = {"available": None, "last_checked": 0.0}
 
 def is_celery_broker_available(timeout: float = 0.1) -> bool:
     """Fast socket check with 10s caching to detect if Redis broker is reachable"""
     now = time.time()
     if _broker_status_cache["available"] is not None and (now - _broker_status_cache["last_checked"]) < 10.0:
-        return _broker_status_cache["available"]
+        return bool(_broker_status_cache["available"])
 
     try:
         parsed = urllib.parse.urlparse(settings.celery_broker_url)

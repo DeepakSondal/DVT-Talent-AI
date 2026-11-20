@@ -198,7 +198,7 @@ def verify_candidate_erasure_authorization(candidate: Candidate, requesting_user
                     detail="Unauthorized: email verification is required before requesting personal data erasure."
                 )
             # Atomically bind user_id to establish stable ownership
-            candidate.user_id = requesting_user.id
+            setattr(candidate, "user_id", requesting_user.id)
             return
 
         raise HTTPException(
