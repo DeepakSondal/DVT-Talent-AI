@@ -412,7 +412,7 @@ export default function JobDetailPage() {
               Generate structured interview questions, benchmark ideal answers, and red-flag alerts tailored to this job specification.
             </p>
           </div>
-          <Link href={`/dashboard/screening`}>
+          <Link href={`/dashboard/screening?job_id=${encodeURIComponent(job.id)}`}>
             <Button className="bg-primary text-primary-foreground font-semibold text-xs h-9 px-5 rounded-xl">
               Open Screening Studio
             </Button>

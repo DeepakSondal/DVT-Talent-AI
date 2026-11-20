@@ -43,7 +43,7 @@ test.describe('Framer Motion Animation & App Router Safety Suite', () => {
   test('test case 2: verifies AnimatePresence modals in core views define unique keys and animated backdrops', async () => {
     const teamPath = path.resolve(__dirname, '../src/app/dashboard/team/page.tsx');
     const portalLayoutPath = path.resolve(__dirname, '../src/app/portal/layout.tsx');
-    const candidatesPath = path.resolve(__dirname, '../src/app/dashboard/candidates/page.tsx');
+    const candidatesPath = path.resolve(__dirname, '../src/app/dashboard/candidates/CandidatesClient.tsx');
 
     const teamContent = fs.readFileSync(teamPath, 'utf8');
     const portalContent = fs.readFileSync(portalLayoutPath, 'utf8');
@@ -62,7 +62,7 @@ test.describe('Framer Motion Animation & App Router Safety Suite', () => {
   });
 
   test('test case 3: verifies GPU-accelerated motion and spring physics configuration', async () => {
-    const screeningPath = path.resolve(__dirname, '../src/app/dashboard/screening/page.tsx');
+    const screeningPath = path.resolve(__dirname, '../src/app/dashboard/screening/ScreeningClient.tsx');
     const screeningContent = fs.readFileSync(screeningPath, 'utf8');
 
     // AI screening view uses spring physics and reduced motion checks

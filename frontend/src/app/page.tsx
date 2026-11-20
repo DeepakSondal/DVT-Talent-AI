@@ -123,11 +123,8 @@ function Navigation() {
                             <span className="font-bold text-lg tracking-tight text-white">
                                 DVT <span className="text-emerald-400 text-emerald-400">Talent AI</span>
                             </span>
-                            <span className="px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-md">
-                                v2.4
-                            </span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-medium">Dual-Sided Autonomous Recruitment Engine</span>
+                        <span className="text-[10px] text-slate-400 font-medium">AI Talent &amp; Career Platform</span>
                     </div>
                 </Link>
 
@@ -852,7 +849,7 @@ export default function LandingPage() {
 
                                 <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.1] break-words">
                                     Autonomous Talent Sourcing &amp; <br className="hidden sm:inline" />
-                                    <span className="bg-emerald-600 text-emerald-400">
+                                    <span className="text-emerald-400">
                                         Screening Engine
                                     </span>
                                 </h1>
@@ -866,20 +863,22 @@ export default function LandingPage() {
                                         <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
                                             <Button
                                                 size="lg"
-                                                className="h-13 px-8 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-xl shadow-blue-600/30 transition-colors duration-150 whitespace-nowrap"
+                                                className="h-12 px-8 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-xl shadow-emerald-600/25 transition-colors duration-150 whitespace-nowrap"
                                             >
                                                 Start 14-Day Recruiter Trial <ArrowRight className="w-4 h-4 ml-2" />
                                             </Button>
                                         </motion.div>
                                     </Link>
                                     <Link href="/auth/login?portal=recruiter" id="recruiter-signin-hero-btn">
-                                        <Button
-                                            size="lg"
-                                            variant="outline"
-                                            className="h-13 px-6 text-sm font-semibold border-slate-700 text-slate-300 hover:bg-slate-900 rounded-xl whitespace-nowrap"
-                                        >
-                                            Recruiter Sign In
-                                        </Button>
+                                        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
+                                            <Button
+                                                size="lg"
+                                                variant="outline"
+                                                className="h-12 px-8 text-sm font-bold bg-slate-900/80 hover:bg-slate-800 border-slate-700 hover:border-slate-500 text-slate-100 hover:text-white rounded-xl transition-colors duration-150 whitespace-nowrap"
+                                            >
+                                                Recruiter Sign In
+                                            </Button>
+                                        </motion.div>
                                     </Link>
                                 </div>
                                 <p className="text-xs text-slate-500">
@@ -905,7 +904,7 @@ export default function LandingPage() {
 
                                 <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white leading-[1.1] break-words">
                                     Stop Applying to Ghost Jobs. <br className="hidden sm:inline" />
-                                    <span className="bg-emerald-600 text-emerald-400">
+                                    <span className="text-emerald-400">
                                         Score Fit with Zero Fabrication.
                                     </span>
                                 </h1>
@@ -919,20 +918,22 @@ export default function LandingPage() {
                                         <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
                                             <Button
                                                 size="lg"
-                                                className="h-13 px-8 text-sm font-bold bg-emerald-600 hover: hover: text-white rounded-xl shadow-xl shadow-emerald-600/30 transition-colors duration-150 whitespace-nowrap"
+                                                className="h-12 px-8 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-xl shadow-emerald-600/25 transition-colors duration-150 whitespace-nowrap"
                                             >
                                                 Join Career-Ops Talent Network <ArrowRight className="w-4 h-4 ml-2" />
                                             </Button>
                                         </motion.div>
                                     </Link>
                                     <Link href="/auth/login?portal=candidate" id="candidate-signin-hero-btn">
-                                        <Button
-                                            size="lg"
-                                            variant="outline"
-                                            className="h-13 px-6 text-sm font-semibold border-slate-700 text-slate-300 hover:bg-slate-900 rounded-xl whitespace-nowrap"
-                                        >
-                                            Candidate Sign In
-                                        </Button>
+                                        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
+                                            <Button
+                                                size="lg"
+                                                variant="outline"
+                                                className="h-12 px-8 text-sm font-bold bg-slate-900/80 hover:bg-slate-800 border-slate-700 hover:border-slate-500 text-slate-100 hover:text-white rounded-xl transition-colors duration-150 whitespace-nowrap"
+                                            >
+                                                Candidate Sign In
+                                            </Button>
+                                        </motion.div>
                                     </Link>
                                 </div>
                                 <p className="text-xs text-slate-500">
@@ -1293,7 +1294,7 @@ export default function LandingPage() {
                                 <Button
                                     size="lg"
                                     variant="outline"
-                                    className="h-12 px-8 text-xs font-bold border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/40 rounded-xl whitespace-nowrap"
+                                    className="h-12 px-8 text-xs font-bold bg-slate-900/80 border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/40 hover:text-emerald-200 rounded-xl whitespace-nowrap"
                                 >
                                     Join Free Candidate Network
                                 </Button>
@@ -1311,7 +1312,7 @@ export default function LandingPage() {
                             D
                         </div>
                         <span className="font-bold text-white">DVT Talent AI</span>
-                        <span className="text-slate-500">&bull; Dual-Sided Autonomous Recruitment Engine</span>
+                        <span className="text-slate-500">&bull; AI Talent &amp; Career Platform</span>
                     </div>
                     <p className="text-slate-500">&copy; 2026 DVT Talent AI Inc. All rights reserved.</p>
                     <div className="flex gap-6 font-semibold text-slate-400">

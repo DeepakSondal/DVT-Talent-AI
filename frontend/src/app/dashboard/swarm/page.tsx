@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
     Zap, Rocket, Target, Mail, ShieldCheck, 
@@ -43,6 +44,9 @@ export default function SwarmCommandCenter() {
     const [requireApproval, setRequireApproval] = useState(true);
     const [targetRole, setTargetRole] = useState("Senior Distributed Systems Engineer");
     const [targetLocation, setTargetLocation] = useState("San Francisco, CA");
+    const [sourcingChannels, setSourcingChannels] = useState<string[]>(["internal", "github", "stackoverflow", "web"]);
+    const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+    const [pollCount, setPollCount] = useState(0);
     const [logs, setLogs] = useState<string[]>([
         "AI agent pipeline connected via real-time WebSocket.",
         "System state: 7 AI Recruiting Agents ready and standing by."
@@ -81,6 +85,14 @@ export default function SwarmCommandCenter() {
         }
     }, [lastMessage, handleSignal]);
 
+    const toggleSourcingChannel = (channelId: string) => {
+        setSourcingChannels(prev =>
+            prev.includes(channelId)
+                ? (prev.length > 1 ? prev.filter(c => c !== channelId) : prev)
+                : [...prev, channelId]
+        );
+    };
+
     const toggleAgentEnabled = (id: string) => {
         setAgents(prev => prev.map(a => {
             if (a.id === id) {
@@ -100,76 +112,85 @@ export default function SwarmCommandCenter() {
         });
     };
 
-    const runAutopilot = async () => {
+    const { data: taskStatusData } = useQuery({
+        queryKey: ["swarm", "status", activeTaskId],
+        queryFn: async () => {
+            setPollCount((c) => c + 1);
+            return agentsApi.getStatus(activeTaskId!);
+        },
+        enabled: Boolean(activeTaskId),
+        refetchInterval: 3000,
+    });
+
+    useEffect(() => {
+        if (!activeTaskId || !taskStatusData) return;
+        const currentStatus = taskStatusData?.status || "running";
+        if (currentStatus === "completed") {
+            setActiveTaskId(null);
+            setAgents(prev => prev.map(a => a.enabled ? { ...a, status: "success" } : a));
+            setStatus("complete");
+            setProgress(100);
+            setLogs(prev => [...prev, `[PIPELINE] Task ${activeTaskId.slice(0, 8)} completed successfully.`]);
+            toast.success("Automated recruitment workflow completed!", {
+                description: `Sourced and screened candidates for '${targetRole}'. Candidates saved to Candidate Pipeline.`
+            });
+        } else if (currentStatus === "failed") {
+            setActiveTaskId(null);
+            setStatus("idle");
+            setProgress(0);
+            setLogs(prev => [...prev, `[ERROR] Task ${activeTaskId.slice(0, 8)} failed: ${taskStatusData?.error || "Execution error"}`]);
+            toast.error(taskStatusData?.error || "Swarm pipeline execution failed.");
+        } else if (pollCount === 1 && currentStatus === "running") {
+            if (agents.find(a => a.id === "screening")?.enabled) updateAgentStatus("screening", "thinking");
+            setProgress(60);
+            setLogs(prev => [...prev, `[PIPELINE] Task ${activeTaskId.slice(0, 8)} executing sourcing and screening stages...`]);
+        } else if (pollCount >= 20) {
+            setActiveTaskId(null);
+            setLogs(prev => [...prev, `[PIPELINE] Task ${activeTaskId.slice(0, 8)} is continuing asynchronously in the background.`]);
+        }
+    }, [activeTaskId, taskStatusData, pollCount, targetRole, agents, updateAgentStatus]);
+
+    const runSwarmMutation = useMutation({
+        mutationFn: () =>
+            agentsApi.runSwarm({
+                industry: targetRole,
+                location: targetLocation,
+                mock_mode: false,
+                require_approval: requireApproval,
+                sources: sourcingChannels,
+            }),
+        onSuccess: (res) => {
+            setLogs(prev => [...prev, `✓ Swarm Dispatched: Task ${res?.task_id ? res.task_id.slice(0, 8) : "active"} queued on backend orchestrator.`]);
+            setProgress(35);
+            if (agents.find(a => a.id === "discovery")?.enabled) updateAgentStatus("discovery", "success");
+            if (agents.find(a => a.id === "sourcing")?.enabled) updateAgentStatus("sourcing", "thinking");
+            if (res?.task_id) {
+                setPollCount(0);
+                setActiveTaskId(res.task_id);
+            } else {
+                setAgents(prev => prev.map(a => a.enabled ? { ...a, status: "success" } : a));
+                setStatus("complete");
+                setProgress(100);
+                toast.success("Automated recruitment workflow completed!");
+            }
+        },
+        onError: (e: any) => {
+            setStatus("idle");
+            toast.error(e?.response?.data?.detail || "Could not initiate recruitment pipeline.");
+        },
+    });
+
+    const runAutopilot = () => {
         const activeAgents = agents.filter(a => a.enabled);
         if (activeAgents.length === 0) {
             toast.error("Please enable at least one agent to run the recruitment pipeline.");
             return;
         }
-
-        try {
-            setStatus("running");
-            setLogs(prev => [...prev, `[PIPELINE] Initiating automated recruitment workflow (${activeAgents.length} Active Agents) for '${targetRole}'...`]);
-            setProgress(15);
-            if (agents.find(a => a.id === "discovery")?.enabled) updateAgentStatus("discovery", "thinking");
-
-            const res = await agentsApi.runSwarm({
-                industry: targetRole,
-                location: targetLocation,
-                mock_mode: false,
-                require_approval: requireApproval
-            });
-
-            setLogs(prev => [...prev, `✓ Swarm Dispatched: Task ${res?.task_id ? res.task_id.slice(0, 8) : "active"} queued on backend orchestrator.`]);
-            setProgress(35);
-            if (agents.find(a => a.id === "discovery")?.enabled) updateAgentStatus("discovery", "success");
-            if (agents.find(a => a.id === "sourcing")?.enabled) updateAgentStatus("sourcing", "thinking");
-
-            if (res?.task_id) {
-                let polls = 0;
-                const pollTimer = setInterval(async () => {
-                    polls += 1;
-                    try {
-                        const st = await agentsApi.getStatus(res.task_id);
-                        const currentStatus = st?.status || "running";
-                        if (polls === 1 && currentStatus === "running") {
-                            if (agents.find(a => a.id === "screening")?.enabled) updateAgentStatus("screening", "thinking");
-                            setProgress(60);
-                            setLogs(prev => [...prev, `[PIPELINE] Task ${res.task_id.slice(0, 8)} executing sourcing and screening stages...`]);
-                        }
-                        if (currentStatus === "completed") {
-                            clearInterval(pollTimer);
-                            activeAgents.forEach(a => updateAgentStatus(a.id, "success"));
-                            setStatus("complete");
-                            setProgress(100);
-                            setLogs(prev => [...prev, `[PIPELINE] Task ${res.task_id.slice(0, 8)} completed successfully.`]);
-                            toast.success("Automated recruitment workflow completed!", {
-                                description: `Sourced and screened candidates for '${targetRole}'. Candidates saved to Candidate Pipeline.`
-                            });
-                        } else if (currentStatus === "failed") {
-                            clearInterval(pollTimer);
-                            setStatus("idle");
-                            setProgress(0);
-                            setLogs(prev => [...prev, `[ERROR] Task ${res.task_id.slice(0, 8)} failed: ${st?.error || "Execution error"}`]);
-                            toast.error(st?.error || "Swarm pipeline execution failed.");
-                        } else if (polls >= 20) {
-                            clearInterval(pollTimer);
-                            setLogs(prev => [...prev, `[PIPELINE] Task ${res.task_id.slice(0, 8)} is continuing asynchronously in the background.`]);
-                        }
-                    } catch {
-                        clearInterval(pollTimer);
-                    }
-                }, 3000);
-            } else {
-                activeAgents.forEach(a => updateAgentStatus(a.id, "success"));
-                setStatus("complete");
-                setProgress(100);
-                toast.success("Automated recruitment workflow completed!");
-            }
-        } catch (e: any) {
-            setStatus("idle");
-            toast.error(e?.response?.data?.detail || "Could not initiate recruitment pipeline.");
-        }
+        setStatus("running");
+        setLogs(prev => [...prev, `[PIPELINE] Initiating automated recruitment workflow (${activeAgents.length} Active Agents) for '${targetRole}'...`]);
+        setProgress(15);
+        if (agents.find(a => a.id === "discovery")?.enabled) updateAgentStatus("discovery", "thinking");
+        runSwarmMutation.mutate();
     };
 
     const exportLogsJSON = () => {
@@ -349,6 +370,38 @@ export default function SwarmCommandCenter() {
                                         onChange={(e) => setTargetLocation(e.target.value)}
                                         className="w-full bg-muted/40 border border-border rounded-2xl px-4 py-3 text-xs font-bold text-foreground outline-none focus:ring-2 focus:ring-blue-500/20"
                                     />
+                                </div>
+                            </div>
+
+                            {/* Sourcing Channels Selector (includes Monster.com & Dice.com) */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black font-semibold text-muted-foreground">Sourcing Channels</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        { id: "internal", label: "Internal Resume Pool" },
+                                        { id: "github", label: "GitHub" },
+                                        { id: "stackoverflow", label: "StackOverflow" },
+                                        { id: "web", label: "Web / LinkedIn" },
+                                        { id: "monster", label: "Monster.com" },
+                                        { id: "dice", label: "Dice.com" },
+                                    ].map((ch) => {
+                                        const active = sourcingChannels.includes(ch.id);
+                                        return (
+                                            <button
+                                                key={ch.id}
+                                                type="button"
+                                                onClick={() => toggleSourcingChannel(ch.id)}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer",
+                                                    active
+                                                        ? "bg-blue-500/15 border-blue-500/50 text-blue-400"
+                                                        : "bg-muted/30 border-border text-muted-foreground hover:border-blue-500/30"
+                                                )}
+                                            >
+                                                {ch.label}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 

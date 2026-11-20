@@ -27,6 +27,10 @@ from .pydantic_config import AgentDeps, get_pydantic_model
 from .swarm_memory import _get_cache, _set_cache
 
 try:
+    from backend.config import settings
+except ImportError:
+    from config import settings  # pyrefly: ignore[missing-import]  # type: ignore
+try:
     from backend.services.resume_parser import ResumeParserService
 except ImportError:
     from services.resume_parser import ResumeParserService  # pyrefly: ignore[missing-import]  # type: ignore
@@ -426,7 +430,38 @@ async def _query_github_talent(deps: AgentDeps, keywords: str) -> str:
     try:
         resp = await deps.http_client.get(url, headers=headers, params=params, timeout=3.5)
         if resp.status_code == 200:
-            payload = json.dumps(resp.json().get("items", []))
+            items = resp.json().get("items", [])[:5]
+
+            async def _fetch_profile(item: Dict[str, Any]) -> Dict[str, Any]:
+                login = item.get("login")
+                if not login:
+                    return item
+                try:
+                    prof_resp = await deps.http_client.get(
+                        f"https://api.github.com/users/{quote(str(login), safe='')}",
+                        headers=headers,
+                        timeout=2.5,
+                    )
+                    if prof_resp.status_code == 200:
+                        prof = prof_resp.json()
+                        return {
+                            "login": login,
+                            "name": prof.get("name") or login,
+                            "bio": prof.get("bio"),
+                            "company": prof.get("company"),
+                            "location": prof.get("location"),
+                            "email": prof.get("email"),
+                            "blog": prof.get("blog"),
+                            "public_repos": prof.get("public_repos"),
+                            "followers": prof.get("followers"),
+                            "html_url": prof.get("html_url") or item.get("html_url"),
+                        }
+                except Exception:  # noqa: S110
+                    pass
+                return item
+
+            enriched = await asyncio.gather(*[_fetch_profile(it) for it in items[:3]])
+            payload = json.dumps(list(enriched) + items[3:])
             _set_sourcing_cache(cache_key, payload, tenant_id=deps.tenant_id, ttl_seconds=3600)
             return payload
         return f"GitHub API Error: {resp.status_code}"
@@ -501,34 +536,94 @@ async def _query_web_signals(deps: AgentDeps, query: str) -> str:
         return f"Web Search Failed: {str(e)}"
 
 
-async def prefetch_all_sourcing_signals(deps: AgentDeps, query: str) -> str:
+async def _query_job_board_talent(board: str, deps: AgentDeps, query: str) -> str:
     """
-    Concurrently executes deterministic facet extraction, internal hybrid search,
-    GitHub qualified search, StackOverflow tag experts, and Serper web search
-    in parallel using asyncio.gather so the Sourcing Agent can synthesize in 1 LLM turn.
+    Unified outbound sourcing connector for Monster.com and Dice.com.
+    Uses per-tenant/system API keys and configured board search endpoints.
+    """
+    board_key = (board or "").strip().lower()
+    if board_key not in {"monster", "dice"}:
+        return f"Unsupported job board: {board}"
+
+    api_key = (
+        getattr(deps, "monster_api_key", "") or getattr(settings, "monster_api_key", "")
+        if board_key == "monster"
+        else getattr(deps, "dice_api_key", "") or getattr(settings, "dice_api_key", "")
+    )
+    api_url = (
+        getattr(settings, "monster_api_url", "")
+        if board_key == "monster"
+        else getattr(settings, "dice_api_url", "")
+    )
+
+    if not api_key or not api_url:
+        return (
+            f"{board_key.title()}.com outbound API key/endpoint not configured; "
+            f"skipping {board_key.title()} live search."
+        )
+
+    clean_q = (query or "")[:500].strip()
+    cache_key = f"{board_key}:{clean_q.lower()}"
+    cached = _get_sourcing_cache(cache_key, tenant_id=deps.tenant_id)
+    if cached:
+        return cached
+
+    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
+    try:
+        resp = await deps.http_client.get(
+            api_url,
+            headers=headers,
+            params={"q": clean_q, "limit": 5},
+            timeout=4.0,
+        )
+        if resp.status_code == 200:
+            payload = resp.text[:2000]
+            _set_sourcing_cache(cache_key, payload, tenant_id=deps.tenant_id, ttl_seconds=1800)
+            return payload
+        return f"{board_key.title()} API Error: {resp.status_code}"
+    except Exception as e:
+        return f"{board_key.title()} Search Failed: {str(e)}"
+
+
+async def prefetch_all_sourcing_signals(
+    deps: AgentDeps,
+    query: str,
+    sources: Optional[List[str]] = None,
+    require_uploaded_resume: bool = False,
+) -> str:
+    """
+    Concurrently executes deterministic facet extraction and selected sourcing channels
+    (internal DB, GitHub, StackOverflow, Web, Monster.com, Dice.com) in parallel.
     """
     facets = ResumeParserService.extract_deterministic_facets(query)
-    internal_task = fast_hybrid_candidate_search(deps.tenant_id, query, limit=5)
-    github_task = _query_github_talent(deps, query[:120])
-    so_task = _query_stackoverflow_experts(deps, query[:120])
-    web_task = _query_web_signals(deps, query[:120])
+    if require_uploaded_resume:
+        active_sources = {"internal"}
+    elif sources:
+        active_sources = {str(s).strip().lower() for s in sources if str(s).strip()}
+    else:
+        active_sources = {"internal", "github", "stackoverflow", "web"}
 
-    internal_res, github_res, so_res, web_res = await asyncio.gather(
-        internal_task, github_task, so_task, web_task, return_exceptions=True
-    )
+    task_map: Dict[str, Any] = {}
+    if "internal" in active_sources:
+        task_map["INTERNAL_POOL"] = fast_hybrid_candidate_search(deps.tenant_id, query, limit=5)
+    if "github" in active_sources:
+        task_map["GITHUB_SIGNALS"] = _query_github_talent(deps, query[:120])
+    if "stackoverflow" in active_sources:
+        task_map["STACKOVERFLOW_EXPERTS"] = _query_stackoverflow_experts(deps, query[:120])
+    if "web" in active_sources:
+        task_map["WEB_SIGNALS"] = _query_web_signals(deps, query[:120])
+    if "monster" in active_sources:
+        task_map["MONSTER_SIGNALS"] = _query_job_board_talent("monster", deps, query[:120])
+    if "dice" in active_sources:
+        task_map["DICE_SIGNALS"] = _query_job_board_talent("dice", deps, query[:120])
 
-    internal_str = json.dumps(internal_res) if isinstance(internal_res, list) else str(internal_res)
-    github_str = str(github_res)[:1500]
-    so_str = str(so_res)[:1000]
-    web_str = str(web_res)[:1500]
-
-    return (
-        f"[DETERMINISTIC_FACETS]: {json.dumps(facets)}\n"
-        f"[PREFETCHED_INTERNAL_POOL]: {internal_str}\n"
-        f"[PREFETCHED_GITHUB_SIGNALS]: {github_str}\n"
-        f"[PREFETCHED_STACKOVERFLOW_EXPERTS]: {so_str}\n"
-        f"[PREFETCHED_WEB_SIGNALS]: {web_str}"
-    )
+    keys = list(task_map.keys())
+    results = await asyncio.gather(*task_map.values(), return_exceptions=True) if keys else []
+    blocks = [f"[DETERMINISTIC_FACETS]: {json.dumps(facets)}"]
+    for k, res in zip(keys, results, strict=True):
+        val = json.dumps(res) if isinstance(res, list) else str(res)
+        blocks.append(f"[PREFETCHED_{k}]: {val[:1500]}")
+    return "\n".join(blocks)
 
 
 @sourcing_agent.tool
@@ -565,6 +660,20 @@ async def search_web_signals(ctx: RunContext[AgentDeps], query: str) -> str:
     """Scans LinkedIn and public developer profiles for active talent signals via Serper API."""
     safe_query, _ = sanitizer_service.sanitize((query or "")[:500])
     return await _query_web_signals(ctx.deps, safe_query[:500])
+
+
+@sourcing_agent.tool
+async def search_monster_talent(ctx: RunContext[AgentDeps], query: str) -> str:
+    """Searches Monster.com candidates and resumes using the workspace's Monster integration."""
+    safe_query, _ = sanitizer_service.sanitize((query or "")[:500])
+    return await _query_job_board_talent("monster", ctx.deps, safe_query[:500])
+
+
+@sourcing_agent.tool
+async def search_dice_talent(ctx: RunContext[AgentDeps], query: str) -> str:
+    """Searches Dice.com candidates and resumes using the workspace's Dice integration."""
+    safe_query, _ = sanitizer_service.sanitize((query or "")[:500])
+    return await _query_job_board_talent("dice", ctx.deps, safe_query[:500])
 
 
 # ── Execution Helper ──────────────────────────────────────────────────────

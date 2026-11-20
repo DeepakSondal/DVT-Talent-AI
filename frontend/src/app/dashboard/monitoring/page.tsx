@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useWebSocket } from "@/providers/websocket-provider";
 import { monitoringApi, agentsApi } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
@@ -51,48 +52,53 @@ const SignalItem = React.memo(({ s }: SignalItemProps) => (
 SignalItem.displayName = "SignalItem";
 
 export default function MonitoringPage() {
-    const [signals, setSignals] = useState<any[]>([]);
-    const [tasks, setTasks] = useState<any[]>([]);
-    const [mediations, setMediations] = useState<any>({ active_locks: 0, resolved_conflicts: 0 });
+    const [liveSignals, setLiveSignals] = useState<any[]>([]);
     const [hourlyRate, setHourlyRate] = useState<number>(45);
     const [filterCategory, setFilterCategory] = useState<string>("all");
     const [isPaused, setIsPaused] = useState<boolean>(false);
     const { lastMessage } = useWebSocket();
 
-    // Load initial monitoring and telemetry history
-    const fetchMonitoringData = async () => {
-        try {
+    const { data: historySignals = [], refetch: refetchSignals } = useQuery({
+        queryKey: ["monitoring", "signals"],
+        queryFn: async () => {
             const history = await monitoringApi.getRecentSignals(50);
-            const formattedSignals = history.map((s: any, idx: number) => ({
+            return (history || []).map((s: any, idx: number) => ({
                 ...s,
-                id: s.id || `hist-${idx}-${s.timestamp}`
+                id: s.id || `hist-${idx}-${s.timestamp}`,
             }));
-            setSignals(formattedSignals);
+        },
+        refetchInterval: isPaused ? false : 8000,
+    });
 
-            const taskData = await agentsApi.listTasks(100);
-            setTasks(taskData.tasks || []);
+    const { data: taskData, refetch: refetchTasks } = useQuery({
+        queryKey: ["monitoring", "tasks"],
+        queryFn: () => agentsApi.listTasks(100),
+        refetchInterval: isPaused ? false : 8000,
+    });
 
-            const stats = await monitoringApi.getMediations();
-            setMediations(stats || { active_locks: 0, resolved_conflicts: 0 });
-        } catch (err) {
-            console.error("Monitoring hydration fallback executed", err);
-        }
+    const { data: mediations = { active_locks: 0, resolved_conflicts: 0 }, refetch: refetchMediations } = useQuery({
+        queryKey: ["monitoring", "mediations"],
+        queryFn: () => monitoringApi.getMediations(),
+        refetchInterval: isPaused ? false : 8000,
+    });
+
+    const tasks: any[] = taskData?.tasks || [];
+    const signals = useMemo(() => [...liveSignals, ...historySignals].slice(0, 80), [liveSignals, historySignals]);
+
+    const fetchMonitoringData = () => {
+        refetchSignals();
+        refetchTasks();
+        refetchMediations();
     };
-
-    useEffect(() => {
-        fetchMonitoringData();
-        const statInterval = setInterval(fetchMonitoringData, 8000);
-        return () => clearInterval(statInterval);
-    }, []);
 
     // WebSocket Live Signal Handler
     useEffect(() => {
         if (lastMessage && !isPaused) {
-            setSignals(prev => [{ 
+            setLiveSignals(prev => [{ 
                 ...lastMessage, 
                 id: Date.now(), 
                 timestamp: new Date().toISOString() 
-            }, ...prev].slice(0, 80));
+            }, ...prev].slice(0, 30));
         }
     }, [lastMessage, isPaused]);
 
@@ -112,7 +118,7 @@ export default function MonitoringPage() {
     });
 
     const clearTelemetryLogs = () => {
-        setSignals([]);
+        setLiveSignals([]);
         toast.info("Telemetry stream buffer cleared.");
     };
 

@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import pytest
 
-from agents.discovery_pydantic import DiscoveryResult, ExtractedJD, MarketIQ, TargetCompany
+from agents.discovery_pydantic import DiscoveryResult, ExtractedJD, TargetCompany
 from agents.orchestrator import AgentOrchestrator
 from agents.screening_pydantic import ScreeningPlan, ScreeningQuestion
 from agents.sourcing_pydantic import CandidateNode, SourcingSynthesis
@@ -29,7 +29,6 @@ async def test_full_autonomous_pulse_logic():
 
     mock_disc = MockPydanticResult(
         DiscoveryResult(
-            market_iq=MarketIQ(salary_range="$140,000 - $190,000", talent_density="High"),
             target_companies=[TargetCompany(name="Apex Systems", fit_score=95.0)],
             extracted_jd=ExtractedJD(
                 title="Lead AI Architect",

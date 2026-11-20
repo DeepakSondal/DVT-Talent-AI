@@ -7,6 +7,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, cast
+from urllib.parse import urlparse
 
 import structlog
 from authlib.integrations.starlette_client import OAuth  # pyrefly: ignore[untyped-import]
@@ -49,12 +50,10 @@ oauth.register(
 )
 
 oauth.register(
-    name="linkedin",
-    client_id=settings.linkedin_client_id,
-    client_secret=settings.linkedin_client_secret,
-    access_token_url="https://www.linkedin.com/oauth/v2/accessToken",  # noqa: S106
-    authorize_url="https://www.linkedin.com/oauth/v2/authorization",
-    api_base_url="https://api.linkedin.com/v2/",
+    name="microsoft",
+    client_id=settings.microsoft_client_id,
+    client_secret=settings.microsoft_client_secret,
+    server_metadata_url="https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration",
     client_kwargs={"scope": "openid email profile"},
 )
 
@@ -91,12 +90,7 @@ def _select_verified_primary_email(
             detail="Failed to fetch verified primary user email from provider",
         )
 
-    if provider in ("google", "linkedin"):
-        # LinkedIn OIDC (/v2/userinfo) returns `email_verified` as a boolean when the
-        # member's primary email is verified — if absent or not True, treated as
-        # unverified and login is rejected with 400 (see P0-2b commit body). If product
-        # decides to allow unverified-LinkedIn signups with mandatory email-link
-        # confirmation, route to /auth/link-oauth instead of raising 400.
+    if provider in ("google", "microsoft"):
         if (
             isinstance(user_info, dict)
             and user_info.get("email_verified") is True
@@ -145,13 +139,35 @@ async def _issue_oauth_link_token(
 
 # ── Routes ───────────────────────────────────────────────────────────────
 
+def _resolve_frontend_origin(request: Request) -> str:
+    """Return the validated frontend origin from Referer when in cors_origins, else settings.frontend_url."""
+    referer = request.headers.get("referer", "")
+    if referer:
+        parsed = urlparse(referer)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+            if origin in settings.cors_origins:
+                return origin
+    return settings.frontend_url.rstrip("/")
+
+
 @router.get("/login/{provider}")
 async def social_login(provider: str, request: Request):
     """Initiate social login redirect"""
     client = oauth.create_client(provider)
     if not client:
         raise HTTPException(status_code=400, detail="Invalid provider")
-    
+
+    client_id = str(getattr(settings, f"{provider}_client_id", "") or "").strip()
+    client_secret = str(getattr(settings, f"{provider}_client_secret", "") or "").strip()
+    if not client_id or not client_secret:
+        log.warning("oauth_provider_not_configured", provider=provider)
+        frontend_origin = _resolve_frontend_origin(request)
+        return RedirectResponse(
+            url=f"{frontend_origin}/auth/login?error=oauth_not_configured&provider={provider}",
+            status_code=302,
+        )
+
     redirect_uri = f"{settings.app_base_url}/api/v1/auth/callback/{provider}"
     return await client.authorize_redirect(request, redirect_uri)
 
@@ -180,12 +196,13 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
         user_info = resp.json() if resp else None
         emails_resp = await client.get("user/emails", token=token)
         emails = emails_resp.json() if emails_resp else []
-    elif provider == "linkedin":
-        # OpenID Connect userinfo endpoint provides email_verified boolean
-        resp = await client.get("https://api.linkedin.com/v2/userinfo", token=token)
-        user_info = resp.json() if resp else None
+    elif provider == "microsoft":
+        user_info = token.get("userinfo")
+        if not user_info:
+            resp = await client.get("https://graph.microsoft.com/oidc/userinfo", token=token)
+            user_info = resp.json() if resp else None
         if isinstance(user_info, dict) and not user_info.get("id"):
-            user_info["id"] = user_info.get("sub")
+            user_info["id"] = user_info.get("sub") or user_info.get("oid")
 
     email = _select_verified_primary_email(provider, user_info, emails=emails)
     raw_provider_id = (user_info or {}).get("id") or (user_info or {}).get("sub")

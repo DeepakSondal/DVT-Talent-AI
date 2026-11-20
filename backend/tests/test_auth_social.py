@@ -9,12 +9,33 @@ from main import app
 
 @pytest.mark.asyncio
 async def test_social_login_redirect():
-    with patch("api.routes.auth_social.oauth.google.authorize_redirect", new_callable=AsyncMock) as mock_auth:
+    with (
+        patch("api.routes.auth_social.settings.google_client_id", "test-google-client-id"),
+        patch("api.routes.auth_social.settings.google_client_secret", "test-google-client-secret"),
+        patch("api.routes.auth_social.oauth.google.authorize_redirect", new_callable=AsyncMock) as mock_auth,
+    ):
         mock_auth.return_value = RedirectResponse(url="https://accounts.google.com/o/oauth2/v2/auth", status_code=302)
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             response = await ac.get("/api/v1/auth/login/google")
             assert response.status_code == 302
             assert "accounts.google.com" in response.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_social_login_unconfigured_redirects_with_error():
+    with (
+        patch("api.routes.auth_social.settings.microsoft_client_id", ""),
+        patch("api.routes.auth_social.settings.microsoft_client_secret", ""),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            response = await ac.get(
+                "/api/v1/auth/login/microsoft",
+                headers={"referer": "http://localhost:3000/auth/login?portal=recruiter"},
+            )
+            assert response.status_code == 302
+            assert response.headers["location"] == (
+                "http://localhost:3000/auth/login?error=oauth_not_configured&provider=microsoft"
+            )
 
 @pytest.mark.asyncio
 async def test_social_login_invalid_provider():

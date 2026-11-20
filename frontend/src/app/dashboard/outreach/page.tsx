@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
     Mail, Sparkles, Send, MessageSquare, 
@@ -54,60 +55,69 @@ interface CombinedRequirementJob {
 // Mock fallbacks removed for live user zero-state
 
 export default function OutreachLab() {
-    const [jobs, setJobs] = useState<CombinedRequirementJob[]>([]);
+    const queryClient = useQueryClient();
     const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
 
-    useEffect(() => {
-        Promise.all([
-            jobsApi.list().catch(() => ({ items: [] })),
-            candidatesApi.list({ page: 1 }).catch(() => ({ items: [] })),
-        ]).then(([jobsRes, candsRes]: [any, any]) => {
+    const { data: jobs = [] } = useQuery<CombinedRequirementJob[]>({
+        queryKey: ["outreach", "jobs-and-candidates"],
+        queryFn: async () => {
+            const [jobsRes, candsRes]: [any, any] = await Promise.all([
+                jobsApi.list().catch(() => ({ items: [] })),
+                candidatesApi.list({ page: 1 }).catch(() => ({ items: [] })),
+            ]);
             const dbJobs = jobsRes?.items || (Array.isArray(jobsRes) ? jobsRes : []);
             const dbCands = candsRes?.items || (Array.isArray(candsRes) ? candsRes : []);
-            if (dbJobs.length > 0 && dbCands.length > 0) {
-                const baseMappedCands: CandidateItem[] = dbCands.slice(0, 10).map((c: any) => ({
-                    id: String(c.id),
-                    first_name: c.first_name || "Candidate",
-                    last_name: c.last_name || "",
-                    title: c.title || "Software Engineer",
-                    company: c.current_company || "Organization",
-                    location: c.location || "—",
-                    email: c.email,
-                    phone: c.phone || "—",
-                    score: Math.round(c.score || 0),
-                    skills: Array.isArray(c.skills) ? c.skills : [],
-                    experience_years: c.experience_years ?? 0,
-                    linkedin_url: c.linkedin_url || "",
-                    github_url: c.github_url || "",
-                    reasoning: c.ai_summary || "Matched to requisition requirements.",
-                    deliverability: "VALID",
-                    selected: false,
-                }));
-                const mappedJobs: CombinedRequirementJob[] = dbJobs.slice(0, 5).map((j: any) => {
-                    const jobSpecific = baseMappedCands.filter((_: any, idx: number) =>
-                        String(dbCands[idx]?.job_id || "") === String(j.id)
-                    );
-                    const perJobCandidates = (jobSpecific.length > 0 ? jobSpecific : baseMappedCands).map(
-                        (c) => ({ ...c, selected: jobSpecific.length > 0 })
-                    );
-                    return {
-                        id: String(j.id),
-                        title: j.title,
-                        company: "Workspace Requisition",
-                        location: j.location || (j.remote ? "Remote" : "On-site"),
-                        portal: "Internal ATS",
-                        source_link: j.source_url || "/dashboard/jobs",
-                        hiring_manager_name: "Hiring Team",
-                        hiring_manager_email: "recruiting@workspace.io",
-                        hiring_manager_phone: "Internal",
-                        sequence_type: "Hyper-Personalized Engineering Sequence (AI-Generated)",
-                        candidates: perJobCandidates,
-                    };
-                });
-                setJobs(mappedJobs);
-            }
-        });
-    }, []);
+            if (dbJobs.length === 0 || dbCands.length === 0) return [];
+
+            const baseMappedCands: CandidateItem[] = dbCands.slice(0, 10).map((c: any) => ({
+                id: String(c.id),
+                first_name: c.first_name || "Candidate",
+                last_name: c.last_name || "",
+                title: c.title || "Software Engineer",
+                company: c.current_company || "Organization",
+                location: c.location || "—",
+                email: c.email,
+                phone: c.phone || "—",
+                score: Math.round(c.score || 0),
+                skills: Array.isArray(c.skills) ? c.skills : [],
+                experience_years: c.experience_years ?? 0,
+                linkedin_url: c.linkedin_url || "",
+                github_url: c.github_url || "",
+                reasoning: c.ai_summary || "Matched to requisition requirements.",
+                deliverability: "VALID",
+                selected: false,
+            }));
+
+            return dbJobs.slice(0, 5).map((j: any) => {
+                const jobSpecific = baseMappedCands.filter((_: any, idx: number) =>
+                    String(dbCands[idx]?.job_id || "") === String(j.id)
+                );
+                const perJobCandidates = (jobSpecific.length > 0 ? jobSpecific : baseMappedCands).map(
+                    (c) => ({ ...c, selected: jobSpecific.length > 0 })
+                );
+                return {
+                    id: String(j.id),
+                    title: j.title,
+                    company: "Workspace Requisition",
+                    location: j.location || (j.remote ? "Remote" : "On-site"),
+                    portal: "Internal ATS",
+                    source_link: j.source_url || "/dashboard/jobs",
+                    hiring_manager_name: "Hiring Team",
+                    hiring_manager_email: "recruiting@workspace.io",
+                    hiring_manager_phone: "Internal",
+                    sequence_type: "Hyper-Personalized Engineering Sequence (AI-Generated)",
+                    candidates: perJobCandidates,
+                };
+            });
+        },
+        staleTime: 60_000,
+    });
+
+    const setJobs = (updater: (prev: CombinedRequirementJob[]) => CombinedRequirementJob[]) => {
+        queryClient.setQueryData<CombinedRequirementJob[]>(["outreach", "jobs-and-candidates"], (prev = []) =>
+            updater(prev)
+        );
+    };
 
     const toggleCandidateSelection = (jobId: string, candidateId: string) => {
         setJobs(prevJobs => prevJobs.map(job => {

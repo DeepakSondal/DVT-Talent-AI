@@ -18,9 +18,12 @@ async def test_screening_agent_parallel_logic():
 
 @pytest.mark.asyncio
 async def test_lead_discovery_reaction():
-    """ Verify discovery_agent initialization and tools """
+    """ Verify discovery_agent initialization and that live search/stub tools are removed """
     assert discovery_agent is not None
     assert hasattr(discovery_agent, "run")
+    tool_names = set(getattr(discovery_agent, "_function_toolset", None).tools.keys()) if hasattr(discovery_agent, "_function_toolset") else set()
+    assert "search_market_signals" not in tool_names
+    assert "analyze_talent_hotspots" not in tool_names
 
 @pytest.mark.asyncio
 async def test_sourcing_filters():

@@ -9,11 +9,11 @@ if __name__.startswith("backend.agents."):
 elif __name__.startswith("agents."):
     sys.modules["backend." + __name__] = sys.modules[__name__]
 
-from typing import Any, Dict, List
+from typing import List
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 
 from .pydantic_config import AgentDeps, get_pydantic_model
 
@@ -30,14 +30,6 @@ class ExtractedJD(BaseModel):
     experience_range: str = Field(default="3-5 years", description="Required years of experience stated in the JD")
     market_positioning: str = Field(default="Competitive", description="The core value proposition or 'hook' the company is using to attract talent")
 
-class MarketIQ(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    currency: str = Field(default="$", description="Local currency symbol (e.g. $, ₹, €)")
-    salary_range: str = Field(default="$120,000 - $180,000", description="Salary range in local currency")
-    talent_density: str = Field(default="High", description="Description of where talent is concentrated within the target country")
-    trending_skills: List[str] = Field(default_factory=list, description="Skills currently on the rise in this sector")
-    competitor_activity: str = Field(default="Active", description="Brief summary of what competitors are doing in this region")
-
 class TargetCompany(BaseModel):
     model_config = ConfigDict(extra="allow")
     name: str = Field(default="TechCorp")
@@ -47,7 +39,6 @@ class TargetCompany(BaseModel):
 
 class DiscoveryResult(BaseModel):
     model_config = ConfigDict(extra="allow")
-    market_iq: MarketIQ = Field(default_factory=MarketIQ)
     target_companies: List[TargetCompany] = Field(default_factory=list)
     extracted_jd: ExtractedJD = Field(default_factory=ExtractedJD)
     strategic_advice: str = Field(default="Focus on target tech hubs and competitive equity packages.")
@@ -61,53 +52,12 @@ discovery_agent = Agent(
     output_type=DiscoveryResult,
     system_prompt=(
         "You are the DVT Discovery Agent, an elite technical recruiter and JD Analyst. "
-        "Your mission is to analyze real-world job descriptions scraped by the Market IQ Agent. "
-        "1. INGEST: Read the raw job postings and requirements provided in the context. "
-        "2. ANALYZE: Break down the actual JD to find the absolute 'Must-Have' technical skills and 'Nice-to-Have' bonuses. "
-        "3. EXTRACT: Extract the core stack and requirements directly from the provided market data. "
-        "4. SYNTHESIZE: Provide a list of target companies and high-velocity signals based on the market. "
-        "5. Do NOT attempt to call nonexistent or unprovided tools. "
+        "Your mission is to analyze the target role, location, and any job description context provided in the prompt. "
+        "1. INGEST: Read the role, location, and any raw job postings or requirements provided in the context. "
+        "2. ANALYZE: Break down the role to identify the 'Must-Have' technical skills and 'Nice-to-Have' bonuses. "
+        "3. EXTRACT: Populate extracted_jd (title, core_stack, must_haves, nice_to_haves, experience_range, market_positioning). "
+        "4. SYNTHESIZE: Provide target_companies and strategic_advice directly from your domain knowledge and the prompt context. "
+        "5. Do NOT attempt to call external search or any unprovided tools. "
         "6. Do NOT output preamble, internal thoughts, or chain of reasoning text."
     )
 )
-
-# ── Tools ────────────────────────────────────────────────────────────────────
-
-@discovery_agent.tool
-async def search_market_signals(ctx: RunContext[AgentDeps], query: str) -> str:
-    """
-    Scans the web for hiring signals, funding rounds, and company expansions via Serper API.
-    Example: 'recent Series A funding tech startups New York'
-    """
-    if not ctx.deps.serper_key:
-        raise RuntimeError("ERROR: Serper API key missing. Please configure it in Settings.")
-    
-    url = "https://google.serper.dev/search"
-    headers = {"X-API-KEY": ctx.deps.serper_key, "Content-Type": "application/json"}
-    data = {"q": query, "num": 10}
-    
-    try:
-        resp = await ctx.deps.http_client.post(url, headers=headers, json=data)
-        resp.raise_for_status()
-        resp_data = resp.json()
-        
-        results = []
-        for res in resp_data.get('organic', [])[:5]:
-            results.append(f"Title: {res.get('title')}\nSnippet: {res.get('snippet')}")
-            
-        return "\n\n".join(results) if results else "No significant market signals found."
-    except Exception as e:
-        log.error("serper_api_error", error=str(e))
-        return f"Market signal search temporary error ({str(e)}). Synthesize requirements using provided Market IQ data."
-
-@discovery_agent.tool
-async def analyze_talent_hotspots(ctx: RunContext[AgentDeps], job_title: str) -> Dict[str, Any]:
-    """
-    Estimates salary bands and talent density for a specific role based on market averages.
-    """
-    log.info("analyzing_talent_hotspots", job_title=job_title)
-    return {
-        "avg_salary": "140k - 190k",
-        "hotspots": ["San Francisco", "Austin", "Remote", "London"],
-        "trending_skills": ["Python", "React", "AI/ML", "Cloud Architecture"]
-    }

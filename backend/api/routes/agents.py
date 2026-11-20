@@ -72,12 +72,16 @@ class PipelineTrigger(BaseModel):
     location: str = "United States"
     send_emails: bool = False
     mock_mode: bool = False
+    sources: Optional[List[str]] = None
+    require_uploaded_resume: bool = False
 
 
 class FastSourcingRequest(BaseModel):
     query: str
     location: Optional[str] = "Remote"
     limit: int = 5
+    sources: Optional[List[str]] = None
+    require_uploaded_resume: bool = False
 
 
 VALID_AGENTS = [
@@ -186,6 +190,8 @@ async def run_swarm_pipeline(
             industry=safe_industry,
             location=safe_location,
             mock_mode=config.mock_mode,
+            sources=config.sources,
+            require_uploaded_resume=config.require_uploaded_resume,
         )
         async with AsyncSessionLocal() as session:
             t_row = await session.get(AgentTask, task_id)
@@ -245,16 +251,35 @@ async def fast_sourcing(
     tenant_uuid = _require_agent_access(current_user)
     safe_query = _sanitize_input(req.query)
     safe_location = _sanitize_input(req.location or "")
-    from agents.sourcing_pydantic import fast_hybrid_candidate_search
+    from agents.sourcing_pydantic import fast_hybrid_candidate_search, prefetch_all_sourcing_signals
+
+    keywords = f"{safe_query} {safe_location}".strip()
     candidates = await fast_hybrid_candidate_search(
         tenant_id=str(tenant_uuid),
-        keywords=f"{safe_query} {safe_location}".strip(),
+        keywords=keywords,
         limit=min(max(1, req.limit), 25),
     )
+    board_signals: Optional[str] = None
+    if req.sources and any(s in {"monster", "dice"} for s in req.sources):
+        import httpx
+
+        from agents.pydantic_config import AgentDeps
+
+        async with httpx.AsyncClient() as client:
+            deps = AgentDeps(http_client=client, tenant_id=str(tenant_uuid))
+            board_signals = await prefetch_all_sourcing_signals(
+                deps,
+                keywords,
+                sources=req.sources,
+                require_uploaded_resume=req.require_uploaded_resume,
+            )
+
     return {
         "status": "completed",
         "candidates": candidates,
         "count": len(candidates),
+        "sources": req.sources or ["internal"],
+        "board_signals": board_signals,
     }
 
 
@@ -372,14 +397,41 @@ async def generate_screening_questions(
     tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
     safe_jd = _sanitize_input(req.job_description)
     safe_role_title = _sanitize_input(req.role_title) if req.role_title is not None else None
+    skills_required: Optional[List[str]] = None
+    safe_requirements: Optional[str] = None
+
+    if req.job_id:
+        try:
+            job_uuid = uuid.UUID(req.job_id)
+        except ValueError:
+            job_uuid = None
+        if job_uuid is not None:
+            from sqlalchemy import select
+
+            from db.models import Job
+
+            job_res = await db.execute(
+                select(Job).where(Job.id == job_uuid, Job.tenant_id == tenant_uuid)
+            )
+            job = job_res.scalar_one_or_none()
+            if job is not None:
+                if not safe_role_title and job.title:
+                    safe_role_title = _sanitize_input(str(job.title))
+                if not safe_jd.strip() and job.description:
+                    safe_jd = _sanitize_input(str(job.description))
+                if job.skills_required:
+                    skills_required = [str(s) for s in job.skills_required if str(s).strip()]
+                if job.requirements:
+                    safe_requirements = _sanitize_input(str(job.requirements))
+
     if not safe_jd or not safe_jd.strip():
         raise HTTPException(status_code=400, detail="Job description cannot be empty.")
-    
+
     import httpx
 
     from agents.pydantic_config import AgentDeps
     from agents.screening_pydantic import generate_screening_guide
-    
+
     async with httpx.AsyncClient() as client:
         deps = AgentDeps(http_client=client, tenant_id=str(tenant_uuid))
         plan = await generate_screening_guide(
@@ -387,5 +439,7 @@ async def generate_screening_questions(
             role_title=safe_role_title,
             tenant_id=str(tenant_uuid),
             deps=deps,
+            skills_required=skills_required,
+            requirements=safe_requirements,
         )
         return plan.model_dump()

@@ -11,6 +11,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { CandidateCardData } from "@/components/candidates/CandidateCard";
+import { candidatesService } from "@/services/candidates.service";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -278,7 +279,14 @@ export function CandidateDrawer({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => toast.success("Resume downloaded")}
+                      onClick={async () => {
+                        try {
+                          await candidatesService.downloadResume(candidate.id, candidate.resume_file_name);
+                          toast.success("Resume downloaded");
+                        } catch {
+                          toast.error("No resume file available for download");
+                        }
+                      }}
                       className="h-7 px-2.5 text-xs font-medium gap-1"
                     >
                       <Download className="w-3 h-3" />

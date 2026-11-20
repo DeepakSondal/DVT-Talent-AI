@@ -49,14 +49,16 @@ screening_agent = Agent(
     output_type=ScreeningPlan,
     system_prompt=(
         "You are an Elite Technical Recruitment Screener for DVT Talent AI. "
-        "Your mission is to analyze a Job Description (JD) and produce a rigorous, structured screening interview guide. "
+        "Your mission is to analyze a Job Description (JD) and produce a rigorous, role-specific screening interview guide. "
+        "Generate 5 to 6 distinct questions tailored directly to the specific Role title, required tech stack, seniority, and responsibilities in the JD. "
+        "Never reuse generic boilerplate questions across different disciplines (for example, frontend roles must test UI/browser/state/accessibility/CSS/JS fundamentals, while backend roles must test APIs, databases, concurrency, distributed systems, and security). "
         "For each question, provide: "
         "1. The exact question the recruiter should ask. "
         "2. The comprehensive ideal answer explaining what good looks like. "
         "3. Key green-flag signals to listen for. "
         "4. Red-flag warning signs. "
         "5. A follow-up probe question to test depth. "
-        "Cover core technical stack, architectural trade-offs, practical problem solving, and behavioral alignment. "
+        "Distribute questions across core role-specific technical stack (2-3), architecture/system design for that discipline (1-2), practical debugging/problem solving (1), and behavioral alignment (1). "
         "Do NOT output preamble, markdown fences, or internal chain of thought."
     ),
 )
@@ -65,7 +67,9 @@ async def generate_screening_guide(
     job_description: str,
     role_title: Optional[str] = None,
     tenant_id: str = "default",
-    deps: Optional[AgentDeps] = None
+    deps: Optional[AgentDeps] = None,
+    skills_required: Optional[List[str]] = None,
+    requirements: Optional[str] = None,
 ) -> ScreeningPlan:
     """Entry point for generating screening questions with answers from a JD."""
     effective_tenant = str((getattr(deps, "tenant_id", None) if deps is not None else tenant_id) or "").strip()
@@ -76,16 +80,39 @@ async def generate_screening_guide(
 
     safe_role_title, _ = sanitizer_service.sanitize((role_title or "Target Role"))
     safe_job_description, _ = sanitizer_service.sanitize((job_description or ""))
-    prompt = (
-        "Generate an interview screening plan with questions and detailed ideal answers for the following Job Description:\n"
-        f"Role: {safe_role_title or 'Target Role'}\n\n"
-        f"Job Description:\n{safe_job_description}"
-    )
+    safe_skills = [
+        sanitizer_service.sanitize(str(skill))[0].strip()
+        for skill in (skills_required or [])
+        if str(skill).strip()
+    ]
+    safe_requirements = sanitizer_service.sanitize(requirements)[0].strip() if requirements else ""
+
+    prompt_parts = [
+        f"Generate a role-specific interview screening plan with 5 to 6 distinct questions and detailed ideal answers tailored strictly to the {safe_role_title or 'Target Role'} role.",
+        f"Role: {safe_role_title or 'Target Role'}",
+    ]
+    if safe_skills:
+        prompt_parts.append(f"Required Skills: {', '.join(safe_skills)}")
+    if safe_requirements:
+        prompt_parts.append(f"Key Requirements:\n{safe_requirements}")
+    prompt_parts.append(f"Job Description:\n{safe_job_description}")
+    prompt = "\n\n".join(prompt_parts)
+
     if deps:
-        result = await screening_agent.run(prompt, deps=deps)
+        result = await screening_agent.run(
+            prompt,
+            deps=deps,
+            model=get_pydantic_model(deps=deps),
+            model_settings={"max_tokens": 3500},
+        )
     else:
         import httpx
         async with httpx.AsyncClient() as client:
             d = AgentDeps(http_client=client, tenant_id=effective_tenant)
-            result = await screening_agent.run(prompt, deps=d)
+            result = await screening_agent.run(
+                prompt,
+                deps=d,
+                model=get_pydantic_model(deps=d),
+                model_settings={"max_tokens": 3500},
+            )
     return result.output

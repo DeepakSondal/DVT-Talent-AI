@@ -183,15 +183,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
         {/* User Footer Deck */}
         <div className="p-3 border-t border-border/60 bg-muted/20">
-          <Link
-            href="/portal"
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors mb-1.5"
-            title="Candidate Portal"
-          >
-            <Target className="w-4 h-4 shrink-0" />
-            {!collapsed && <span className="truncate">Candidate Portal</span>}
-          </Link>
-
           <Button
             variant="ghost"
             size="sm"
@@ -267,13 +258,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               </nav>
 
               <div className="pt-4 border-t border-border space-y-2">
-                <Link
-                  href="/portal"
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40"
-                >
-                  <Target className="w-4 h-4" />
-                  <span>Switch to Candidate Portal</span>
-                </Link>
                 <Button
                   variant="outline"
                   size="sm"

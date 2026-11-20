@@ -779,3 +779,100 @@ class ResumeParserService:
             return min(30, max(1, years))
 
         return 3
+
+    @classmethod
+    def generate_candidate_pdf_dossier(
+        cls,
+        candidate_data: Dict[str, Any],
+        role_title: str = "",
+    ) -> Tuple[bytes, str]:
+        """
+        Generate a valid, pypdf-readable PDF 1.4 resume dossier and matching plain text
+        for externally sourced candidates that do not have an uploaded file.
+        """
+        import textwrap
+
+        full_name = str(candidate_data.get("full_name") or candidate_data.get("name") or "Candidate Profile").strip()
+        title = str(candidate_data.get("title") or role_title or "Software Engineer").strip()
+        location = str(candidate_data.get("location") or "Remote").strip()
+        email = str(candidate_data.get("email") or "").strip()
+        phone = str(candidate_data.get("phone") or "").strip()
+        company = str(candidate_data.get("current_company") or candidate_data.get("company") or "").strip()
+        exp_years = candidate_data.get("experience_years") or candidate_data.get("experience") or 5
+        skills = candidate_data.get("skills") if isinstance(candidate_data.get("skills"), list) else []
+        github_url = str(candidate_data.get("github_url") or "").strip()
+        linkedin_url = str(candidate_data.get("linkedin_url") or "").strip()
+        source = str(candidate_data.get("source_platform") or candidate_data.get("source") or "AI Swarm").strip()
+        summary = str(candidate_data.get("summary") or candidate_data.get("ai_summary") or "").strip()
+        if not summary:
+            reasoning = candidate_data.get("ai_reasoning") or candidate_data.get("reasoning")
+            if isinstance(reasoning, dict):
+                summary = str(reasoning.get("alignment") or reasoning.get("summary") or "").strip()
+            elif isinstance(reasoning, str):
+                summary = reasoning.strip()
+
+        raw_lines = [
+            f"{full_name} - {title}",
+            f"Location: {location} | Experience: {exp_years} years | Source: {source}",
+        ]
+        if email or phone:
+            raw_lines.append(f"Contact: {' | '.join([p for p in (email, phone) if p])}")
+        if company:
+            raw_lines.append(f"Current Company: {company}")
+        if github_url:
+            raw_lines.append(f"GitHub: {github_url}")
+        if linkedin_url:
+            raw_lines.append(f"LinkedIn: {linkedin_url}")
+        if skills:
+            raw_lines.append(f"Skills: {', '.join(str(s) for s in skills[:20])}")
+        if summary:
+            raw_lines.append("")
+            raw_lines.append("Profile Summary:")
+            raw_lines.append(summary)
+
+        raw_text = "\n".join(raw_lines)
+
+        wrapped_lines: List[str] = []
+        for line in raw_lines:
+            if not line:
+                wrapped_lines.append("")
+                continue
+            wrapped_lines.extend(textwrap.wrap(line, width=85) or [""])
+
+        # Escape PDF literal string characters and restrict to printable ASCII
+        def _pdf_escape(text: str) -> str:
+            ascii_text = text.encode("ascii", "replace").decode("ascii")
+            return ascii_text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+        stream_cmds = ["BT", "/F1 11 Tf", "50 750 Td", "14 TL"]
+        for idx, line in enumerate(wrapped_lines[:46]):
+            escaped = _pdf_escape(line)
+            if idx == 0:
+                stream_cmds.append(f"({escaped}) Tj")
+            else:
+                stream_cmds.append(f"T* ({escaped}) Tj")
+        stream_cmds.append("ET")
+        stream_bytes = "\n".join(stream_cmds).encode("ascii")
+
+        objects = [
+            b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+            b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+            b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
+            f"4 0 obj\n<< /Length {len(stream_bytes)} >>\nstream\n".encode("ascii") + stream_bytes + b"\nendstream\nendobj\n",
+            b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+        ]
+
+        pdf = bytearray(b"%PDF-1.4\n")
+        offsets = [0]
+        for obj in objects:
+            offsets.append(len(pdf))
+            pdf.extend(obj)
+
+        xref_start = len(pdf)
+        pdf.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii"))
+        for off in offsets[1:]:
+            pdf.extend(f"{off:010d} 00000 n \n".encode("ascii"))
+        pdf.extend(
+            f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF\n".encode("ascii")
+        )
+        return bytes(pdf), raw_text

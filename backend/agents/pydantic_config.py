@@ -176,3 +176,5 @@ class AgentDeps:
     serper_key: str = settings.serper_api_key
     openai_key: Optional[str] = None
     anthropic_key: Optional[str] = None
+    monster_api_key: str = settings.monster_api_key
+    dice_api_key: str = settings.dice_api_key

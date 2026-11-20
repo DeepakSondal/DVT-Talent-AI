@@ -122,6 +122,9 @@ class Settings(BaseSettings):
     # Hub Integrations
     ziprecruiter_api_key: str = ""
     dice_api_key: str = ""
+    dice_api_url: str = ""
+    monster_api_key: str = ""
+    monster_api_url: str = ""
 
     # Rate Limiting & Abuse Controls
     api_rate_limit: int = 60
@@ -132,6 +135,7 @@ class Settings(BaseSettings):
 
     # Inbound Webhook Secrets
     monster_webhook_secret: str = ""
+    dice_webhook_secret: str = ""
     inbound_email_webhook_secret: str = ""
 
 

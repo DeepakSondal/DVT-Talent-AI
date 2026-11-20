@@ -92,17 +92,17 @@ def test_select_verified_primary_email():
             _select_verified_primary_email("google", bad_google)
         assert g_exc.value.status_code == 400
 
-    # LinkedIn OIDC userinfo: requires email_verified is True
+    # Microsoft OIDC userinfo: requires email_verified is True
     assert _select_verified_primary_email(
-        "linkedin", {"email": "User@LinkedIn.com", "email_verified": True}
-    ) == "user@linkedin.com"
-    for bad_li in [
-        {"email": "User@LinkedIn.com", "email_verified": False},
-        {"email": "User@LinkedIn.com"},
+        "microsoft", {"email": "User@Microsoft.com", "email_verified": True}
+    ) == "user@microsoft.com"
+    for bad_ms in [
+        {"email": "User@Microsoft.com", "email_verified": False},
+        {"email": "User@Microsoft.com"},
     ]:
-        with pytest.raises(HTTPException) as li_exc:
-            _select_verified_primary_email("linkedin", bad_li)
-        assert li_exc.value.status_code == 400
+        with pytest.raises(HTTPException) as ms_exc:
+            _select_verified_primary_email("microsoft", bad_ms)
+        assert ms_exc.value.status_code == 400
 
 
 def test_enum_validation_and_stage_aliases():
@@ -325,19 +325,19 @@ async def test_social_callback_rejects_unverified_primary(client):
         resp_g = await client.get("/api/v1/auth/callback/google", follow_redirects=False)
     assert resp_g.status_code == 400
 
-    # 3. LinkedIn: missing email_verified field
-    li_email = f"li_unverified_{uuid.uuid4().hex[:8]}@example.com"
-    li_client = AsyncMock()
-    li_client.authorize_access_token = AsyncMock(return_value={"access_token": "tok"})
-    li_resp = MagicMock()
-    li_resp.json.return_value = {"email": li_email, "sub": "li-unv"}
-    li_client.get = AsyncMock(return_value=li_resp)
-    with patch("api.routes.auth_social.oauth.create_client", return_value=li_client):
-        resp_li = await client.get("/api/v1/auth/callback/linkedin", follow_redirects=False)
-    assert resp_li.status_code == 400
+    # 3. Microsoft: missing email_verified field
+    ms_email = f"ms_unverified_{uuid.uuid4().hex[:8]}@example.com"
+    ms_client = AsyncMock()
+    ms_client.authorize_access_token = AsyncMock(return_value={"access_token": "tok"})
+    ms_resp = MagicMock()
+    ms_resp.json.return_value = {"email": ms_email, "sub": "ms-unv"}
+    ms_client.get = AsyncMock(return_value=ms_resp)
+    with patch("api.routes.auth_social.oauth.create_client", return_value=ms_client):
+        resp_ms = await client.get("/api/v1/auth/callback/microsoft", follow_redirects=False)
+    assert resp_ms.status_code == 400
 
     async with AsyncSessionLocal() as session:
-        for email in (gh_email, f"alt_{gh_email}", g_email, li_email):
+        for email in (gh_email, f"alt_{gh_email}", g_email, ms_email):
             assert (await session.execute(select(User).where(User.email == email))).scalar_one_or_none() is None
 
 

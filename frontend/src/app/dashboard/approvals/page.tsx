@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     ShieldCheck, Bot, CheckCircle2, XCircle, AlertTriangle, Sparkles,
@@ -33,59 +34,53 @@ interface PendingApprovalItem {
 // Mock fallbacks removed for live user zero-state
 
 export default function ApprovalsPage() {
-    const [items, setItems] = useState<PendingApprovalItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
     const [calibratingId, setCalibratingId] = useState<string | null>(null);
     const [calibrationNote, setCalibrationNote] = useState("");
 
-    const fetchLedgers = async () => {
-        setLoading(true);
-        try {
+    const { data: items = [], isLoading: loading, refetch: fetchLedgers } = useQuery<PendingApprovalItem[]>({
+        queryKey: ["compliance", "ledger"],
+        queryFn: async () => {
             const data = await complianceApi.getLedger(30);
-            if (data && data.length > 0) {
-                const mapped: PendingApprovalItem[] = data.map((d: any) => ({
-                    id: d.id,
-                    candidate_name: d.evidence_signals?.candidate_name || (d.candidate_id ? `Candidate #${d.candidate_id.substring(0, 8)}` : "Talent Node"),
-                    candidate_role: d.evidence_signals?.role_title || d.action_type || d.decision_type || "AI Recommendation",
-                    candidate_email: d.evidence_signals?.candidate_email || "candidate.node@dvt-talent.ai",
-                    action_type: d.action_type || d.decision_type,
-                    decision_reasoning: d.reasoning || d.reasoning_summary || d.justification || "Automated evaluation decision.",
-                    confidence_score: d.confidence_score || 0.89,
-                    created_at: d.created_at,
-                    status: d.reviewer_override || "PENDING",
-                    sanitization_status: d.sanitized ? "CLEAN" : "NEUTRALIZED",
-                    email_deliverability: "VALID",
-                    eeoc_impact_status: "PASSED",
-                    evidence_items: d.evidence_hash ? [`Verified Audit Hash: ${d.evidence_hash.substring(0, 16)}...`] : [
-                        "Zero-width prompt injection sanitizer passed",
-                        "EEOC 4/5ths Rule selection ratio safe",
-                        "Human-in-the-Loop review mandatory"
-                    ]
-                }));
-                setItems(mapped);
-            } else {
-                setItems([]);
-            }
-        } catch (e) {
-            console.error("Failed fetching ledger items:", e);
-            setItems([]);
-        } finally {
-            setLoading(false);
-        }
-    };
+            if (!data || data.length === 0) return [];
+            return data.map((d: any) => ({
+                id: d.id,
+                candidate_name: d.evidence_signals?.candidate_name || (d.candidate_id ? `Candidate #${d.candidate_id.substring(0, 8)}` : "Talent Node"),
+                candidate_role: d.evidence_signals?.role_title || d.action_type || d.decision_type || "AI Recommendation",
+                candidate_email: d.evidence_signals?.candidate_email || "candidate.node@dvt-talent.ai",
+                action_type: d.action_type || d.decision_type,
+                decision_reasoning: d.reasoning || d.reasoning_summary || d.justification || "Automated evaluation decision.",
+                confidence_score: d.confidence_score || 0.89,
+                created_at: d.created_at,
+                status: d.reviewer_override || "PENDING",
+                sanitization_status: d.sanitized ? "CLEAN" : "NEUTRALIZED",
+                email_deliverability: "VALID",
+                eeoc_impact_status: "PASSED",
+                evidence_items: d.evidence_hash ? [`Verified Audit Hash: ${d.evidence_hash.substring(0, 16)}...`] : [
+                    "Zero-width prompt injection sanitizer passed",
+                    "EEOC 4/5ths Rule selection ratio safe",
+                    "Human-in-the-Loop review mandatory"
+                ]
+            }));
+        },
+    });
 
-    useEffect(() => {
-        fetchLedgers();
-    }, []);
-
-    const handleOverride = async (id: string, overrideStatus: "APPROVED" | "REJECTED", notes?: string) => {
-        try {
-            await complianceApi.overrideDecision(id, overrideStatus, notes || "Recruiter manual sign-off.");
-            toast.success(`Decision ${overrideStatus === "APPROVED" ? "approved" : "rejected"} successfully!`);
-            setItems(prev => prev.map(item => item.id === id ? { ...item, status: overrideStatus } : item));
-        } catch (e) {
+    const overrideMutation = useMutation({
+        mutationFn: ({ id, overrideStatus, notes }: { id: string; overrideStatus: "APPROVED" | "REJECTED"; notes?: string }) =>
+            complianceApi.overrideDecision(id, overrideStatus, notes || "Recruiter manual sign-off."),
+        onSuccess: (_data, variables) => {
+            toast.success(`Decision ${variables.overrideStatus === "APPROVED" ? "approved" : "rejected"} successfully!`);
+            queryClient.setQueryData<PendingApprovalItem[]>(["compliance", "ledger"], (prev = []) =>
+                prev.map(item => item.id === variables.id ? { ...item, status: variables.overrideStatus } : item)
+            );
+        },
+        onError: () => {
             toast.error("Failed to record decision override. Please try again.");
-        }
+        },
+    });
+
+    const handleOverride = (id: string, overrideStatus: "APPROVED" | "REJECTED", notes?: string) => {
+        overrideMutation.mutate({ id, overrideStatus, notes });
     };
 
     const submitCalibration = async (id: string) => {
@@ -140,7 +135,7 @@ export default function ApprovalsPage() {
                             <p className="text-2xl font-black text-emerald-400 break-words">98.4%</p>
                         </div>
                     </div>
-                    <Button onClick={fetchLedgers} variant="outline" size="sm" className="bg-slate-900 border-slate-800 text-white hover:bg-slate-800 text-xs font-bold rounded-xl">
+                    <Button onClick={() => fetchLedgers()} variant="outline" size="sm" className="bg-slate-900 border-slate-800 text-white hover:bg-slate-800 text-xs font-bold rounded-xl">
                         <RefreshCw className={cn("w-3.5 h-3.5 mr-2", loading && "animate-spin")} />
                         Refresh Queue
                     </Button>

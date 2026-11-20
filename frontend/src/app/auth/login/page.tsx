@@ -1,12 +1,12 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Bot, Target,
-  Mail, Chrome as Google, Linkedin,
+  Mail, Chrome as Google,
   ArrowRight, Loader2,
   Eye, EyeOff, CheckCircle2, Lock
 } from "lucide-react";
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
 
-function resolveSocialAuthUrl(provider: "google" | "linkedin"): string {
+function resolveSocialAuthUrl(provider: "google" | "microsoft"): string {
   const rawBase = (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/$/, "");
   const apiPrefix = rawBase.endsWith("/api/v1") ? rawBase : `${rawBase}/api/v1`;
   return `${apiPrefix}/auth/login/${provider}`;
@@ -37,6 +37,19 @@ function LoginContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+
+  const errorParam = searchParams.get("error");
+  const providerParam = searchParams.get("provider");
+  useEffect(() => {
+    if (errorParam === "oauth_not_configured") {
+      const label = providerParam
+        ? providerParam.charAt(0).toUpperCase() + providerParam.slice(1)
+        : "Social";
+      toast.error(`${label} Sign-In Not Configured`, {
+        description: `Set ${label.toUpperCase()}_CLIENT_ID and ${label.toUpperCase()}_CLIENT_SECRET in backend/.env to enable ${label} login.`,
+      });
+    }
+  }, [errorParam, providerParam]);
 
   const transitionConfig = shouldReduceMotion ? { duration: 0 } : springPreset;
 
@@ -284,12 +297,17 @@ function LoginContent() {
             <button
               type="button"
               onClick={() => {
-                window.location.href = resolveSocialAuthUrl("linkedin");
+                window.location.href = resolveSocialAuthUrl("microsoft");
               }}
               className="h-10 rounded-xl bg-muted/30 border border-border hover:bg-muted transition-colors flex items-center justify-center gap-2 text-xs font-medium text-foreground"
             >
-              <Linkedin className="w-4 h-4 text-blue-500" />
-              <span>LinkedIn</span>
+              <svg className="w-4 h-4" viewBox="0 0 21 21" aria-hidden="true">
+                <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+              </svg>
+              <span>Microsoft</span>
             </button>
           </div>
 

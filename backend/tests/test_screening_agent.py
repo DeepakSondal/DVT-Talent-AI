@@ -101,3 +101,102 @@ def test_dodo_webhook_sync_payload_schema():
     assert sync_payload.amount == 14900
     assert sync_payload.metadata is not None
     assert "tenant_id" in sync_payload.metadata
+
+
+@pytest.mark.asyncio
+async def test_generate_screening_guide_tailors_prompt_per_role_and_skills():
+    """Test 5: Verifies generate_screening_guide builds distinct, skill-enriched prompts and raises max_tokens."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from agents import screening_pydantic
+
+    captured = []
+
+    async def _fake_run(prompt, deps=None, model=None, model_settings=None, **kwargs):
+        captured.append({"prompt": prompt, "model_settings": model_settings})
+        return SimpleNamespace(output=ScreeningPlan(role_title="Mock", questions=[]))
+
+    tenant_id = str(uuid.uuid4())
+    with patch.object(screening_pydantic.screening_agent, "run", side_effect=_fake_run):
+        await screening_pydantic.generate_screening_guide(
+            job_description="Build accessible React 19 UI components with TypeScript and Tailwind.",
+            role_title="Frontend Developer",
+            tenant_id=tenant_id,
+            skills_required=["React", "TypeScript", "CSS"],
+            requirements="3+ years shipping responsive web apps",
+        )
+        await screening_pydantic.generate_screening_guide(
+            job_description="Design async FastAPI microservices backed by PostgreSQL and Redis.",
+            role_title="Backend Developer",
+            tenant_id=tenant_id,
+            skills_required=["Python", "FastAPI", "PostgreSQL"],
+            requirements="Experience with high-throughput SQL tuning",
+        )
+
+    assert len(captured) == 2
+    assert captured[0]["prompt"] != captured[1]["prompt"]
+    assert "Frontend Developer" in captured[0]["prompt"]
+    assert "React, TypeScript, CSS" in captured[0]["prompt"]
+    assert "3+ years shipping responsive web apps" in captured[0]["prompt"]
+    assert "5 to 6" in captured[0]["prompt"]
+    assert "Backend Developer" in captured[1]["prompt"]
+    assert "Python, FastAPI, PostgreSQL" in captured[1]["prompt"]
+    assert captured[0]["model_settings"] == {"max_tokens": 3500}
+    assert captured[1]["model_settings"] == {"max_tokens": 3500}
+
+
+def test_screening_agent_system_prompt_enforces_role_specificity():
+    """Test 6: Verifies screening_agent system prompt mandates 5-6 role-specific questions without generic reuse."""
+    from agents.screening_pydantic import screening_agent
+
+    joined_prompt = " ".join(str(p) for p in getattr(screening_agent, "_system_prompts", ()))
+    assert "5 to 6" in joined_prompt
+    assert "Never reuse generic boilerplate" in joined_prompt
+
+
+@pytest.mark.asyncio
+async def test_screening_route_enriches_from_tenant_scoped_job():
+    """Test 7: Verifies /screening/generate loads tenant-scoped Job skills/requirements when job_id is provided."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from api.routes.agents import ScreeningGenerateRequest, generate_screening_questions
+
+    tenant_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    fake_job = SimpleNamespace(
+        id=job_id,
+        tenant_id=tenant_id,
+        title="Frontend Developer",
+        description="Build interactive React dashboards.",
+        skills_required=["React", "Next.js", "WCAG"],
+        requirements="Strong browser rendering and state management skills.",
+    )
+    fake_result = MagicMock()
+    fake_result.scalar_one_or_none.return_value = fake_job
+    fake_db = AsyncMock()
+    fake_db.execute.return_value = fake_result
+
+    fake_user = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id, role="recruiter")
+    captured_kwargs = {}
+
+    async def _fake_generate(**kwargs):
+        captured_kwargs.update(kwargs)
+        return ScreeningPlan(role_title=kwargs["role_title"], questions=[])
+
+    with (
+        patch("api.routes.agents._enforce_agent_rate_limit", new=AsyncMock(return_value=tenant_id)),
+        patch("agents.screening_pydantic.generate_screening_guide", side_effect=_fake_generate),
+    ):
+        req = ScreeningGenerateRequest(
+            job_description="Build interactive React dashboards.",
+            role_title=None,
+            job_id=str(job_id),
+        )
+        out = await generate_screening_questions(req=req, request=MagicMock(), db=fake_db, current_user=fake_user)
+
+    assert out["role_title"] == "Frontend Developer"
+    assert captured_kwargs["skills_required"] == ["React", "Next.js", "WCAG"]
+    assert captured_kwargs["requirements"] == "Strong browser rendering and state management skills."
+    fake_db.execute.assert_awaited_once()

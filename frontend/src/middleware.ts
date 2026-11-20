@@ -31,7 +31,20 @@ function isJwtExpired(rawToken: string): boolean {
 }
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
+  const token = request.cookies.get("dvt_token")?.value;
+
+  if (pathname === "/auth/login" || pathname === "/auth/register") {
+    if (token && !isJwtExpired(token)) {
+      const payload = parseJwtPayload(token);
+      const fromParam = searchParams.get("from");
+      const safeFrom =
+        fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") ? fromParam : null;
+      const defaultDest = payload?.role === "candidate" ? "/portal" : "/dashboard";
+      return NextResponse.redirect(new URL(safeFrom || defaultDest, request.url));
+    }
+    return NextResponse.next();
+  }
 
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
@@ -40,7 +53,6 @@ export function middleware(request: NextRequest) {
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   if (!isProtected) return NextResponse.next();
 
-  const token = request.cookies.get("dvt_token")?.value;
   const hasRefreshCookie = Boolean(request.cookies.get("dvt_refresh_token")?.value);
 
   if (!token || (isJwtExpired(token) && !hasRefreshCookie)) {

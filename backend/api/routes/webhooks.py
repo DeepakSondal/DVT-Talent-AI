@@ -30,16 +30,23 @@ def _verify_webhook_hmac(raw_body: bytes, signature_header: str, secret: str) ->
     return hmac.compare_digest(sig.lower(), expected.lower())
 
 
-@router.post("/monster/applications")
-async def monster_application_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+async def _ingest_job_board_application(board: str, request: Request, db: AsyncSession):
     """
-    Accepts Easy Apply applications from Monster.
-    Reference: Monster Easy Apply Integration Guide.
+    Shared intake handler for Monster.com and Dice.com Easy Apply webhooks.
+    Verifies HMAC signature, resolves tenant via Job.id, creates/updates Candidate,
+    and attaches any submitted resume (or generates a PDF dossier).
     """
+    import base64
+    import re
+
+    from db.models import Resume
+    from services.resume_parser import ResumeParserService
+
+    board_key = board.strip().lower()
     client_ip = get_real_client_ip(request)
     await enforce_endpoint_rate_limit(
         request,
-        scope="webhook_monster_ip",
+        scope=f"webhook_{board_key}_ip",
         identifier=client_ip,
         limit=30,
         window_seconds=60,
@@ -47,8 +54,12 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
     )
 
     raw_body = await request.body()
-    secret = getattr(settings, "monster_webhook_secret", "") or ""
-    sig_header = request.headers.get("X-Monster-Signature") or request.headers.get("X-Webhook-Signature") or ""
+    secret = getattr(settings, f"{board_key}_webhook_secret", "") or ""
+    sig_header = (
+        request.headers.get(f"X-{board_key.title()}-Signature")
+        or request.headers.get("X-Webhook-Signature")
+        or ""
+    )
     is_testing_bypass = os.getenv("TESTING", "").strip().lower() == "true" and not settings.is_production
     if secret or not is_testing_bypass:
         if not _verify_webhook_hmac(raw_body, sig_header, secret):
@@ -59,15 +70,14 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
-    log.info("monster_webhook_received", payload=payload)
-    
+    log.info(f"{board_key}_webhook_received", payload=payload)
+
     applicant = payload.get("applicant", {})
     job_id_external = payload.get("job_external_id") or payload.get("jobId")
-    
-    if not applicant or not job_id_external:
-        raise HTTPException(status_code=400, detail="Malformed Monster payload")
 
-    # 1. Map external Job ID back to our DB to resolve tenant_id
+    if not applicant or not job_id_external:
+        raise HTTPException(status_code=400, detail=f"Malformed {board_key.title()} payload")
+
     from sqlalchemy import select
     job_uuid = None
     target_tenant_id = None
@@ -81,19 +91,17 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
         if job_row:
             target_tenant_id = job_row.tenant_id
 
-    # 2. Extract Applicant Info
     email = applicant.get("email")
-    first_name = applicant.get("firstName", "Monster")
+    first_name = applicant.get("firstName", board_key.title())
     last_name = applicant.get("lastName", "Applicant")
-    
-    # 3. Create or Update Candidate scoped strictly to resolved tenant_id
+
     cand_stmt = select(Candidate).where(
         Candidate.email == email,
         Candidate.tenant_id == target_tenant_id,
     )
     result = await db.execute(cand_stmt)
     candidate = result.scalars().first()
-    
+
     if not candidate:
         candidate = Candidate(
             id=uuid.uuid4(),
@@ -102,17 +110,84 @@ async def monster_application_webhook(request: Request, db: AsyncSession = Depen
             first_name=first_name,
             last_name=last_name,
             status=CandidateStatus.APPLIED,
-            source="monster",
-            title=applicant.get("jobTitle")
+            source=board_key,
+            title=applicant.get("jobTitle"),
         )
         db.add(candidate)
         await db.flush()
-        log.info("candidate_created_from_monster", email=email, tenant_id=str(target_tenant_id) if target_tenant_id else None)
+        log.info(
+            f"candidate_created_from_{board_key}",
+            email=email,
+            tenant_id=str(target_tenant_id) if target_tenant_id else None,
+        )
 
-    # 4. Linkage & Commit
+    existing_resume = (
+        await db.execute(
+            select(Resume.id).where(Resume.candidate_id == candidate.id, Resume.is_current.is_(True)).limit(1)
+        )
+    ).scalar_one_or_none()
+    if not existing_resume:
+        resume_b64 = applicant.get("resumeBase64") or applicant.get("resume_base64")
+        resume_text = str(applicant.get("resumeText") or applicant.get("resume_text") or "").strip()
+        resume_uuid = uuid.uuid4()
+        safe_slug = re.sub(r"[^a-zA-Z0-9_-]", "_", f"{first_name}_{last_name}".lower())[:40] or "applicant"
+        file_name = applicant.get("resumeFileName") or f"{safe_slug}_{board_key}.pdf"
+        content_bytes: bytes
+        if isinstance(resume_b64, str) and resume_b64.strip():
+            try:
+                content_bytes = base64.b64decode(resume_b64, validate=True)
+            except Exception:
+                content_bytes, resume_text = ResumeParserService.generate_candidate_pdf_dossier(
+                    {
+                        "full_name": f"{first_name} {last_name}".strip(),
+                        "email": email,
+                        "title": applicant.get("jobTitle") or "Applicant",
+                        "source": board_key,
+                        "summary": resume_text,
+                    }
+                )
+        else:
+            content_bytes, generated_text = ResumeParserService.generate_candidate_pdf_dossier(
+                {
+                    "full_name": f"{first_name} {last_name}".strip(),
+                    "email": email,
+                    "title": applicant.get("jobTitle") or "Applicant",
+                    "source": board_key,
+                    "summary": resume_text,
+                }
+            )
+            resume_text = resume_text or generated_text
+
+        file_url = ResumeParserService.save_resume_file(
+            str(candidate.id), str(resume_uuid), str(file_name), content_bytes
+        )
+        db.add(
+            Resume(
+                id=resume_uuid,
+                tenant_id=target_tenant_id,
+                candidate_id=candidate.id,
+                file_name=str(file_name),
+                file_url=file_url,
+                raw_text=resume_text,
+                parsed_data={"source": board_key, "name": f"{first_name} {last_name}".strip()},
+                is_current=True,
+            )
+        )
+
     await db.commit()
-    
-    return {"status": "success", "candidate_id": str(candidate.id)}
+    return {"status": "success", "candidate_id": str(candidate.id), "source": board_key}
+
+
+@router.post("/monster/applications")
+async def monster_application_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    """Accepts Easy Apply applications and resumes from Monster.com."""
+    return await _ingest_job_board_application("monster", request, db)
+
+
+@router.post("/dice/applications")
+async def dice_application_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    """Accepts Easy Apply applications and resumes from Dice.com."""
+    return await _ingest_job_board_application("dice", request, db)
 
 @router.post("/email/inbound")
 async def email_inbound_webhook(request: Request):

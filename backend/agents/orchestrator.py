@@ -249,6 +249,8 @@ class AgentOrchestrator:
         enable_screening: bool = False,
         enable_microsite: bool = False,
         mock_mode: bool = False,
+        sources: Optional[List[str]] = None,
+        require_uploaded_resume: bool = False,
     ) -> Dict[str, Any]:
         """Alias for compatibility with api routes and legacy task runners."""
         return await self.run_full_pipeline(
@@ -257,6 +259,8 @@ class AgentOrchestrator:
             enable_screening=enable_screening,
             enable_microsite=enable_microsite,
             mock_mode=mock_mode,
+            sources=sources,
+            require_uploaded_resume=require_uploaded_resume,
         )
 
     async def run_full_pipeline(
@@ -266,6 +270,8 @@ class AgentOrchestrator:
         enable_screening: bool = False,
         enable_microsite: bool = False,
         mock_mode: bool = False,
+        sources: Optional[List[str]] = None,
+        require_uploaded_resume: bool = False,
     ) -> Dict[str, Any]:
         """Runs the complete 5/6-stage recruitment swarm pipeline."""
         pipeline_start = datetime.now(timezone.utc)
@@ -302,7 +308,12 @@ class AgentOrchestrator:
                             model=dynamic_model,
                             model_settings={"max_tokens": 1200},
                         ),
-                        prefetch_all_sourcing_signals(deps, f"{safe_industry} {safe_location}"),
+                        prefetch_all_sourcing_signals(
+                            deps,
+                            f"{safe_industry} {safe_location}",
+                            sources=sources,
+                            require_uploaded_resume=require_uploaded_resume,
+                        ),
                     )
                     prefetched_block = f"\n\nPre-fetched candidate signals:\n{_sanitize_prompt_input(prefetched_signals)}"
                 else:
@@ -453,10 +464,10 @@ class AgentOrchestrator:
                     post_tasks.append(
                         self._run_agent_with_retry(
                             screening_agent,
-                            f"Generate interview guide and benchmark questions for role: {safe_role_desc}. Requisition context: {safe_jd_data}",
+                            f"Generate a role-specific interview guide with 5 to 6 benchmark questions tailored strictly to role: {safe_role_desc}. Requisition context: {safe_jd_data}",
                             deps=deps,
                             model=dynamic_model,
-                            model_settings={"max_tokens": 1500},
+                            model_settings={"max_tokens": 3500},
                         )
                     )
 
@@ -521,6 +532,8 @@ class AgentOrchestrator:
                     location=kwargs.get("location", ""),
                     mode=mode,
                     mock_mode=mock_mode,
+                    sources=kwargs.get("sources"),
+                    require_uploaded_resume=bool(kwargs.get("require_uploaded_resume", False)),
                 )
             elif phase == "outreach":
                 cands = kwargs.get("approved_candidates") or kwargs.get("recipients") or []
@@ -612,6 +625,8 @@ class AgentOrchestrator:
         location: str,
         mode: str = "copilot",
         mock_mode: bool = False,
+        sources: Optional[List[str]] = None,
+        require_uploaded_resume: bool = False,
     ) -> Dict[str, Any]:
         """Phase 2: Talent Sourcing with Concurrent Pre-Fetch and Trimmed Critic Audit."""
         safe_job_description = _sanitize_prompt_input(job_description)
@@ -621,7 +636,10 @@ class AgentOrchestrator:
         prefetched_block = ""
         if not is_sourcing_mocked:
             prefetched_signals = await prefetch_all_sourcing_signals(
-                deps, f"{safe_job_description} {safe_location}".strip()
+                deps,
+                f"{safe_job_description} {safe_location}".strip(),
+                sources=sources,
+                require_uploaded_resume=require_uploaded_resume,
             )
             prefetched_block = f"\n\nPre-fetched candidate signals:\n{_sanitize_prompt_input(prefetched_signals)}"
 
@@ -702,10 +720,10 @@ class AgentOrchestrator:
         if enable_screening and job:
             scr_task = self._run_agent_with_retry(
                 screening_agent,
-                f"Generate interview guide for role: {safe_job_title}. Description: {safe_job_desc}",
+                f"Generate a role-specific interview guide with 5 to 6 benchmark questions tailored strictly to role: {safe_job_title}. Description: {safe_job_desc}",
                 deps=deps,
                 model=dynamic_model,
-                model_settings={"max_tokens": 1500},
+                model_settings={"max_tokens": 3500},
             )
             out_res, scr_res = await asyncio.gather(out_task, scr_task)
             screening_guide = _serialize(_get_agent_data(scr_res))
@@ -761,7 +779,8 @@ class AgentOrchestrator:
 
             from sqlalchemy import select
 
-            from db.models import AIDecisionLedger, AsyncSessionLocal, Candidate, CandidateStatus
+            from db.models import AIDecisionLedger, AsyncSessionLocal, Candidate, CandidateStatus, Resume
+            from services.resume_parser import ResumeParserService
 
             job_uuid = None
             if self.job_id:
@@ -833,6 +852,43 @@ class AgentOrchestrator:
                         )
                         session.add(cand_row)
                         await session.flush()
+
+                    existing_resume = (
+                        await session.execute(
+                            select(Resume.id).where(
+                                Resume.candidate_id == cand_row.id,
+                                Resume.is_current.is_(True),
+                            ).limit(1)
+                        )
+                    ).scalar_one_or_none()
+                    if not existing_resume:
+                        resume_uuid = uuid.uuid4()
+                        safe_slug = re.sub(r"[^a-zA-Z0-9_-]", "_", full_name.lower())[:40].strip("_") or "candidate"
+                        file_name = f"{safe_slug}_resume.pdf"
+                        pdf_bytes, raw_text = ResumeParserService.generate_candidate_pdf_dossier(
+                            c_dict, role_title=role_title
+                        )
+                        file_url = ResumeParserService.save_resume_file(
+                            str(cand_row.id), str(resume_uuid), file_name, pdf_bytes
+                        )
+                        session.add(
+                            Resume(
+                                id=resume_uuid,
+                                tenant_id=tenant_uuid,
+                                candidate_id=cand_row.id,
+                                file_name=file_name,
+                                file_url=file_url,
+                                raw_text=raw_text,
+                                parsed_data={
+                                    "name": full_name,
+                                    "title": cand_row.title,
+                                    "skills": cand_row.skills or [],
+                                    "source": cand_row.source,
+                                },
+                                score=score_val,
+                                is_current=True,
+                            )
+                        )
 
                     input_hash = hashlib.sha256(f"{tenant_uuid}:{cand_row.email}:{role_title}".encode()).hexdigest()
                     ledger = AIDecisionLedger(
