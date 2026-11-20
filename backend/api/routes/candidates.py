@@ -245,7 +245,7 @@ async def create_candidate(
         raise HTTPException(status_code=409, detail="Candidate with this email already exists in your workspace")
 
     candidate = Candidate(**data.model_dump())
-    setattr(candidate, "tenant_id", current_user.tenant_id)
+    candidate.tenant_id = current_user.tenant_id
     db.add(candidate)
     await db.commit()
     await db.refresh(candidate)
@@ -429,10 +429,10 @@ async def schedule_candidate_interview(
         },
     )
     meta["scheduled_interviews"] = interviews
-    setattr(candidate, "meta_data", meta)
-    setattr(candidate, "status", CandidateStatus.INTERVIEWING)
+    candidate.meta_data = meta
+    candidate.status = CandidateStatus.INTERVIEWING
     await db.commit()
-    return {"scheduled_interviews": interviews, "status": candidate.status.value}
+    return {"scheduled_interviews": interviews, "status": CandidateStatus.INTERVIEWING.value}
 
 
 @router.post("/{candidate_id}/resume")

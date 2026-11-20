@@ -77,3 +77,30 @@ def test_all_orm_tables_present_in_alembic_upgrade_sql():
     )
     missing = set(Base.metadata.tables.keys()) - created_tables
     assert not missing, f"ORM tables missing from Alembic upgrade head SQL: {sorted(missing)}"
+
+
+def test_all_orm_models_use_mapped_annotations():
+    """Verify every mapped ORM class in Base declares SQLAlchemy 2.0 Mapped[...] annotations."""
+    for mapper in Base.registry.mappers:
+        cls = mapper.class_
+        ann = {}
+        for base_cls in cls.__mro__:
+            ann.update(getattr(base_cls, "__annotations__", {}))
+        col_keys = {prop.key for prop in mapper.column_attrs}
+        assert col_keys <= set(ann.keys()), f"{cls.__name__} missing Mapped annotations for {col_keys - set(ann.keys())}"
+
+
+def test_partial_unique_indexes_preserved_on_companies_and_candidates():
+    """Verify partial unique indexes remain intact after SQLAlchemy 2.0 Mapped conversion."""
+    companies_ix = {str(ix.name): ix for ix in Base.metadata.tables["companies"].indexes}
+    candidates_ix = {str(ix.name): ix for ix in Base.metadata.tables["candidates"].indexes}
+    assert companies_ix["uq_companies_tenant_domain"].unique is True
+    assert candidates_ix["uq_candidate_tenant_email"].unique is True
+
+
+def test_timestamp_mixin_columns_non_nullable_across_models():
+    """Verify created_at/updated_at on TimestampMixin models remain non-nullable."""
+    for table_name in ("tenants", "users", "candidates", "jobs", "agent_tasks"):
+        tbl = Base.metadata.tables[table_name]
+        assert tbl.c.created_at.nullable is False
+        assert tbl.c.updated_at.nullable is False

@@ -198,7 +198,7 @@ def verify_candidate_erasure_authorization(candidate: Candidate, requesting_user
                     detail="Unauthorized: email verification is required before requesting personal data erasure."
                 )
             # Atomically bind user_id to establish stable ownership
-            setattr(candidate, "user_id", requesting_user.id)
+            candidate.user_id = requesting_user.id
             return
 
         raise HTTPException(
@@ -638,7 +638,7 @@ async def erase_candidate_personal_data(
             "tombstone_recorded": tombstone_ok,
             "cleanup_task_id": str(target_cleanup_task.id),
             "pending_cleanup": True,
-            "erased_at": candidate.pii_erased_at.isoformat(),
+            "erased_at": candidate.pii_erased_at.isoformat() if candidate.pii_erased_at else now.isoformat(),
             "message": "Candidate personal data sanitized in primary database. External storage cleanup or durable tombstone persistence is actively pending in the background. Erasure is not yet complete.",
         }
 
@@ -668,7 +668,7 @@ async def erase_candidate_personal_data(
         "files_deleted": True,
         "vector_store_erased": True,
         "pending_cleanup": False,
-        "erased_at": candidate.pii_erased_at.isoformat(),
+        "erased_at": candidate.pii_erased_at.isoformat() if candidate.pii_erased_at else now.isoformat(),
         "message": "Candidate personal data has been permanently removed from primary database, file storage, Redis cache, and vector search indexes. Residual audit logs are retained under statutory compliance obligations, and backup snapshots will age out according to the retention schedule.",
     }
 

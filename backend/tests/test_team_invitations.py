@@ -689,9 +689,12 @@ class TestSecureTeamInvitations:
                     .order_by(AuditLog.created_at.desc())
                 )).scalars().all()
 
-                matching_logs = [entry for entry in audit_logs if "code" in entry.meta_data.get("query_params", {})]
+                matching_logs = [
+                    entry for entry in audit_logs if "code" in (entry.meta_data or {}).get("query_params", {})
+                ]
                 assert len(matching_logs) > 0
                 latest_log = matching_logs[0]
+                assert latest_log.meta_data is not None
                 qp = latest_log.meta_data.get("query_params", {})
 
                 # Verify repeated parameter values are both redacted

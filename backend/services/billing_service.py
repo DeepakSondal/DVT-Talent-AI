@@ -2,7 +2,7 @@
 DVT Talent AI — Credit Deduction Helper
 Used by BaseAgent to deduct credits per agent task.
 """
-from typing import Any, Optional, cast
+from typing import Optional
 
 import structlog
 
@@ -65,7 +65,7 @@ async def deduct_credits(
                 )
 
             # Deduct and log
-            current_balance = int(cast(Any, getattr(tenant, "credits_balance", 0)) or 0)
+            current_balance = int(tenant.credits_balance or 0)
             setattr(tenant, "credits_balance", current_balance - amount)
             tx = CreditTransaction(
                 tenant_id=tenant.id,

@@ -782,26 +782,28 @@ def test_gtm_7_sprint1_infra_vector_store_and_celery_hardening():
             init_worker()
 
     # RR-06: SoftTimeLimitExceeded transitions AgentTask to FAILED cleanly
-    async def _seed_and_check_task(create_only: bool, tid=None):
+    async def _seed_task():
         async with AsyncSessionLocal() as s:
-            if create_only:
-                t = Tenant(name="Celery Timeout Tenant", domain=f"celery-{uuid.uuid4().hex[:6]}.test")
-                s.add(t)
-                await s.flush()
-                row = AgentTask(
-                    tenant_id=t.id,
-                    agent_name="analytics",
-                    task_type="manual_trigger",
-                    status=AgentTaskStatus.RUNNING,
-                )
-                s.add(row)
-                await s.commit()
-                return t.id, row.id
+            t = Tenant(name="Celery Timeout Tenant", domain=f"celery-{uuid.uuid4().hex[:6]}.test")
+            s.add(t)
+            await s.flush()
+            row = AgentTask(
+                tenant_id=t.id,
+                agent_name="analytics",
+                task_type="manual_trigger",
+                status=AgentTaskStatus.RUNNING,
+            )
+            s.add(row)
+            await s.commit()
+            return t.id, row.id
+
+    async def _fetch_task_state(tid):
+        async with AsyncSessionLocal() as s:
             row = await s.get(AgentTask, tid)
             assert row is not None
             return row.status, row.error_message
 
-    tenant_uuid, task_uuid = asyncio.run(_seed_and_check_task(True))
+    tenant_uuid, task_uuid = asyncio.run(_seed_task())
     with (
         patch("workers.tasks.broadcast_signal"),
         patch("workers.tasks.analytics_agent.run", side_effect=SoftTimeLimitExceeded()),
@@ -813,7 +815,7 @@ def test_gtm_7_sprint1_infra_vector_store_and_celery_hardening():
         )
     assert outcome["status"] == "failed"
     assert outcome["error"] == "SoftTimeLimitExceeded"
-    final_status, final_err = asyncio.run(_seed_and_check_task(False, tid=task_uuid))
+    final_status, final_err = asyncio.run(_fetch_task_state(task_uuid))
     assert final_status == AgentTaskStatus.FAILED
     assert "soft execution time limit" in (final_err or "").lower()
 

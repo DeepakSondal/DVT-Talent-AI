@@ -1482,6 +1482,7 @@ async def test_candidate_notes_and_interview_schedule_persist_in_metadata():
 
     note_res = await add_candidate_note(cand_id, CandidateNoteIn(note="Strong systems background"), db=mock_db, current_user=user)
     assert note_res["notes"] == ["Strong systems background"]
+    assert cand.meta_data is not None
     assert cand.meta_data["notes"] == ["Strong systems background"]
 
     sched_res = await schedule_candidate_interview(
@@ -1492,6 +1493,7 @@ async def test_candidate_notes_and_interview_schedule_persist_in_metadata():
     )
     assert sched_res["status"] == "interviewing"
     assert cand.status == CandidateStatus.INTERVIEWING
+    assert cand.meta_data is not None
     assert cand.meta_data["scheduled_interviews"][0]["scheduled_date"] == "2026-12-01"
 
 

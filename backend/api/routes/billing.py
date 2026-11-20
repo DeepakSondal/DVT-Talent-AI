@@ -77,8 +77,8 @@ def _build_upi_checkout_details(plan: SubscriptionPlan, session_id: str) -> Opti
     cfg = _get_merchant_upi_config()
     if not cfg["upi_id"] and not cfg["upi_number"]:
         return None
-    price_cents = int(cast(Any, getattr(plan, "price_usd_cents", 0)) or 0)
-    credits_per_month = int(cast(Any, getattr(plan, "credits_per_month", 0)) or 0)
+    price_cents = int(getattr(plan, "price_usd_cents", 0) or 0)
+    credits_per_month = int(getattr(plan, "credits_per_month", 0) or 0)
     amount_usd = round(price_cents / 100.0, 2)
     amount_inr = max(1, int(round(amount_usd * cfg["usd_to_inr_rate"])))
     pa = cfg["upi_id"] or f"{cfg['upi_number']}@upi"
