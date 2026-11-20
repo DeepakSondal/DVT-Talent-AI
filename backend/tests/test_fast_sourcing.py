@@ -12,6 +12,7 @@ import asyncio
 import time
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 
@@ -139,7 +140,8 @@ async def test_prefetch_all_sourcing_signals_concurrent_and_cached():
         await asyncio.sleep(0.10)
         resp = MagicMock()
         resp.status_code = 200
-        if "stackexchange.com" in url:
+        host = (urlparse(url).hostname or "").lower()
+        if host == "stackexchange.com" or host.endswith(".stackexchange.com"):
             resp.json.return_value = {
                 "items": [
                     {"user": {"display_name": "KubeGuru", "reputation": 45000, "link": "https://stackoverflow.com/u/1"}, "post_count": 120, "score": 890}
@@ -174,14 +176,14 @@ async def test_prefetch_all_sourcing_signals_concurrent_and_cached():
     assert "go-ace" in combined
     assert "KubeGuru" in combined
     assert "Senior Go Dev" in combined
-    # 1 GET for GitHub + 1 GET for StackOverflow, 1 POST for Serper
-    assert mock_http.get.call_count == 2
+    # 1 GET for GitHub search + 1 GET for GitHub profile enrichment + 1 GET for StackOverflow, 1 POST for Serper
+    assert mock_http.get.call_count == 3
     assert mock_http.post.call_count == 1
 
     # Second call with same query and tenant must hit cache with 0 additional HTTP calls
     combined_cached = await prefetch_all_sourcing_signals(deps, "Golang Kubernetes SRE")
     assert combined_cached == combined
-    assert mock_http.get.call_count == 2
+    assert mock_http.get.call_count == 3
     assert mock_http.post.call_count == 1
 
 

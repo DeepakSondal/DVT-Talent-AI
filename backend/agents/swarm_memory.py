@@ -47,6 +47,11 @@ def _require_tenant_id(tenant_id: Optional[str]) -> str:
     return safe_tenant
 
 
+def _hash_query(value: str) -> str:
+    """Return deterministic SHA-256 hex digest for cache and vector IDs."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def _get_cache(query_hash: str, tenant_id: str) -> Optional[str]:
     safe_tenant = _require_tenant_id(tenant_id)
     try:
@@ -64,7 +69,7 @@ def _get_cache(query_hash: str, tenant_id: str) -> Optional[str]:
 def _set_cache(query: str, result: str, tenant_id: str, ttl_seconds: int = 86400):
     safe_tenant = _require_tenant_id(tenant_id)
     try:
-        query_hash = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
+        query_hash = _hash_query(query)
         r = _get_redis()
         r.setex(f"swarm_cache:{safe_tenant}:{query_hash}", ttl_seconds, result)
     except Exception as exc:
@@ -109,7 +114,7 @@ async def add_negative_vector(category: str, reason: str, tenant_id: str):
             model="text-embedding-3-small",
         )
         vector = emb_response.data[0].embedding
-        vec_id = hashlib.md5(f"{safe_tenant}:{clean_reason}".encode(), usedforsecurity=False).hexdigest()
+        vec_id = _hash_query(f"{safe_tenant}:{clean_reason}")
 
         async with httpx.AsyncClient() as http:
             await http.post(
@@ -181,7 +186,7 @@ async def query_memory_tree(query: str, tenant_id: str) -> str:
     Uses Redis cache -> local PostgreSQL AIDecisionLedger / Redis store -> Pinecone fallback.
     """
     safe_tenant = _require_tenant_id(tenant_id)
-    query_hash = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
+    query_hash = _hash_query(query)
     cached_result = _get_cache(query_hash, tenant_id=safe_tenant)
     if cached_result:
         return cached_result

@@ -56,9 +56,11 @@ def _build_anthropic_model(model_name: str, api_key: str):
 
 
 def _hash_key_id(key: str, tenant_id: Optional[str] = None, provider: Optional[str] = None) -> str:
+    """Derive a fixed-length cache identifier from an API key without fast-hash exposure."""
     import hashlib
-    payload = f"{tenant_id or ''}:{provider or ''}:{key}" if (tenant_id or provider) else key
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    salt = f"{tenant_id or ''}:{provider or ''}".encode("utf-8")
+    return hashlib.pbkdf2_hmac("sha256", key.encode("utf-8"), salt, 100_000, dklen=32).hex()
 
 
 def _get_or_cache(cache_k: str, builder):

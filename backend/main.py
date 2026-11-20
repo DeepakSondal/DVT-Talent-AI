@@ -229,7 +229,7 @@ async def track_link_click(tracking_id: _uuid.UUID, url: str, request: Request, 
     Tracks clicks on personalized links (e.g. Microsites).
     Increments click count and redirects ONLY to validated safe origins or the recorded microsite URL.
     """
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, urlunparse
 
     from fastapi import HTTPException
     from sqlalchemy import select, update
@@ -259,25 +259,33 @@ async def track_link_click(tracking_id: _uuid.UUID, url: str, request: Request, 
 
     # Validate redirect target against open-redirect abuse
     raw_url = (url or "").strip()
-    if not raw_url or "\\" in raw_url or "\x00" in raw_url or "\r" in raw_url or "\n" in raw_url:
+    if not raw_url or any(ch in raw_url for ch in ("\\", "\x00", "\r", "\n", "\t")):
         raise HTTPException(status_code=400, detail="Invalid redirect URL")
 
     if raw_url.startswith("/") and not raw_url.startswith("//"):
-        return RedirectResponse(url=raw_url)
+        parsed_rel = urlparse(raw_url)
+        if parsed_rel.scheme or parsed_rel.netloc or not parsed_rel.path.startswith("/") or parsed_rel.path.startswith("//"):
+            raise HTTPException(status_code=400, detail="Invalid relative redirect URL")
+        safe_rel = urlunparse(("", "", parsed_rel.path, parsed_rel.params, parsed_rel.query, parsed_rel.fragment))
+        return RedirectResponse(url=safe_rel)
 
     parsed = urlparse(raw_url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise HTTPException(status_code=400, detail="Invalid redirect URL scheme")
 
-    allowed_hosts = set()
+    if stored_microsite_url and raw_url == stored_microsite_url:
+        return RedirectResponse(url=stored_microsite_url)
+
+    allowed_hosts: dict[str, str] = {}
     for base in [settings.frontend_url, settings.app_base_url, *settings.cors_origins]:
         try:
             h = urlparse(base).hostname
             if h:
-                allowed_hosts.add(h.lower())
+                allowed_hosts[h.lower()] = h.lower()
         except ValueError as exc:
             log.debug("invalid_allowed_origin_host", base=base, error=str(exc))
-    allowed_hosts.update({"dvttalent.com", "www.dvttalent.com", "dvt.com", "talent-ai.dvt.com"})
+    for static_host in ("dvttalent.com", "www.dvttalent.com", "dvt.com", "talent-ai.dvt.com"):
+        allowed_hosts[static_host] = static_host
 
     target_host = (parsed.hostname or "").lower()
     is_trusted_host = (
@@ -285,8 +293,12 @@ async def track_link_click(tracking_id: _uuid.UUID, url: str, request: Request, 
         or target_host.endswith(".dvttalent.com")
         or target_host.endswith(".dvt.com")
     )
-    if raw_url == stored_microsite_url or is_trusted_host:
-        return RedirectResponse(url=raw_url)
+    if is_trusted_host:
+        safe_scheme = "https" if parsed.scheme == "https" else "http"
+        safe_host = allowed_hosts.get(target_host, target_host)
+        safe_netloc = f"{safe_host}:{parsed.port}" if parsed.port else safe_host
+        safe_url = urlunparse((safe_scheme, safe_netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+        return RedirectResponse(url=safe_url)
 
     raise HTTPException(status_code=400, detail="Untrusted redirect destination blocked")
 

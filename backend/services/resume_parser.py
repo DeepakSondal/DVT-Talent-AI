@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,6 +26,64 @@ logger = structlog.get_logger(__name__)
 
 class UnsupportedResumeFormatError(ValueError):
     """Raised when a binary resume format (e.g. legacy OLE2 .doc) cannot be extracted."""
+
+
+class _ScriptTagStripper(HTMLParser):
+    """Strips <script> tags and their inner content using the stdlib HTML parser."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self._script_depth = 0
+        self._parts: List[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, Optional[str]]]) -> None:
+        if tag.lower() == "script":
+            self._script_depth += 1
+        elif self._script_depth == 0:
+            raw = self.get_starttag_text()
+            if raw:
+                self._parts.append(raw)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, Optional[str]]]) -> None:
+        if tag.lower() != "script" and self._script_depth == 0:
+            raw = self.get_starttag_text()
+            if raw:
+                self._parts.append(raw)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() == "script":
+            self._script_depth = max(0, self._script_depth - 1)
+        elif self._script_depth == 0:
+            self._parts.append(f"</{tag}>")
+
+    def handle_data(self, data: str) -> None:
+        if self._script_depth == 0:
+            self._parts.append(data)
+
+    def handle_entityref(self, name: str) -> None:
+        if self._script_depth == 0:
+            self._parts.append(f"&{name};")
+
+    def handle_charref(self, name: str) -> None:
+        if self._script_depth == 0:
+            self._parts.append(f"&#{name};")
+
+    def handle_comment(self, data: str) -> None:
+        if self._script_depth == 0:
+            self._parts.append(f"<!--{data}-->")
+
+    def get_text(self) -> str:
+        return "".join(self._parts)
+
+
+def _strip_script_tags(text: str) -> str:
+    """Remove <script> elements from extracted text without fragile tag-filtering regexes."""
+    if "<" not in text:
+        return text
+    stripper = _ScriptTagStripper()
+    stripper.feed(text)
+    stripper.close()
+    return stripper.get_text()
 
 def get_upload_dir() -> Path:
     try:
@@ -216,8 +275,7 @@ class ResumeParserService:
 
         # Normalize line endings, sanitize prompt injection vectors, and bound size
         clean_text = cls._clean_text(text)
-        clean_text = re.sub(r"<\s*script[^>]*>.*?<\s*/\s*script\s*>", "", clean_text, flags=re.IGNORECASE | re.DOTALL)
-        clean_text = re.sub(r"<\s*/?\s*script[^>]*>", "", clean_text, flags=re.IGNORECASE)
+        clean_text = _strip_script_tags(clean_text)
         try:
             try:
                 from services.sanitizer_service import sanitizer_service

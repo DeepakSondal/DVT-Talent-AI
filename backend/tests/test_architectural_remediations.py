@@ -64,8 +64,7 @@ def test_swarm_memory_redis_caching():
 
     with patch.object(sm, "_get_redis", return_value=mock_redis):
         sm._set_cache(query, expected_result, tenant_id="test_tenant", ttl_seconds=60)
-        import hashlib
-        h = hashlib.md5(query.encode(), usedforsecurity=False).hexdigest()
+        h = sm._hash_query(query)
         cached = sm._get_cache(h, tenant_id="test_tenant")
         assert cached == expected_result
 

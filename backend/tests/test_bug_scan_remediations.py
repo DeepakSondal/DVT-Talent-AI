@@ -1525,3 +1525,70 @@ async def test_tenant_patch_merges_preferred_ats_settings():
         db=mock_db,
     )
     assert updated.settings == {"existing_flag": True, "preferred_ats": ["greenhouse", "lever"]}
+
+
+def test_strip_script_tags_removes_malformed_scripts_and_preserves_text():
+    """Verify HTMLParser-based script stripper handles malformed tags without breaking text."""
+    from services.resume_parser import _strip_script_tags
+
+    raw = 'Alice <alice@example.com> <script x=">">alert(1)</script foo="bar"> Experience < 5 yrs'
+    cleaned = _strip_script_tags(raw)
+    assert "alert(1)" not in cleaned
+    assert "<script" not in cleaned.lower()
+    assert "Alice <alice@example.com>" in cleaned
+    assert "Experience < 5 yrs" in cleaned
+
+
+def test_canonical_fingerprint_rejects_spoofed_profile_urls():
+    """Verify URL hostname parsing blocks substring-spoofed GitHub and LinkedIn URLs."""
+    from agents.sourcing_pydantic import _canonical_candidate_fingerprint
+
+    assert (
+        _canonical_candidate_fingerprint({"name": "Alice", "github_url": "https://evil.com/github.com/alice"})
+        == "name:alice"
+    )
+    assert (
+        _canonical_candidate_fingerprint({"name": "Alice", "linkedin_url": "https://evil.com/linkedin.com/in/alice"})
+        == "name:alice"
+    )
+    assert (
+        _canonical_candidate_fingerprint({"name": "Alice", "github_url": "https://github.com/alice-dev"})
+        == "gh:alice-dev"
+    )
+    assert (
+        _canonical_candidate_fingerprint({"name": "Alice", "linkedin_url": "https://www.linkedin.com/in/alice-dev"})
+        == "li:alice-dev"
+    )
+
+
+@pytest.mark.asyncio
+async def test_track_click_and_oauth_callback_block_open_redirects_and_invalid_providers():
+    """Verify click tracking blocks malformed relative redirects and OAuth callback enforces provider allowlist."""
+    import uuid
+
+    from httpx import ASGITransport, AsyncClient
+
+    from main import app
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        tab_resp = await ac.get(
+            f"/api/v1/track/{uuid.uuid4()}/click",
+            params={"url": "/\t/evil.example.com"},
+            follow_redirects=False,
+        )
+        assert tab_resp.status_code == 400
+
+        rel_resp = await ac.get(
+            f"/api/v1/track/{uuid.uuid4()}/click",
+            params={"url": "/dashboard/jobs"},
+            follow_redirects=False,
+        )
+        assert rel_resp.status_code in (302, 307)
+        assert rel_resp.headers["location"] == "/dashboard/jobs"
+
+        oauth_resp = await ac.get(
+            "/api/v1/email-sender/oauth/evilprovider/callback",
+            params={"code": "abc", "state": "xyz"},
+            follow_redirects=False,
+        )
+        assert oauth_resp.status_code == 400

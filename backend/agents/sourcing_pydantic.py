@@ -16,7 +16,7 @@ import hashlib
 import json
 import re
 from typing import Any, Dict, List, Optional, cast
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
@@ -126,23 +126,44 @@ sourcing_agent = Agent(
 
 # ── Freehire-Style Fingerprint Deduplication & Evidence Scorer ────────────
 
+def _extract_profile_handle(
+    raw_url: str,
+    allowed_hosts: tuple[str, ...],
+    path_prefix: str = "",
+) -> str:
+    """Extract a profile slug only when the parsed hostname matches allowed_hosts."""
+    cleaned = raw_url.strip().lower().rstrip("/")
+    if not cleaned:
+        return ""
+    parsed = urlparse(cleaned if "://" in cleaned else f"https://{cleaned}")
+    host = (parsed.hostname or "").lower()
+    if host not in allowed_hosts:
+        return ""
+    path = parsed.path.lstrip("/")
+    if path_prefix:
+        if not path.startswith(path_prefix):
+            return ""
+        path = path[len(path_prefix):]
+    return path.split("/")[0].strip()
+
+
 def _canonical_candidate_fingerprint(cand: Dict[str, Any]) -> str:
     """Compute a deterministic identity key across email, GitHub handle, LinkedIn slug, or normalized name."""
     email = str(cand.get("email") or "").strip().lower()
     if email and "@" in email and email not in {"candidate@example.com", "verified@talent-vault.io"}:
         return f"email:{email}"
 
-    gh_url = str(cand.get("github_url") or "").strip().lower().rstrip("/")
-    if "github.com/" in gh_url:
-        handle = gh_url.split("github.com/")[-1].split("/")[0].strip()
-        if handle:
-            return f"gh:{handle}"
+    handle = _extract_profile_handle(str(cand.get("github_url") or ""), ("github.com", "www.github.com"))
+    if handle:
+        return f"gh:{handle}"
 
-    li_url = str(cand.get("linkedin_url") or "").strip().lower().rstrip("/")
-    if "linkedin.com/in/" in li_url:
-        slug = li_url.split("linkedin.com/in/")[-1].split("/")[0].strip()
-        if slug:
-            return f"li:{slug}"
+    slug = _extract_profile_handle(
+        str(cand.get("linkedin_url") or ""),
+        ("linkedin.com", "www.linkedin.com"),
+        path_prefix="in/",
+    )
+    if slug:
+        return f"li:{slug}"
 
     raw_name = str(cand.get("name") or cand.get("full_name") or f"{cand.get('first_name', '')} {cand.get('last_name', '')}").strip().lower()
     norm_name = re.sub(r"[^a-z0-9]", "", raw_name)

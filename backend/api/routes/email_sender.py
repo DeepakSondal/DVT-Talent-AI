@@ -410,6 +410,9 @@ async def connect_oauth_sender(
     )
 
 
+_OAUTH_PROVIDERS = {"google": "google", "microsoft": "microsoft"}
+
+
 @router.get("/oauth/{provider}/callback", summary="OAuth 2.0 callback for Google / Microsoft mailbox")
 async def oauth_sender_callback(
     provider: str,
@@ -429,7 +432,9 @@ async def oauth_sender_callback(
             window_seconds=60,
             detail="Too many OAuth callback requests. Please wait a minute.",
         )
-    provider_clean = provider.strip().lower()
+    provider_clean = _OAUTH_PROVIDERS.get(provider.strip().lower())
+    if not provider_clean:
+        raise HTTPException(status_code=400, detail="Unsupported OAuth provider. Choose 'google' or 'microsoft'.")
     try:
         claims = jwt.decode(state, settings.secret_key, algorithms=[settings.algorithm])
         if claims.get("type") != "oauth_state" or claims.get("provider") != provider_clean:

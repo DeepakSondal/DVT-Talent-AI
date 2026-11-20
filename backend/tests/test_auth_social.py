@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, patch
+from urllib.parse import urlparse
 
 import pytest
 from fastapi.responses import RedirectResponse
@@ -18,7 +19,7 @@ async def test_social_login_redirect():
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             response = await ac.get("/api/v1/auth/login/google")
             assert response.status_code == 302
-            assert "accounts.google.com" in response.headers["location"]
+            assert urlparse(response.headers["location"]).hostname == "accounts.google.com"
 
 
 @pytest.mark.asyncio

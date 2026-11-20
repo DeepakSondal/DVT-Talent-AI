@@ -12,6 +12,7 @@ elif __name__.startswith("agents."):
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -779,7 +780,13 @@ class AgentOrchestrator:
 
             from sqlalchemy import select
 
-            from db.models import AIDecisionLedger, AsyncSessionLocal, Candidate, CandidateStatus, Resume
+            from db.models import (
+                AIDecisionLedger,
+                AsyncSessionLocal,
+                Candidate,
+                CandidateStatus,
+                Resume,
+            )
             from services.resume_parser import ResumeParserService
 
             job_uuid = None
@@ -803,7 +810,7 @@ class AgentOrchestrator:
                     last_name = (parts[1] if len(parts) > 1 else "Profile")[:100]
                     email = c_dict.get("email")
                     if not email or "@" not in str(email):
-                        slug = hashlib.md5(f"{tenant_uuid}:{full_name}".encode(), usedforsecurity=False).hexdigest()[:8]
+                        slug = hashlib.sha256(f"{tenant_uuid}:{full_name}".encode("utf-8")).hexdigest()[:8]
                         email = f"{first_name.lower()}.{slug}@sourced.dvt-talent.io"
 
                     existing_res = await session.execute(

@@ -10,6 +10,8 @@ jobs:
   backend:
     name: Backend Tests & Security
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       APP_ENV: "testing"
       TESTING: "true"
@@ -49,6 +51,8 @@ jobs:
   frontend:
     name: Frontend Lint & Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
 
@@ -77,6 +81,8 @@ jobs:
   postgres-migration-check:
     name: Postgres Migration & Schema Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     services:
       postgres:
         image: pgvector/pgvector:pg16
