@@ -767,6 +767,8 @@ async def list_candidate_applications(
 
     apps: List[ApplicationOut] = []
     for app, job_title, comp_name in results:
+        if app.job_id is None:
+            continue
         apps.append(
             ApplicationOut(
                 id=app.id,
@@ -775,7 +777,7 @@ async def list_candidate_applications(
                 company_name=comp_name or "Confidential Client",
                 status=app.status.value if app.status is not None and hasattr(app.status, "value") else str(app.status),
                 applied_at=app.created_at,
-                match_score=app.match_score,
+                match_score=float(app.match_score or 0.0),
                 career_ops_scoring=app.career_ops_scoring or {},
                 notes=app.notes,
             )
