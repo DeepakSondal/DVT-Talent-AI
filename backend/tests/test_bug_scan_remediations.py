@@ -1644,3 +1644,32 @@ def test_get_ats_client_ceipal_coerces_base_url_to_str():
         client = get_ats_client(cast(Any, conn))
     assert isinstance(client, CeipalClient)
     assert client.base_url == "https://custom.ceipal.example.com/v1"
+
+
+def test_preflight_check_removes_legacy_stripe_probe():
+    """Verify legacy check_stripe helper is removed from PreflightCheck."""
+    from scripts.preflight_check import PreflightCheck
+
+    assert not hasattr(PreflightCheck, "check_stripe")
+
+
+def test_dockerfiles_satisfy_trivy_hardening_checks():
+    """Verify backend and frontend Dockerfiles include --no-install-recommends and HEALTHCHECK."""
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    backend_df = (repo_root / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    frontend_df = (repo_root / "frontend" / "Dockerfile").read_text(encoding="utf-8")
+    assert "--no-install-recommends" in backend_df
+    assert "HEALTHCHECK " in frontend_df
+
+
+def test_ci_workflow_enforces_pip_audit_exit_code():
+    """Verify CI pip-audit step no longer swallows vulnerability failures with || true."""
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    ci_yml = (repo_root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    pip_lines = [line for line in ci_yml.splitlines() if "pip-audit" in line]
+    assert pip_lines
+    assert all("|| true" not in line for line in pip_lines)

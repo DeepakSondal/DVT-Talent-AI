@@ -46,7 +46,8 @@ jobs:
           pytest tests -v
 
       - name: Run Pip Audit (Vulnerability Check)
-        run: pip-audit -r backend/requirements.txt --ignore-vuln GHSA-3qf3-8w2g-rqmx || true
+        # Ignore unfixable transitive ecdsa advisories (no upstream fix available) while failing CI on any new CVE
+        run: pip-audit -r backend/requirements.txt --ignore-vuln GHSA-3qf3-8w2g-rqmx --ignore-vuln PYSEC-2026-1325
 
   frontend:
     name: Frontend Lint & Build

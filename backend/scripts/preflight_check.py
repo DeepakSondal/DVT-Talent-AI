@@ -14,10 +14,6 @@ import httpx
 # Add the backend directory to sys.path to import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-
 from config import settings
 
 # ANSI Color Codes for terminal output
@@ -172,19 +168,6 @@ class PreflightCheck:
         except Exception as e:
             self.log_result("GitHub (Sourcing)", False, f"Connection failed: {str(e)}")
 
-    async def check_stripe(self):
-        """Test Stripe (Billing) connectivity."""
-        stripe_key = getattr(settings, "stripe_secret_key", None)
-        if not stripe_key:
-            return self.log_result("Stripe (Billing)", False, "No secret key found.")
-        try:
-            import stripe  # type: ignore[import-not-found]  # pyrefly: ignore[missing-import]
-            stripe.api_key = str(stripe_key)
-            stripe.Account.retrieve()
-            self.log_result("Stripe (Billing)", True, "Billing gateway active.")
-        except Exception as e:
-            self.log_result("Stripe (Billing)", False, f"Connection error: {str(e)}")
-
     async def run_all(self):
         print(f"\n{BOLD}{BLUE}=== DVT TALENT AI PRE-FLIGHT CHECK (v1.1) ==={RESET}\n")
         
@@ -195,7 +178,6 @@ class PreflightCheck:
         await self.check_openai()
         await self.check_serper()
         await self.check_github()
-        await self.check_stripe()
         
         print(f"\n{BLUE}{'='*40}{RESET}")
         all_passed = all(r[1] for r in self.results)
@@ -208,6 +190,8 @@ class PreflightCheck:
             return False
 
 if __name__ == "__main__":
+    if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
     check = PreflightCheck()
     success = asyncio.run(check.run_all())
     sys.exit(0 if success else 1)
