@@ -204,7 +204,7 @@ async def list_candidates(
     )
     paged_items = (await db.execute(query)).scalars().all()
 
-    return CandidateList(items=paged_items, total=total, page=page, page_size=page_size)
+    return CandidateList(items=list(cast(Any, paged_items)), total=total, page=page, page_size=page_size)
 
 
 def _require_recruiter_workspace_access(current_user: User) -> None:
@@ -245,7 +245,7 @@ async def create_candidate(
         raise HTTPException(status_code=409, detail="Candidate with this email already exists in your workspace")
 
     candidate = Candidate(**data.model_dump())
-    candidate.tenant_id = current_user.tenant_id
+    setattr(candidate, "tenant_id", current_user.tenant_id)
     db.add(candidate)
     await db.commit()
     await db.refresh(candidate)

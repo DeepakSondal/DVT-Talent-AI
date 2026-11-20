@@ -221,7 +221,7 @@ async def run_swarm_pipeline(
             tenant_id=str(tenant_uuid),
         )
         if dispatched:
-            agent_task.celery_task_id = dispatched.id
+            setattr(agent_task, "celery_task_id", dispatched.id)
             await db.commit()
             return {
                 "message": "Unified swarm protocol queued via Celery",

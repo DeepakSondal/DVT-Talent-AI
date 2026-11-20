@@ -294,7 +294,7 @@ async def get_or_create_candidate_for_user(user: User, db: AsyncSession) -> Cand
     )
     cand = result.scalars().first()
     if cand:
-        cand.user_id = user.id
+        setattr(cand, "user_id", user.id)
         await db.commit()
         return cand
 
@@ -623,23 +623,24 @@ async def list_matched_jobs(
 
         # Career-Ops 5-Dimension Scoring
         dimensions = compute_career_ops_score(cand, job, comp_name)
+        job_row = cast(Any, job)
 
         matched_jobs.append(
             JobMatchOut(
-                id=job.id,
-                title=job.title,
+                id=job_row.id,
+                title=job_row.title,
                 company_name=comp_name,
                 company_domain=comp_dom,
-                location=job.location,
-                remote=job.remote or False,
-                salary_min=job.salary_min,
-                salary_max=job.salary_max,
-                skills_required=job.skills_required or [],
-                experience_years=job.experience_years,
-                job_type=job.job_type,
-                posted_at=job.posted_at,
+                location=job_row.location,
+                remote=job_row.remote or False,
+                salary_min=job_row.salary_min,
+                salary_max=job_row.salary_max,
+                skills_required=job_row.skills_required or [],
+                experience_years=job_row.experience_years,
+                job_type=job_row.job_type,
+                posted_at=job_row.posted_at,
                 scoring=dimensions,
-                has_applied=job.id in applied_job_ids,
+                has_applied=job_row.id in applied_job_ids,
             )
         )
 
@@ -767,17 +768,18 @@ async def list_candidate_applications(
 
     apps: List[ApplicationOut] = []
     for app, job_title, comp_name in results:
+        app_row = cast(Any, app)
         apps.append(
             ApplicationOut(
-                id=app.id,
-                job_id=app.job_id,
+                id=app_row.id,
+                job_id=app_row.job_id,
                 job_title=job_title,
                 company_name=comp_name or "Confidential Client",
-                status=app.status.value if hasattr(app.status, "value") else str(app.status),
-                applied_at=app.created_at,
-                match_score=app.match_score,
-                career_ops_scoring=app.career_ops_scoring or {},
-                notes=app.notes,
+                status=app_row.status.value if hasattr(app_row.status, "value") else str(app_row.status),
+                applied_at=app_row.created_at,
+                match_score=app_row.match_score,
+                career_ops_scoring=app_row.career_ops_scoring or {},
+                notes=app_row.notes,
             )
         )
     return apps

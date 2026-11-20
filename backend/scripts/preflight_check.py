@@ -178,7 +178,7 @@ class PreflightCheck:
         if not stripe_key:
             return self.log_result("Stripe (Billing)", False, "No secret key found.")
         try:
-            import stripe
+            import stripe  # type: ignore[import-not-found]  # pyrefly: ignore[missing-import]
             stripe.api_key = str(stripe_key)
             stripe.Account.retrieve()
             self.log_result("Stripe (Billing)", True, "Billing gateway active.")
