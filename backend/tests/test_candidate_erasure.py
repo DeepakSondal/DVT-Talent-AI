@@ -353,6 +353,7 @@ class TestCandidatePersonalDataErasure:
                     )
                 )).scalar_one()
                 assert task.status == AgentTaskStatus.PENDING
+                assert task.input_data is not None
                 assert str(task.input_data["candidate_id"]) == str(data["candidate_a"].id)
                 assert task.input_data["retry_vector"] is True
 
@@ -521,6 +522,7 @@ class TestCandidatePersonalDataErasure:
                 )).scalars().all()
                 task = next((t for t in tasks if t.input_data and t.input_data.get("candidate_id") == str(data["candidate_a"].id)), None)
                 assert task is not None
+                assert task.input_data is not None
                 assert task.input_data["candidate_id"] == str(data["candidate_a"].id)
                 target_task_id = task.id
 
@@ -635,6 +637,7 @@ class TestCandidatePersonalDataErasure:
                 select(AgentTask).where(AgentTask.id == task_id)
             )).scalar_one()
             assert completed_task.status == AgentTaskStatus.COMPLETED
+            assert completed_task.celery_task_id is not None
             assert completed_task.celery_task_id != stale_lease
             assert completed_task.celery_task_id.startswith("claim_")
             worker2_completed_at = completed_task.completed_at

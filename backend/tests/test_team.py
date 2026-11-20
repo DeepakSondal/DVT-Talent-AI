@@ -149,6 +149,7 @@ async def test_team_api_keys_encryption(db_session: AsyncSession):
     stmt = select(TeamApiKeys).where(TeamApiKeys.team_id == team.id)
     db_keys = (await db_session.execute(stmt)).scalar_one()
 
+    assert db_keys.openai_key is not None
     assert db_keys.openai_key != raw_openai_key
     assert db_keys.serper_key != raw_serper_key
     assert "sk-proj" not in db_keys.openai_key  # Must be encrypted/gibberish

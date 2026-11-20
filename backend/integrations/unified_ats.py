@@ -38,7 +38,7 @@ def get_ats_client(conn: "IntegrationConnection"):
         return GreenhouseClient(api_key=api_key, tenant_id=str(conn.tenant_id))
 
     if conn.provider == "ceipal":
-        base_url = str(cast(Any, conn).base_url or settings.ceipal_api_base_url or "https://api.ceipal.com/v1")
+        base_url = conn.base_url or settings.ceipal_api_base_url or "https://api.ceipal.com/v1"
         return CeipalClient(api_key=api_key, base_url=base_url, tenant_id=str(conn.tenant_id))
 
     raise ValueError(f"Unsupported ATS provider: {conn.provider}")
