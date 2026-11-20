@@ -21,7 +21,8 @@ async def test_lead_discovery_reaction():
     """ Verify discovery_agent initialization and that live search/stub tools are removed """
     assert discovery_agent is not None
     assert hasattr(discovery_agent, "run")
-    tool_names = set(getattr(discovery_agent, "_function_toolset", None).tools.keys()) if hasattr(discovery_agent, "_function_toolset") else set()
+    toolset = getattr(discovery_agent, "_function_toolset", None)
+    tool_names = set(toolset.tools.keys()) if toolset is not None else set()
     assert "search_market_signals" not in tool_names
     assert "analyze_talent_hotspots" not in tool_names
 

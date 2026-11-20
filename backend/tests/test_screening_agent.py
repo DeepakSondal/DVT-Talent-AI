@@ -7,11 +7,13 @@ Validates:
 4. Dodo Payments webhook-sync credit grant ledger integration.
 """
 import uuid
+from typing import Any, Dict, List, cast
 
 import pytest
 
 from agents.screening_pydantic import ScreeningPlan, ScreeningQuestion
 from api.routes.billing import WebhookSyncRequest
+from db.models import User
 
 
 def test_screening_question_schema_validation():
@@ -111,9 +113,15 @@ async def test_generate_screening_guide_tailors_prompt_per_role_and_skills():
 
     from agents import screening_pydantic
 
-    captured = []
+    captured: List[Dict[str, Any]] = []
 
-    async def _fake_run(prompt, deps=None, model=None, model_settings=None, **kwargs):
+    async def _fake_run(
+        prompt: str,
+        deps: Any = None,
+        model: Any = None,
+        model_settings: Any = None,
+        **kwargs: Any,
+    ):
         captured.append({"prompt": prompt, "model_settings": model_settings})
         return SimpleNamespace(output=ScreeningPlan(role_title="Mock", questions=[]))
 
@@ -194,7 +202,12 @@ async def test_screening_route_enriches_from_tenant_scoped_job():
             role_title=None,
             job_id=str(job_id),
         )
-        out = await generate_screening_questions(req=req, request=MagicMock(), db=fake_db, current_user=fake_user)
+        out = await generate_screening_questions(
+            req=req,
+            request=MagicMock(),
+            db=fake_db,
+            current_user=cast(User, fake_user),
+        )
 
     assert out["role_title"] == "Frontend Developer"
     assert captured_kwargs["skills_required"] == ["React", "Next.js", "WCAG"]

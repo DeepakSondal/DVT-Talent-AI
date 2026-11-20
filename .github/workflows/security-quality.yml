@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   python-security-lint:
-    name: Python Security Lint (Ruff)
+    name: Python Security, Lint & Type Check
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,13 +26,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Ruff
-        run: python -m pip install --upgrade pip && pip install ruff
+      - name: Install uv and Python Checkers
+        run: |
+          python -m pip install --upgrade pip
+          pip install uv
+          uv pip install --system -r backend/requirements.txt ruff pyrefly
 
-      - name: Run Ruff Default & Bandit Security Rules
+      - name: Run Ruff Default, Security Rules & Pyrefly Type Check
         run: |
           ruff check backend
           ruff check backend --select S
+          pyrefly check --python-interpreter-path "$(which python)"
 
   frontend-security-audit:
     name: Frontend Dependency Audit
