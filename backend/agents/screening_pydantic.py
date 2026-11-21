@@ -81,9 +81,9 @@ async def generate_screening_guide(
     safe_role_title, _ = sanitizer_service.sanitize((role_title or "Target Role"))
     safe_job_description, _ = sanitizer_service.sanitize((job_description or ""))
     safe_skills = [
-        sanitizer_service.sanitize(str(skill))[0].strip()
+        sanitizer_service.sanitize(skill)[0].strip()
         for skill in (skills_required or [])
-        if str(skill).strip()
+        if skill.strip()
     ]
     safe_requirements = sanitizer_service.sanitize(requirements)[0].strip() if requirements else ""
 

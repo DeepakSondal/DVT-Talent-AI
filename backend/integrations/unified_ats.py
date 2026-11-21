@@ -32,7 +32,7 @@ SUPPORTED_PROVIDERS = ["greenhouse", "ceipal"]
 # ── Factory ──────────────────────────────────────────────────────────────────
 def get_ats_client(conn: "IntegrationConnection"):
     """Return the correct ATS client for a given IntegrationConnection record."""
-    api_key = decrypt_pii(str(conn.api_key_encrypted))
+    api_key = decrypt_pii(conn.api_key_encrypted)
 
     if conn.provider == "greenhouse":
         return GreenhouseClient(api_key=api_key, tenant_id=str(conn.tenant_id))

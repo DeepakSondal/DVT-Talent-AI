@@ -338,7 +338,7 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
                         )
                     ).scalars().all()
                     for hc in hit_rows:
-                        hc_hidden = [str(x).strip().lower() for x in (hc.hide_from_companies or []) if x]
+                        hc_hidden = [x.strip().lower() for x in (hc.hide_from_companies or []) if x]
                         if (
                             hc.pii_erased
                             or hc.is_searchable is False
@@ -400,7 +400,7 @@ async def fast_hybrid_candidate_search(tenant_id: str, keywords: str, limit: int
                 candidates = (await session.execute(fallback_stmt)).scalars().all()
 
             for c in candidates:
-                hidden = [str(x).strip().lower() for x in (c.hide_from_companies or []) if x]
+                hidden = [x.strip().lower() for x in (c.hide_from_companies or []) if x]
                 if blocked_identifiers and any(b in hidden for b in blocked_identifiers):
                     continue
                 full_name = f"{c.first_name} {c.last_name}".strip()
@@ -620,7 +620,7 @@ async def prefetch_all_sourcing_signals(
     if require_uploaded_resume:
         active_sources = {"internal"}
     elif sources:
-        active_sources = {str(s).strip().lower() for s in sources if str(s).strip()}
+        active_sources = {s.strip().lower() for s in sources if s.strip()}
     else:
         active_sources = {"internal", "github", "stackoverflow", "web"}
 
