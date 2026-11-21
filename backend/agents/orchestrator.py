@@ -193,11 +193,11 @@ class AgentOrchestrator:
                 keys = res_keys.scalar_one_or_none()
                 if keys:
                     if keys.openai_key:
-                        keys_dict["openai_key"] = decrypt_pii(str(keys.openai_key))
+                        keys_dict["openai_key"] = decrypt_pii(keys.openai_key)
                     if keys.serper_key:
-                        keys_dict["serper_key"] = decrypt_pii(str(keys.serper_key))
+                        keys_dict["serper_key"] = decrypt_pii(keys.serper_key)
                     if keys.anthropic_key:
-                        keys_dict["anthropic_key"] = decrypt_pii(str(keys.anthropic_key))
+                        keys_dict["anthropic_key"] = decrypt_pii(keys.anthropic_key)
             _TENANT_KEYS_CACHE[cache_key] = (now, dict(keys_dict))
         except Exception as e:
             log.warning("failed_to_resolve_tenant_keys", error=str(e), tenant_id=self.tenant_id)
