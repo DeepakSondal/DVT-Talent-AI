@@ -11,10 +11,10 @@ Provides free B2C candidate capabilities:
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import desc, select
@@ -785,17 +785,25 @@ async def list_candidate_applications(
     return apps
 
 
+_INTERVIEW_PREP_CACHE: Dict[str, Tuple[float, InterviewPrepResponse]] = {}
+_INTERVIEW_PREP_CACHE_TTL_SECONDS = 600.0
+_INTERVIEW_PREP_CACHE_MAX_SIZE = 256
+
+
 @router.post("/interview-prep/{job_id}", response_model=InterviewPrepResponse)
 async def generate_interview_prep(
     job_id: uuid.UUID,
+    refresh: bool = Query(False, description="Set true to bypass cache and regenerate fresh AI STAR cards."),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Career-Ops STAR Interview Rehearsal Generator.
-    Generates tailored Situation, Task, Action, Result cards based on candidate skills
-    and target job description without fabricating claims.
+    Generates 5 AI-tailored Situation, Task, Action, Result cards grounded in the target JD
+    and PII-redacted candidate resume, with per-candidate/job caching and deterministic fallback.
     """
+    import time
+
     cand = await get_or_create_candidate_for_user(current_user, db)
 
     job_res = await db.execute(select(Job).where(Job.id == job_id))
@@ -803,14 +811,75 @@ async def generate_interview_prep(
     if not job or not job.is_active or not job.is_published:
         raise HTTPException(status_code=404, detail="Job requisition not found")
 
+    tenant_scope = str(job.tenant_id or cand.tenant_id or "portal")
+    cache_key = f"{tenant_scope}:{cand.id}:{job.id}"
+    now = time.monotonic()
+    if not refresh:
+        cached = _INTERVIEW_PREP_CACHE.get(cache_key)
+        if cached and (now - cached[0]) < _INTERVIEW_PREP_CACHE_TTL_SECONDS:
+            return cached[1]
+
     comp_res = await db.execute(select(Company.name).where(Company.id == job.company_id))
     company_name = comp_res.scalar_one_or_none() or "Target Employer"
 
+    resume_text = (
+        await db.execute(
+            select(Resume.raw_text)
+            .where(Resume.candidate_id == cand.id, Resume.is_current.is_(True))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
     cand_skills_list: List[str] = list(cast(Any, cand.skills) or [])
-    skills_text = ", ".join(cand_skills_list[:5]) if cand_skills_list else "Modern Software Engineering & Problem Solving"
+    job_skills_list: List[str] = list(cast(Any, job.skills_required) or [])
     cand_title = cand.title or "Professional Engineer"
 
-    # Deterministic High-Signal STAR cards adapted from career-ops story bank
+    try:
+        from agents.screening_pydantic import generate_interview_prep_cards
+
+        cand_full_name = f"{getattr(cand, 'first_name', '') or ''} {getattr(cand, 'last_name', '') or ''}".strip()
+        ai_plan = await generate_interview_prep_cards(
+            job_title=str(job.title),
+            company_name=company_name,
+            job_description=str(job.description or ""),
+            job_requirements=str(job.requirements or "") if job.requirements else None,
+            job_skills=job_skills_list,
+            candidate_title=cand_title,
+            candidate_skills=cand_skills_list,
+            resume_text=str(resume_text or "") if resume_text else None,
+            tenant_id=tenant_scope,
+            candidate_name=cand_full_name or None,
+        )
+        if ai_plan and ai_plan.cards:
+            ai_cards = [
+                InterviewStarCard(
+                    question=c.question,
+                    category=c.category,
+                    situation=c.situation,
+                    task=c.task,
+                    action=c.action,
+                    result=c.result,
+                    interviewer_focus=c.interviewer_focus,
+                    pitfalls_to_avoid=c.pitfalls_to_avoid,
+                )
+                for c in ai_plan.cards[:6]
+            ]
+            response = InterviewPrepResponse(
+                job_title=str(job.title),
+                company_name=company_name,
+                archetype=ai_plan.archetype or "Technical Specialist / Builder",
+                cards=ai_cards,
+            )
+            if len(_INTERVIEW_PREP_CACHE) >= _INTERVIEW_PREP_CACHE_MAX_SIZE:
+                _INTERVIEW_PREP_CACHE.pop(next(iter(_INTERVIEW_PREP_CACHE)), None)
+            _INTERVIEW_PREP_CACHE[cache_key] = (now, response)
+            return response
+    except Exception as exc:
+        log.warning("interview_prep_ai_fallback", error=str(exc), job_id=str(job_id))
+
+    skills_text = ", ".join(cand_skills_list[:5]) if cand_skills_list else "Modern Software Engineering & Problem Solving"
+
+    # Deterministic fallback when LLM provider is unavailable or rate-limited
     cards = [
         InterviewStarCard(
             question=f"Tell me about a complex project where you leveraged {cand.skills[0] if cand.skills else 'core architecture'} under high delivery pressure.",

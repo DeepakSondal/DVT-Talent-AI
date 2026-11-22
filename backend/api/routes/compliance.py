@@ -414,7 +414,9 @@ async def record_human_override(
     updated_candidate_status = None
     updated_job_candidate_status = None
     aedt_notice_eligibility = None
+    outreach_dispatch_status = None
 
+    cand = None
     if entry.candidate_id:
         cand_res = await db.execute(
             select(Candidate).where(
@@ -423,29 +425,132 @@ async def record_human_override(
             )
         )
         cand = cand_res.scalar_one_or_none()
-        if cand:
-            if resolved_action == "APPROVED":
-                aedt_notice_eligibility = compliance_service.check_screening_notice_eligibility(
-                    cand,
-                    enforce=False,
+
+    if entry.decision_type == "outreach_approval":
+        from datetime import datetime, timezone
+
+        from sqlalchemy import func
+
+        from db.models import EmailSent, EmailStatus
+        from services.email_service import EmailService
+        from services.validation_service import validation_service
+
+        signals = entry.evidence_signals if isinstance(entry.evidence_signals, dict) else {}
+        raw_email_id = signals.get("email_sent_id")
+        email_row = None
+        if raw_email_id:
+            try:
+                email_uuid = uuid.UUID(str(raw_email_id))
+                email_row = (
+                    await db.execute(
+                        select(EmailSent).where(
+                            EmailSent.id == email_uuid,
+                            EmailSent.tenant_id == tenant_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+            except (ValueError, TypeError):
+                email_row = None
+
+        if resolved_action == "APPROVED":
+            recipient_email = (email_row.to_email if email_row is not None else signals.get("candidate_email")) or ""
+            is_erased = bool(cand is not None and getattr(cand, "pii_erased", False))
+            if not is_erased and recipient_email:
+                erased_match = (
+                    await db.execute(
+                        select(Candidate.id).where(
+                            func.lower(Candidate.email) == str(recipient_email).strip().lower(),
+                            Candidate.pii_erased.is_(True),
+                            (Candidate.tenant_id == tenant_id) | (Candidate.tenant_id.is_(None)),
+                        ).limit(1)
+                    )
+                ).scalar_one_or_none()
+                is_erased = erased_match is not None
+
+            if is_erased:
+                setattr(entry, "human_action", "REJECTED")
+                setattr(entry, "override_reason", "Blocked at approval: candidate data erased under GDPR.")
+                if email_row is not None:
+                    setattr(email_row, "status", EmailStatus.FAILED)
+                await db.commit()
+                raise HTTPException(
+                    status_code=400,
+                    detail="Outreach blocked: candidate data has been erased under GDPR.",
                 )
+
+            email_check = validation_service.validate_email(str(recipient_email))
+            if not email_check.get("valid") or validation_service.is_placeholder_email(str(recipient_email)):
+                reason = email_check.get("reason") or "Synthetic or placeholder email domain"
+                setattr(entry, "human_action", "REJECTED")
+                setattr(entry, "override_reason", f"Blocked at approval: {reason}")
+                if email_row is not None:
+                    setattr(email_row, "status", EmailStatus.FAILED)
+                await db.commit()
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Outreach blocked: recipient email is invalid, disposable, or a placeholder ({reason}).",
+                )
+
+            if email_row is not None:
+                if email_row.status == EmailStatus.SENT:
+                    outreach_dispatch_status = "already_sent"
+                elif email_row.status == EmailStatus.SCHEDULED:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Outreach dispatch is already in progress for this draft.",
+                    )
+                else:
+                    # Claim draft before provider delivery so concurrent retries cannot double-send
+                    setattr(email_row, "status", EmailStatus.SCHEDULED)
+                    await db.commit()
+                    sent_ok = await EmailService().send_email(
+                        email_id=str(email_row.id),
+                        to_address=str(email_row.to_email),
+                        subject=str(email_row.subject or ""),
+                        body=str(email_row.body or ""),
+                        tenant_id=tenant_id,
+                    )
+                    if sent_ok:
+                        setattr(email_row, "status", EmailStatus.SENT)
+                        setattr(email_row, "sent_at", datetime.now(timezone.utc))
+                        outreach_dispatch_status = "sent"
+                        target_status = CandidateStatus.CONTACTED
+                    else:
+                        setattr(email_row, "status", EmailStatus.FAILED)
+                        outreach_dispatch_status = "failed"
+        else:
+            if email_row is not None and email_row.status == EmailStatus.DRAFT:
+                setattr(email_row, "status", EmailStatus.FAILED)
+            outreach_dispatch_status = "cancelled"
+
+    should_update_candidate_status = (
+        entry.decision_type != "outreach_approval" or outreach_dispatch_status == "sent"
+    )
+
+    if cand:
+        if resolved_action == "APPROVED":
+            aedt_notice_eligibility = compliance_service.check_screening_notice_eligibility(
+                cand,
+                enforce=False,
+            )
+        if should_update_candidate_status:
             setattr(cand, "status", target_status)
             updated_candidate_status = target_status.value
 
-        if entry.job_id:
-            jc_res = await db.execute(
-                select(JobCandidate)
-                .outerjoin(Job, JobCandidate.job_id == Job.id)
-                .where(
-                    JobCandidate.job_id == entry.job_id,
-                    JobCandidate.candidate_id == entry.candidate_id,
-                    (JobCandidate.tenant_id == tenant_id) | (Job.tenant_id == tenant_id),
-                )
+    if should_update_candidate_status and entry.candidate_id and entry.job_id:
+        jc_res = await db.execute(
+            select(JobCandidate)
+            .outerjoin(Job, JobCandidate.job_id == Job.id)
+            .where(
+                JobCandidate.job_id == entry.job_id,
+                JobCandidate.candidate_id == entry.candidate_id,
+                (JobCandidate.tenant_id == tenant_id) | (Job.tenant_id == tenant_id),
             )
-            jc = jc_res.scalar_one_or_none()
-            if jc:
-                setattr(jc, "status", target_status)
-                updated_job_candidate_status = target_status.value
+        )
+        jc = jc_res.scalar_one_or_none()
+        if jc:
+            setattr(jc, "status", target_status)
+            updated_job_candidate_status = target_status.value
 
     await db.commit()
 
@@ -467,4 +572,5 @@ async def record_human_override(
         "candidate_status": updated_candidate_status,
         "job_candidate_status": updated_job_candidate_status,
         "aedt_notice_eligibility": aedt_notice_eligibility,
+        "outreach_dispatch_status": outreach_dispatch_status,
     }

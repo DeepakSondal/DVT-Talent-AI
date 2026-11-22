@@ -116,3 +116,122 @@ async def generate_screening_guide(
                 model_settings={"max_tokens": 3500},
             )
     return result.output
+
+
+class InterviewStarCardOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    question: str = Field(description="Role-specific behavioral or technical STAR interview question.")
+    category: str = Field(default="Technical Delivery", description="Short competency category.")
+    situation: str = Field(description="Grounded situation framing from the candidate's authentic background.")
+    task: str = Field(description="Specific responsibility or goal for the candidate.")
+    action: str = Field(description="Concrete technical/behavioral steps tailored to the role's stack.")
+    result: str = Field(description="Measurable outcome framing without inventing unverified metrics.")
+    interviewer_focus: str = Field(description="What the hiring team is evaluating with this question.")
+    pitfalls_to_avoid: str = Field(description="Common mistakes to avoid when answering.")
+
+
+class InterviewPrepPlan(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    archetype: str = Field(default="Technical Specialist / Builder", description="Role archetype summary.")
+    cards: List[InterviewStarCardOutput] = Field(default_factory=list, description="5 tailored STAR interview flashcards.")
+
+
+interview_prep_agent = Agent(
+    get_pydantic_model(),
+    retries=2,
+    deps_type=AgentDeps,
+    output_type=InterviewPrepPlan,
+    system_prompt=(
+        "You are an Elite Career-Ops Interview Coach for DVT Talent AI. "
+        "Generate exactly 5 distinct, role-specific STAR (Situation, Task, Action, Result) interview flashcards "
+        "tailored strictly to the target Job Description, required tech stack, and the candidate's authentic background. "
+        "ZERO-FABRICATION RULE: Never invent companies, titles, technologies, or metrics that are not supported by the candidate's skills or redacted resume. "
+        "When concrete metrics are absent from the candidate's background, phrase the Result as a promptable template (e.g., '[highlight measurable latency/uptime/delivery impact]'). "
+        "Cover discipline-specific technical delivery, architecture/trade-offs, debugging/incident response, cross-functional collaboration, and growth/ownership. "
+        "Do NOT output preamble, markdown fences, or internal chain of thought."
+    ),
+)
+
+
+async def generate_interview_prep_cards(
+    job_title: str,
+    company_name: str,
+    job_description: str,
+    job_requirements: Optional[str],
+    job_skills: Optional[List[str]],
+    candidate_title: str,
+    candidate_skills: Optional[List[str]],
+    resume_text: Optional[str],
+    tenant_id: str,
+    deps: Optional[AgentDeps] = None,
+    candidate_name: Optional[str] = None,
+) -> InterviewPrepPlan:
+    """Generate 5 PII-safe, role-specific STAR interview flashcards for a candidate."""
+    import re
+
+    try:
+        from backend.services.pii_service import PIIRedactionService
+    except ImportError:
+        from services.pii_service import PIIRedactionService  # pyrefly: ignore[missing-import]  # type: ignore
+
+    effective_tenant = str((getattr(deps, "tenant_id", None) if deps is not None else tenant_id) or "").strip()
+    if not effective_tenant or effective_tenant.lower() == "default":
+        effective_tenant = "candidate-portal"
+
+    masked_resume, _ = PIIRedactionService.mask_pii((resume_text or "")[:3000])
+    if candidate_name:
+        clean_name = candidate_name.strip()
+        tokens = [clean_name] + [t for t in re.split(r"\s+", clean_name) if len(t) >= 2]
+        for tok in sorted(set(tokens), key=len, reverse=True):
+            masked_resume = re.sub(rf"\b{re.escape(tok)}\b", "[PII_REDACTED]", masked_resume, flags=re.IGNORECASE)
+    safe_resume, _ = sanitizer_service.sanitize(masked_resume)
+    safe_job_title, _ = sanitizer_service.sanitize(job_title or "Target Role")
+    safe_company, _ = sanitizer_service.sanitize(company_name or "Target Employer")
+    safe_jd, _ = sanitizer_service.sanitize((job_description or "")[:2500])
+    safe_reqs, _ = sanitizer_service.sanitize((job_requirements or "")[:1500])
+    safe_cand_title, _ = sanitizer_service.sanitize(candidate_title or "Software Engineer")
+    safe_job_skills = [
+        sanitizer_service.sanitize(str(s))[0].strip()
+        for s in (job_skills or [])
+        if str(s).strip()
+    ]
+    safe_cand_skills = [
+        sanitizer_service.sanitize(str(s))[0].strip()
+        for s in (candidate_skills or [])
+        if str(s).strip()
+    ]
+
+    prompt_parts = [
+        f"Generate 5 role-specific STAR interview flashcards for a candidate applying to '{safe_job_title}' at '{safe_company}'.",
+        f"Candidate Current Title: {safe_cand_title}",
+        f"Candidate Skills: {', '.join(safe_cand_skills) if safe_cand_skills else 'Not specified'}",
+    ]
+    if safe_job_skills:
+        prompt_parts.append(f"Job Required Skills: {', '.join(safe_job_skills)}")
+    if safe_reqs:
+        prompt_parts.append(f"Job Requirements:\n{safe_reqs}")
+    if safe_jd:
+        prompt_parts.append(f"Job Description:\n{safe_jd}")
+    if safe_resume:
+        prompt_parts.append(f"Candidate Redacted Resume Excerpt:\n{safe_resume}")
+
+    prompt = "\n\n".join(prompt_parts)
+
+    if deps is not None:
+        result = await interview_prep_agent.run(
+            prompt,
+            deps=deps,
+            model=get_pydantic_model(deps=deps),
+            model_settings={"max_tokens": 3000},
+        )
+    else:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            d = AgentDeps(http_client=client, tenant_id=effective_tenant)
+            result = await interview_prep_agent.run(
+                prompt,
+                deps=d,
+                model=get_pydantic_model(deps=d),
+                model_settings={"max_tokens": 3000},
+            )
+    return result.output

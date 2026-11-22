@@ -16,6 +16,14 @@ DISPOSABLE_DOMAINS = {
     "sharklasers.com", "yopmail.com", "trashmail.com", "dispostable.com"
 }
 
+PLACEHOLDER_DOMAINS = {
+    "sourced.dvt-talent.io",
+    "example.com",
+    "example.org",
+    "example.net",
+    "users.noreply.github.com",
+}
+
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 PHONE_REGEX = re.compile(r"^\+?[1-9]\d{1,14}$")
 
@@ -50,6 +58,14 @@ class ValidationService:
             "domain": domain,
             "disposable": False
         }
+
+    @staticmethod
+    def is_placeholder_email(email: str) -> bool:
+        """Returns True if email uses a synthetic/placeholder domain that cannot be delivered."""
+        if not email or "@" not in str(email):
+            return True
+        domain = str(email).strip().lower().split("@")[-1]
+        return domain in PLACEHOLDER_DOMAINS
 
     @staticmethod
     def normalize_phone(phone: str, default_country_code: str = "+1") -> Optional[str]:

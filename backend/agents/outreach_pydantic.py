@@ -49,6 +49,7 @@ outreach_agent = Agent(
         "You are an Elite Outreach Agent for DVT Talent AI. "
         "Your goal is to draft hyper-personalized outreach sequences that don't sound like AI. "
         "Use candidate details to build rapport and explain 'Why them' and 'Why now'. "
+        "You are strictly draft-only: never attempt to send emails or invoke external delivery tools. "
         "Do NOT output preamble, internal thoughts, or chain of reasoning text."
     ),
 )
@@ -105,13 +106,12 @@ async def _verify_tenant_candidate_ownership(tenant_id: str, clean_email: str) -
         return True, None
 
 
-@outreach_agent.tool
 async def push_to_smartlead_campaign(
     ctx: RunContext[AgentDeps], candidate_email: str, subject: str, body: str
 ) -> Union[str, Dict[str, Any]]:
     """
-    Pushes the personalized outreach sequence to Smartlead/Instantly for safe, multi-domain sending.
-    VC FIX: Domain rotation prevents the agency's primary @enterprise.com domain from being blacklisted.
+    Internal helper (NOT registered as an LLM tool) to push an explicitly human-approved
+    outreach sequence to Smartlead/Instantly for safe, multi-domain sending.
     """
     email_check = validation_service.validate_email(candidate_email)
     if not email_check.get("valid"):
