@@ -187,17 +187,34 @@ _TENANT_KEYS_TTL_SECONDS = 60.0
 
 
 def invalidate_tenant_keys_cache(tenant_id: Optional[str]) -> None:
-    """Clears cached BYOK credentials for a tenant after key updates."""
+    """Clears local cached BYOK credentials for a tenant."""
     if not tenant_id:
         return
     _TENANT_KEYS_CACHE.pop(str(tenant_id).strip(), None)
 
 
+async def invalidate_tenant_keys_cache_async(tenant_id: Optional[str]) -> None:
+    """Clears cached BYOK credentials for a tenant in both local memory and Redis."""
+    if not tenant_id:
+        return
+    clean_tid = str(tenant_id).strip()
+    _TENANT_KEYS_CACHE.pop(clean_tid, None)
+    try:
+        try:
+            from services.redis_service import cache_delete
+        except ImportError:
+            from backend.services.redis_service import cache_delete  # pyrefly: ignore[missing-import]  # type: ignore
+        await cache_delete(f"tenant:{clean_tid}:team_keys")
+    except Exception:  # noqa: S110
+        pass
+
+
 async def resolve_tenant_api_keys(tenant_id: Optional[str]) -> Dict[str, Optional[str]]:
     """
-    Fetches and decrypts per-tenant TeamApiKeys (LLM + Serper + Monster/Dice) with a 60s TTL cache.
-    Shared across AgentOrchestrator, Celery workers, and API routes.
+    Fetches and decrypts per-tenant TeamApiKeys (LLM + Serper + Monster/Dice) with a 60s TTL cache
+    backed by AES-encrypted Redis storage (shared across workers) + local in-memory fallback.
     """
+    import json
     import time
     import uuid as _uuid
 
@@ -216,7 +233,28 @@ async def resolve_tenant_api_keys(tenant_id: Optional[str]) -> Dict[str, Optiona
         return keys_dict
 
     cache_key = str(tenant_uuid)
+    redis_key = f"tenant:{cache_key}:team_keys"
     now = time.monotonic()
+
+    try:
+        try:
+            from services.redis_service import cache_get_text, cache_set_text
+            from services.security_service import decrypt_pii, encrypt_pii
+        except ImportError:
+            from backend.services.redis_service import cache_get_text, cache_set_text  # pyrefly: ignore[missing-import]  # type: ignore
+            from backend.services.security_service import decrypt_pii, encrypt_pii  # pyrefly: ignore[missing-import]  # type: ignore
+
+        redis_blob = await cache_get_text(redis_key)
+        if redis_blob:
+            parsed = json.loads(decrypt_pii(redis_blob))
+            if isinstance(parsed, dict):
+                merged = {k: parsed.get(k) for k in keys_dict}
+                _TENANT_KEYS_CACHE[cache_key] = (now, dict(merged))
+                return merged
+    except Exception:  # noqa: S110
+        cache_set_text = None  # type: ignore[assignment]
+        encrypt_pii = None  # type: ignore[assignment]
+
     cached = _TENANT_KEYS_CACHE.get(cache_key)
     if cached and (now - cached[0]) < _TENANT_KEYS_TTL_SECONDS:
         return dict(cached[1])
@@ -225,11 +263,11 @@ async def resolve_tenant_api_keys(tenant_id: Optional[str]) -> Dict[str, Optiona
         from sqlalchemy import select
 
         try:
-            from backend.db.models import AsyncSessionLocal, Team, TeamApiKeys
-            from backend.services.security_service import decrypt_pii
+            from db.models import AsyncSessionLocal, Team, TeamApiKeys
+            from services.security_service import decrypt_pii as _decrypt_pii
         except ImportError:
-            from db.models import AsyncSessionLocal, Team, TeamApiKeys  # pyrefly: ignore[missing-import]  # type: ignore
-            from services.security_service import decrypt_pii  # pyrefly: ignore[missing-import]  # type: ignore
+            from backend.db.models import AsyncSessionLocal, Team, TeamApiKeys  # pyrefly: ignore[missing-import]  # type: ignore
+            from backend.services.security_service import decrypt_pii as _decrypt_pii  # pyrefly: ignore[missing-import]  # type: ignore
 
         async with AsyncSessionLocal() as session:
             stmt = (
@@ -243,8 +281,11 @@ async def resolve_tenant_api_keys(tenant_id: Optional[str]) -> Dict[str, Optiona
                 for field in ("openai_key", "serper_key", "anthropic_key", "monster_api_key", "dice_api_key"):
                     raw_val = getattr(keys, field, None)
                     if raw_val:
-                        keys_dict[field] = decrypt_pii(str(raw_val))
+                        keys_dict[field] = _decrypt_pii(str(raw_val))
         _TENANT_KEYS_CACHE[cache_key] = (now, dict(keys_dict))
+        if cache_set_text is not None and encrypt_pii is not None:
+            encrypted_blob = encrypt_pii(json.dumps(keys_dict))
+            await cache_set_text(redis_key, encrypted_blob, ttl_seconds=int(_TENANT_KEYS_TTL_SECONDS))
     except Exception:  # noqa: S110
         pass
 

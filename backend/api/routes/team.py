@@ -780,8 +780,8 @@ async def save_team_api_keys(
         
     await db.commit()
 
-    from agents.pydantic_config import invalidate_tenant_keys_cache
-    invalidate_tenant_keys_cache(str(team.tenant_id))
+    from agents.pydantic_config import invalidate_tenant_keys_cache_async
+    await invalidate_tenant_keys_cache_async(str(team.tenant_id))
 
     return {"status": "saved", "message": "Team API keys saved and encrypted successfully"}
 

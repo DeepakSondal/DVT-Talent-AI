@@ -521,3 +521,47 @@ async def consume_oauth_link_nonce(nonce: str) -> Optional[str]:
         if now > expires_at:
             return None
         return payload_json
+
+
+async def cache_get_text(key: str) -> Optional[str]:
+    """Read a string value from Redis if online, returning None on miss or circuit-breaker open."""
+    client = get_redis_client()
+    if not client:
+        return None
+    try:
+        val = await client.get(key)
+        if val is None:
+            return None
+        return val.decode("utf-8") if isinstance(val, bytes) else str(val)
+    except Exception:
+        _circuit_state["available"] = False
+        _circuit_state["last_checked"] = time.time()
+        return None
+
+
+async def cache_set_text(key: str, value: str, ttl_seconds: int = 300) -> bool:
+    """Write a string value with TTL to Redis if online; silently returns False when offline."""
+    client = get_redis_client()
+    if not client:
+        return False
+    try:
+        await client.setex(key, max(1, int(ttl_seconds)), value)
+        return True
+    except Exception:
+        _circuit_state["available"] = False
+        _circuit_state["last_checked"] = time.time()
+        return False
+
+
+async def cache_delete(key: str) -> bool:
+    """Delete a cache key from Redis if online."""
+    client = get_redis_client()
+    if not client:
+        return False
+    try:
+        await client.delete(key)
+        return True
+    except Exception:
+        _circuit_state["available"] = False
+        _circuit_state["last_checked"] = time.time()
+        return False
