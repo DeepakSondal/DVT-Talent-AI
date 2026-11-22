@@ -46,24 +46,23 @@ def _get_sourcing_cache(raw_key: str, tenant_id: str) -> Optional[str]:
     safe_tenant = (tenant_id or "").strip()
     if not safe_tenant or safe_tenant.lower() == "default":
         return None
-    q_hash = hashlib.md5(raw_key.encode(), usedforsecurity=False).hexdigest()
-    local_k = f"{safe_tenant}:{q_hash}"
-    if local_k in _LOCAL_SOURCING_CACHE:
-        return _LOCAL_SOURCING_CACHE[local_k]
+    q_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+    local_k = f"tenant:{safe_tenant}:sourcing:{q_hash}"
     cached = _get_cache(q_hash, tenant_id=safe_tenant)
     if cached:
         if len(_LOCAL_SOURCING_CACHE) >= 256:
             _LOCAL_SOURCING_CACHE.pop(next(iter(_LOCAL_SOURCING_CACHE)), None)
         _LOCAL_SOURCING_CACHE[local_k] = cached
-    return cached
+        return cached
+    return _LOCAL_SOURCING_CACHE.get(local_k)
 
 
 def _set_sourcing_cache(raw_key: str, value: str, tenant_id: str, ttl_seconds: int = 3600) -> None:
     safe_tenant = (tenant_id or "").strip()
     if not safe_tenant or safe_tenant.lower() == "default":
         return
-    q_hash = hashlib.md5(raw_key.encode(), usedforsecurity=False).hexdigest()
-    local_k = f"{safe_tenant}:{q_hash}"
+    q_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+    local_k = f"tenant:{safe_tenant}:sourcing:{q_hash}"
     if len(_LOCAL_SOURCING_CACHE) >= 256:
         _LOCAL_SOURCING_CACHE.pop(next(iter(_LOCAL_SOURCING_CACHE)), None)
     _LOCAL_SOURCING_CACHE[local_k] = value

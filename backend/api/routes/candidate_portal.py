@@ -812,9 +812,17 @@ async def generate_interview_prep(
         raise HTTPException(status_code=404, detail="Job requisition not found")
 
     tenant_scope = str(job.tenant_id or cand.tenant_id or "portal")
-    cache_key = f"{tenant_scope}:{cand.id}:{job.id}"
+    cache_key = f"tenant:{tenant_scope}:interview_prep:{cand.id}:{job.id}"
     now = time.monotonic()
     if not refresh:
+        from services.redis_service import cache_get_text
+
+        redis_cached = await cache_get_text(cache_key)
+        if redis_cached:
+            try:
+                return InterviewPrepResponse.model_validate_json(redis_cached)
+            except Exception:  # noqa: S110
+                pass
         cached = _INTERVIEW_PREP_CACHE.get(cache_key)
         if cached and (now - cached[0]) < _INTERVIEW_PREP_CACHE_TTL_SECONDS:
             return cached[1]
@@ -873,6 +881,13 @@ async def generate_interview_prep(
             if len(_INTERVIEW_PREP_CACHE) >= _INTERVIEW_PREP_CACHE_MAX_SIZE:
                 _INTERVIEW_PREP_CACHE.pop(next(iter(_INTERVIEW_PREP_CACHE)), None)
             _INTERVIEW_PREP_CACHE[cache_key] = (now, response)
+            from services.redis_service import cache_set_text
+
+            await cache_set_text(
+                cache_key,
+                response.model_dump_json(),
+                ttl_seconds=int(_INTERVIEW_PREP_CACHE_TTL_SECONDS),
+            )
             return response
     except Exception as exc:
         log.warning("interview_prep_ai_fallback", error=str(exc), job_id=str(job_id))
