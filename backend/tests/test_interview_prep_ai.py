@@ -7,6 +7,7 @@ Unit tests for AI-Powered Candidate Portal Interview Prep:
 """
 import uuid
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,7 +36,7 @@ def _make_fake_cards(count: int = 5, prefix: str = "AI") -> list[InterviewStarCa
 @pytest.mark.asyncio
 async def test_generate_interview_prep_cards_redacts_pii_and_injection():
     """Test 1: PII (email/phone) and prompt injection are stripped before reaching interview_prep_agent."""
-    captured = []
+    captured: list[dict[str, Any]] = []
 
     async def _fake_run(prompt, deps=None, model=None, model_settings=None, **kwargs):
         captured.append({"prompt": str(prompt), "model_settings": model_settings})
@@ -93,7 +94,7 @@ async def test_interview_prep_endpoint_caches_and_supports_refresh():
         is_active=True,
         is_published=True,
     )
-    fake_user = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id)
+    fake_user: Any = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id)
 
     def _build_db():
         db = AsyncMock()
@@ -169,7 +170,7 @@ async def test_interview_prep_endpoint_graceful_fallback_on_llm_error():
         resp = await candidate_portal.generate_interview_prep(
             job_id=job_id,
             refresh=False,
-            current_user=SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id),
+            current_user=cast(Any, SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id)),
             db=db,
         )
 

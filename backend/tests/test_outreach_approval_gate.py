@@ -7,6 +7,7 @@ Unit tests for the Outreach Human Approval Gate:
 """
 import uuid
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -79,6 +80,7 @@ async def test_persist_outreach_campaign_saves_draft_and_pending_ledger_without_
     assert len(ledgers) == 1
     assert ledgers[0].decision_type == "outreach_approval"
     assert ledgers[0].human_action == "PENDING_REVIEW"
+    assert ledgers[0].evidence_signals is not None
     assert ledgers[0].evidence_signals["email_sent_id"] == str(drafts[0].id)
 
 
@@ -86,7 +88,7 @@ async def test_persist_outreach_campaign_saves_draft_and_pending_ledger_without_
 async def test_approval_override_dispatches_valid_email_and_blocks_placeholder():
     """Test 3: Approving a valid outreach draft sends it; approving a placeholder domain fails closed (400)."""
     tenant_id = uuid.uuid4()
-    reviewer = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id, role=UserRole.RECRUITER)
+    reviewer: Any = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id, role=UserRole.RECRUITER)
     email_id = uuid.uuid4()
     cand_id = uuid.uuid4()
 
@@ -210,7 +212,7 @@ async def test_approval_override_dispatches_valid_email_and_blocks_placeholder()
 async def test_approval_override_blocks_gdpr_erased_candidate():
     """Test 4: Approving outreach for a GDPR-erased candidate fails closed with HTTP 400."""
     tenant_id = uuid.uuid4()
-    reviewer = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id, role=UserRole.ADMIN)
+    reviewer: Any = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id, role=UserRole.ADMIN)
     cand_id = uuid.uuid4()
     email_id = uuid.uuid4()
 
@@ -254,7 +256,7 @@ async def test_approval_override_blocks_gdpr_erased_candidate():
 async def test_rejecting_outreach_draft_preserves_candidate_status():
     """Test 5: Cancelling an outreach draft must not overwrite the candidate's existing pipeline status."""
     tenant_id = uuid.uuid4()
-    reviewer = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id, role=UserRole.RECRUITER)
+    reviewer: Any = SimpleNamespace(id=uuid.uuid4(), tenant_id=tenant_id, role=UserRole.RECRUITER)
     cand_id = uuid.uuid4()
     email_id = uuid.uuid4()
 
