@@ -46,6 +46,7 @@ export default function SwarmCommandCenter() {
     const [targetLocation, setTargetLocation] = useState("San Francisco, CA");
     const [sourcingChannels, setSourcingChannels] = useState<string[]>(["internal", "github", "stackoverflow", "web"]);
     const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+    const [failedTaskId, setFailedTaskId] = useState<string | null>(null);
     const [pollCount, setPollCount] = useState(0);
     const [logs, setLogs] = useState<string[]>([
         "AI agent pipeline connected via real-time WebSocket.",
@@ -125,8 +126,30 @@ export default function SwarmCommandCenter() {
     useEffect(() => {
         if (!activeTaskId || !taskStatusData) return;
         const currentStatus = taskStatusData?.status || "running";
+        const checkpoint: string | null = taskStatusData?.current_checkpoint || null;
+
+        if (checkpoint === "discovery_complete") {
+            setProgress((p) => Math.max(p, 35));
+            updateAgentStatus("discovery", "success");
+            updateAgentStatus("sourcing", "thinking");
+        } else if (checkpoint === "sourcing_complete") {
+            setProgress((p) => Math.max(p, 60));
+            updateAgentStatus("discovery", "success");
+            updateAgentStatus("sourcing", "success");
+            updateAgentStatus("critic", "thinking");
+        } else if (checkpoint === "critic_complete") {
+            setProgress((p) => Math.max(p, 80));
+            updateAgentStatus("critic", "success");
+            updateAgentStatus("outreach", "thinking");
+            updateAgentStatus("analytics", "thinking");
+            updateAgentStatus("screening", "thinking");
+        } else if (checkpoint === "post_complete") {
+            setProgress((p) => Math.max(p, 95));
+        }
+
         if (currentStatus === "completed") {
             setActiveTaskId(null);
+            setFailedTaskId(null);
             setAgents(prev => prev.map(a => a.enabled ? { ...a, status: "success" } : a));
             setStatus("complete");
             setProgress(100);
@@ -135,35 +158,35 @@ export default function SwarmCommandCenter() {
                 description: `Sourced and screened candidates for '${targetRole}'. Candidates saved to Candidate Pipeline.`
             });
         } else if (currentStatus === "failed") {
+            const failedId = activeTaskId;
             setActiveTaskId(null);
+            setFailedTaskId(failedId);
             setStatus("idle");
-            setProgress(0);
-            setLogs(prev => [...prev, `[ERROR] Task ${activeTaskId.slice(0, 8)} failed: ${taskStatusData?.error || "Execution error"}`]);
+            setLogs(prev => [...prev, `[ERROR] Task ${failedId.slice(0, 8)} failed at checkpoint '${checkpoint || "start"}': ${taskStatusData?.error || "Execution error"}`]);
             toast.error(taskStatusData?.error || "Swarm pipeline execution failed.");
-        } else if (pollCount === 1 && currentStatus === "running") {
-            if (agents.find(a => a.id === "screening")?.enabled) updateAgentStatus("screening", "thinking");
-            setProgress(60);
-            setLogs(prev => [...prev, `[PIPELINE] Task ${activeTaskId.slice(0, 8)} executing sourcing and screening stages...`]);
-        } else if (pollCount >= 20) {
+        } else if (pollCount >= 40) {
             setActiveTaskId(null);
             setLogs(prev => [...prev, `[PIPELINE] Task ${activeTaskId.slice(0, 8)} is continuing asynchronously in the background.`]);
         }
-    }, [activeTaskId, taskStatusData, pollCount, targetRole, agents, updateAgentStatus]);
+    }, [activeTaskId, taskStatusData, pollCount, targetRole, updateAgentStatus]);
 
     const runSwarmMutation = useMutation({
-        mutationFn: () =>
-            agentsApi.runSwarm({
+        mutationFn: () => {
+            const enabledStageIds = agents.filter(a => a.enabled).map(a => a.id);
+            return agentsApi.runSwarm({
                 industry: targetRole,
                 location: targetLocation,
                 mock_mode: false,
                 require_approval: requireApproval,
                 sources: sourcingChannels,
-            }),
+                enable_screening: enabledStageIds.includes("screening"),
+                enabled_stages: enabledStageIds,
+            });
+        },
         onSuccess: (res) => {
+            setFailedTaskId(null);
             setLogs(prev => [...prev, `✓ Swarm Dispatched: Task ${res?.task_id ? res.task_id.slice(0, 8) : "active"} queued on backend orchestrator.`]);
-            setProgress(35);
-            if (agents.find(a => a.id === "discovery")?.enabled) updateAgentStatus("discovery", "success");
-            if (agents.find(a => a.id === "sourcing")?.enabled) updateAgentStatus("sourcing", "thinking");
+            setProgress(20);
             if (res?.task_id) {
                 setPollCount(0);
                 setActiveTaskId(res.task_id);
@@ -177,6 +200,21 @@ export default function SwarmCommandCenter() {
         onError: (e: any) => {
             setStatus("idle");
             toast.error(e?.response?.data?.detail || "Could not initiate recruitment pipeline.");
+        },
+    });
+
+    const resumeSwarmMutation = useMutation({
+        mutationFn: (taskId: string) => agentsApi.resumeSwarm(taskId),
+        onSuccess: (res, taskId) => {
+            setFailedTaskId(null);
+            setStatus("running");
+            setPollCount(0);
+            setActiveTaskId(taskId);
+            setLogs(prev => [...prev, `[PIPELINE] Resuming Task ${taskId.slice(0, 8)} from checkpoint '${res?.resumed_from_checkpoint || "start"}'...`]);
+            toast.info("Resuming pipeline from last saved checkpoint...");
+        },
+        onError: (e: any) => {
+            toast.error(e?.response?.data?.detail || "Could not resume failed task.");
         },
     });
 
@@ -235,6 +273,17 @@ export default function SwarmCommandCenter() {
                 </div>
 
                 <div className="relative z-10 flex flex-wrap items-center gap-4 shrink-0">
+                    {failedTaskId && status !== "running" && (
+                        <Button
+                            onClick={() => resumeSwarmMutation.mutate(failedTaskId)}
+                            disabled={resumeSwarmMutation.isPending}
+                            variant="outline"
+                            className="h-12 px-6 rounded-2xl border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-black text-[11px] whitespace-nowrap"
+                        >
+                            <RefreshCcw className="w-4 h-4 mr-2" />
+                            Resume from Checkpoint
+                        </Button>
+                    )}
                     <Button 
                         onClick={runAutopilot}
                         disabled={status === "running"}

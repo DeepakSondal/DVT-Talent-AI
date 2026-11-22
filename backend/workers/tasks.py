@@ -10,7 +10,7 @@ import time
 import urllib.parse
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import redis
 import structlog
@@ -209,20 +209,54 @@ def run_full_autonomous_pipeline(
     send_emails: bool = False,
     mock_mode: bool = False,
     tenant_id: Optional[str] = None,
+    enable_screening: bool = False,
+    enabled_stages: Optional[List[str]] = None,
+    sources: Optional[List[str]] = None,
+    require_uploaded_resume: bool = False,
+    task_id: Optional[str] = None,
+    resume_from_stages: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Run the complete end-to-end 5-agent pipeline"""
+    """Run the checkpointed end-to-end 5/6-agent pipeline"""
     safe_tenant_id = _require_tenant_uuid(tenant_id)
     safe_industry, _ = sanitizer_service.sanitize(industry or "")
     safe_location, _ = sanitizer_service.sanitize(location or "")
-    log.info("celery_task_started", task="full_pipeline", industry=safe_industry, tenant_id=safe_tenant_id)
+    log.info("celery_task_started", task="full_pipeline", industry=safe_industry, tenant_id=safe_tenant_id, task_id=task_id)
     try:
         orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
         broadcast_signal(f"Initiating full swarm for {safe_industry} in {safe_location}...", "swarm_start", tenant_id=safe_tenant_id)
         result = asyncio.run(orchestrator.run_full_pipeline(
             industry=safe_industry,
             location=safe_location,
-            mock_mode=mock_mode
+            enable_screening=enable_screening,
+            mock_mode=mock_mode,
+            sources=sources,
+            require_uploaded_resume=require_uploaded_resume,
+            enabled_stages=enabled_stages,
+            task_id=task_id,
+            resume_from_stages=resume_from_stages,
         ))
+        if task_id:
+            async def _finalize_task() -> None:
+                from datetime import datetime, timezone
+
+                from db.models import AgentTask, AgentTaskStatus, AsyncSessionLocal
+
+                async with AsyncSessionLocal() as session:
+                    t_row = await session.get(AgentTask, uuid.UUID(str(task_id)))
+                    if t_row and str(t_row.tenant_id) == safe_tenant_id:
+                        setattr(t_row, "output_data", result)
+                        setattr(t_row, "completed_at", datetime.now(timezone.utc))
+                        if result.get("error"):
+                            setattr(t_row, "status", AgentTaskStatus.FAILED)
+                            setattr(t_row, "error_message", str(result["error"]))
+                        else:
+                            setattr(t_row, "status", AgentTaskStatus.COMPLETED)
+                        await session.commit()
+
+            try:
+                asyncio.run(_finalize_task())
+            except Exception as fin_exc:
+                log.warning("finalize_agent_task_failed", task_id=task_id, error=str(fin_exc))
         log.info("celery_task_completed", task="full_pipeline")
         return result
     except SoftTimeLimitExceeded as exc:
