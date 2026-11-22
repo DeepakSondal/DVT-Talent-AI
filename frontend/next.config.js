@@ -1,14 +1,24 @@
 /** @type {import('next').NextConfig} */
 const isProd = process.env.NODE_ENV === "production";
+const backendOrigin = (process.env.BACKEND_API_URL || process.env.INTERNAL_API_URL || "http://127.0.0.1:8000")
+  .replace(/\/api\/v1\/?$/, "")
+  .replace(/\/$/, "");
 
 const nextConfig = {
   output: "standalone",
   serverExternalPackages: ["axios"],
   env: {
-    NEXT_PUBLIC_API_URL:
-      process.env.NEXT_PUBLIC_API_URL || (isProd ? "" : "http://localhost:8000/api/v1"),
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "/api/v1",
     NEXT_PUBLIC_WS_URL:
       process.env.NEXT_PUBLIC_WS_URL || (isProd ? "" : "ws://localhost:8000/api/v1/ws"),
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${backendOrigin}/api/v1/:path*`,
+      },
+    ];
   },
   async headers() {
     return [

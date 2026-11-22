@@ -12,7 +12,12 @@ from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.rate_limit import enforce_endpoint_rate_limit, get_real_client_ip
-from api.routes.auth import create_access_token, get_current_user, hash_password
+from api.routes.auth import (
+    create_access_token,
+    create_refresh_token,
+    get_current_user,
+    hash_password,
+)
 from config import settings
 from db.models import (
     Candidate,
@@ -538,6 +543,7 @@ async def accept_team_invitation(
         "tenant_id": str(new_user.tenant_id),
     }
     access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token(token_data)
 
     content = {
         "status": "success",
@@ -557,7 +563,17 @@ async def accept_team_invitation(
         key="dvt_token",
         value=f"Bearer {access_token}",
         httponly=True,
+        path="/",
         max_age=settings.access_token_expire_minutes * 60,
+        samesite="lax",
+        secure=settings.is_production,
+    )
+    response.set_cookie(
+        key="dvt_refresh_token",
+        value=refresh_token,
+        httponly=True,
+        path="/",
+        max_age=30 * 24 * 60 * 60,
         samesite="lax",
         secure=settings.is_production,
     )

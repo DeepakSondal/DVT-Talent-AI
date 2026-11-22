@@ -10,49 +10,41 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 const http: AxiosInstance = axios.create({
   baseURL: API_BASE,
   timeout: 30000,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    "X-Requested-With": "XMLHttpRequest",
+  },
   withCredentials: true,
 });
 
-// Request interceptor: attach JWT bearer token if present in localStorage
-http.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("dvt_token");
-    if (token) {
-      const finalToken = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
-      config.headers.Authorization = finalToken;
-    }
-  }
-  return config;
-});
+let refreshPromise: Promise<boolean> | null = null;
 
-let refreshPromise: Promise<string | null> | null = null;
-
-async function attemptSilentRefresh(): Promise<string | null> {
+async function attemptSilentRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = axios
-    .post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true, timeout: 10000 })
-    .then((res) => {
-      const newToken: string | undefined = res.data?.access_token;
-      if (newToken && typeof window !== "undefined") {
-        localStorage.setItem("dvt_token", newToken);
-        if (res.data?.tenant_id) {
-          localStorage.setItem("tenant_id", res.data.tenant_id);
-        }
-        const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
-        document.cookie = `dvt_token=${newToken}; path=/; max-age=86400; SameSite=Strict${isSecure}`;
-        return newToken;
+    .post(
+      `${API_BASE}/auth/refresh`,
+      {},
+      {
+        withCredentials: true,
+        timeout: 10000,
+        headers: { "X-Requested-With": "XMLHttpRequest" },
       }
-      return null;
+    )
+    .then((res) => {
+      if (typeof window !== "undefined" && res.data?.tenant_id) {
+        localStorage.setItem("tenant_id", res.data.tenant_id);
+      }
+      return Boolean(res.status >= 200 && res.status < 300);
     })
-    .catch(() => null)
+    .catch(() => false)
     .finally(() => {
       refreshPromise = null;
     });
   return refreshPromise;
 }
 
-// Response interceptor: attempt silent refresh on 401 before invalidating session
+// Response interceptor: attempt silent HttpOnly cookie refresh on 401 before invalidating session
 http.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -65,9 +57,8 @@ http.interceptors.response.use(
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
-      const refreshedToken = await attemptSilentRefresh();
-      if (refreshedToken) {
-        originalRequest.headers.Authorization = `Bearer ${refreshedToken}`;
+      const refreshed = await attemptSilentRefresh();
+      if (refreshed) {
         return http(originalRequest);
       }
     }
@@ -76,8 +67,6 @@ http.interceptors.response.use(
       if (typeof window !== "undefined") {
         localStorage.removeItem("dvt_token");
         localStorage.removeItem("tenant_id");
-        document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Lax";
-        document.cookie = "dvt_refresh_token=; path=/; max-age=0; SameSite=Lax";
         if (!window.location.pathname.startsWith("/auth/")) {
           window.location.href = "/auth/login";
         }

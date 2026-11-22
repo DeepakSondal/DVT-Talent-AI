@@ -110,11 +110,12 @@ function AcceptInvitationContent() {
         full_name: fullName.trim(),
       });
 
-      // Securely store authentication session (standard JWT auth)
+      // Session is authenticated via backend-set HttpOnly dvt_token & dvt_refresh_token cookies
       if (typeof window !== "undefined") {
-        localStorage.setItem("dvt_token", res.access_token);
-        const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
-        document.cookie = `dvt_token=${res.access_token}; path=/; max-age=86400; SameSite=Strict${isSecure}`;
+        localStorage.removeItem("dvt_token");
+        if (res?.user?.tenant_id) {
+          localStorage.setItem("tenant_id", res.user.tenant_id);
+        }
       }
 
       setIsSuccess(true);

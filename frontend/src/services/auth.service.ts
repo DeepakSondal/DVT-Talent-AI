@@ -6,14 +6,13 @@ import type { LoginCredentials, AuthResponse, UserOut } from "@/types";
 
 function persistAuthSession(data: AuthResponse) {
   if (typeof window === "undefined") return;
-  localStorage.setItem("dvt_token", data.access_token);
+  // Tokens are stored strictly in HttpOnly cookies set by the backend; never persist JWTs in localStorage.
+  localStorage.removeItem("dvt_token");
   if (data.tenant_id) {
     localStorage.setItem("tenant_id", data.tenant_id);
   } else {
     localStorage.removeItem("tenant_id");
   }
-  const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `dvt_token=${data.access_token}; path=/; max-age=86400; SameSite=Strict${isSecure}`;
 }
 
 export const authService = {
@@ -64,8 +63,6 @@ export const authService = {
       if (typeof window !== "undefined") {
         localStorage.removeItem("dvt_token");
         localStorage.removeItem("tenant_id");
-        document.cookie = "dvt_token=; path=/; max-age=0; SameSite=Lax";
-        document.cookie = "dvt_refresh_token=; path=/; max-age=0; SameSite=Lax";
       }
     }
   },
