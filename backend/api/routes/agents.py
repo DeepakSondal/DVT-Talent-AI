@@ -377,10 +377,10 @@ async def fast_sourcing(
     if req.sources and any(s in {"monster", "dice"} for s in req.sources):
         import httpx
 
-        from agents.pydantic_config import AgentDeps
+        from agents.pydantic_config import build_tenant_agent_deps
 
         async with httpx.AsyncClient() as client:
-            deps = AgentDeps(http_client=client, tenant_id=str(tenant_uuid))
+            deps = await build_tenant_agent_deps(client, str(tenant_uuid))
             board_signals = await prefetch_all_sourcing_signals(
                 deps,
                 keywords,
