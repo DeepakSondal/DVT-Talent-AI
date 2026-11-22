@@ -4,6 +4,15 @@ All notable changes and architectural refactorings are documented in this file.
 
 ---
 
+## [2.1.0] — 2026-11-22
+### Checkpointed Swarm Orchestration, Outreach Approval Gate & AI Interview Prep
+- **Checkpointed Swarm Orchestrator (PR #18):** Persists stage checkpoints (`discovery_complete` → `sourcing_complete` → `critic_complete` → `post_complete`) in `AgentTask`, supports resuming failed runs via `POST /api/v1/agents/swarm/{task_id}/resume`, wires UI stage toggles (`enabled_stages`, `enable_screening`) through Celery and FastAPI, and drives Swarm UI progress from real checkpoints.
+- **Outreach Human Approval Gate (PR #17):** Made `outreach_agent` strictly draft-only, persisted `PENDING_REVIEW` `AIDecisionLedger` entries instead of auto-sending, added fail-closed placeholder/disposable/GDPR-erasure guards at approval time, and enforced idempotent dispatch claiming (`SCHEDULED` → `SENT`).
+- **AI-Powered Candidate Portal Interview Prep (PR #17):** Replaced static STAR cards with 5 role- and resume-grounded AI flashcards with PII + candidate-name redaction, per-candidate/job caching (`?refresh=true`), and deterministic fallback.
+- **Database, Vector & Security Hardening (PRs #12–#16):** Migrated ORM models to SQLAlchemy 2.0 `Mapped` syntax, removed legacy ChromaDB code, enforced Pyrefly + Ruff + Trivy + pip-audit in CI, and modernized dashboard routes to Next.js 15 Server Components + TanStack Query.
+
+---
+
 ## [2.0.0] — 2026-10-18
 ### Major Product Pivot: Dual-Sided AI Recruitment & Candidate Platform (Career-Ops Integration)
 **Architected & Refactored by:** Principal Product Architect, Senior Full-Stack Engineer, Application Security Engineer
