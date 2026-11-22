@@ -74,6 +74,8 @@ class PipelineTrigger(BaseModel):
     mock_mode: bool = False
     sources: Optional[List[str]] = None
     require_uploaded_resume: bool = False
+    enable_screening: bool = False
+    enabled_stages: Optional[List[str]] = None
 
 
 class FastSourcingRequest(BaseModel):
@@ -189,9 +191,12 @@ async def run_swarm_pipeline(
         res = await orchestrator.run_full_swarm(
             industry=safe_industry,
             location=safe_location,
+            enable_screening=config.enable_screening,
             mock_mode=config.mock_mode,
             sources=config.sources,
             require_uploaded_resume=config.require_uploaded_resume,
+            enabled_stages=config.enabled_stages,
+            task_id=str(task_id),
         )
         async with AsyncSessionLocal() as session:
             t_row = await session.get(AgentTask, task_id)
@@ -219,6 +224,11 @@ async def run_swarm_pipeline(
             send_emails=config.send_emails,
             mock_mode=config.mock_mode,
             tenant_id=str(tenant_uuid),
+            enable_screening=config.enable_screening,
+            enabled_stages=config.enabled_stages,
+            sources=config.sources,
+            require_uploaded_resume=config.require_uploaded_resume,
+            task_id=str(task_id),
         )
         if dispatched:
             agent_task.celery_task_id = dispatched.id
@@ -238,6 +248,110 @@ async def run_swarm_pipeline(
         "status": "active",
         "task_id": str(task_id),
         "mock": config.mock_mode,
+    }
+
+
+@router.post("/swarm/{task_id}/resume")
+async def resume_swarm_pipeline(
+    task_id: uuid.UUID,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Resume a failed or interrupted swarm AgentTask from its last saved checkpoint."""
+    tenant_uuid = await _enforce_agent_rate_limit(request, current_user)
+    task = await db.get(AgentTask, task_id)
+    if not task or task.tenant_id != tenant_uuid:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.status in (AgentTaskStatus.COMPLETED, AgentTaskStatus.RUNNING):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot resume task in status '{getattr(task.status, 'value', str(task.status))}'.",
+        )
+
+    input_data = task.input_data if isinstance(task.input_data, dict) else {}
+    output_data = task.output_data if isinstance(task.output_data, dict) else {}
+    saved_stages = output_data.get("stages") if isinstance(output_data.get("stages"), dict) else {}
+
+    safe_industry = _sanitize_input(str(input_data.get("industry") or "technology"))
+    safe_location = _sanitize_input(str(input_data.get("location") or "United States"))
+    mock_mode = bool(input_data.get("mock_mode", False))
+    sources = input_data.get("sources")
+    require_uploaded_resume = bool(input_data.get("require_uploaded_resume", False))
+    enable_screening = bool(input_data.get("enable_screening", False))
+    enabled_stages = input_data.get("enabled_stages")
+
+    setattr(task, "status", AgentTaskStatus.RUNNING)
+    setattr(task, "error_message", None)
+    setattr(task, "completed_at", None)
+    setattr(task, "retries", int(task.retries or 0) + 1)
+    await db.commit()
+
+    from agents.orchestrator import AgentOrchestrator
+    from db.models import AsyncSessionLocal
+    from workers.tasks import (
+        is_celery_broker_available,
+        run_full_autonomous_pipeline,
+        safe_dispatch_task,
+    )
+
+    if is_celery_broker_available():
+        dispatched = safe_dispatch_task(
+            run_full_autonomous_pipeline,
+            industry=safe_industry,
+            location=safe_location,
+            send_emails=bool(input_data.get("send_emails", False)),
+            mock_mode=mock_mode,
+            tenant_id=str(tenant_uuid),
+            enable_screening=enable_screening,
+            enabled_stages=enabled_stages,
+            sources=sources,
+            require_uploaded_resume=require_uploaded_resume,
+            task_id=str(task_id),
+            resume_from_stages=saved_stages,
+        )
+        if dispatched:
+            task.celery_task_id = dispatched.id
+            await db.commit()
+            return {
+                "message": "Swarm pipeline resumed via Celery",
+                "status": "active",
+                "task_id": str(task_id),
+                "resumed_from_checkpoint": task.current_checkpoint,
+            }
+
+    async def _resume_and_persist():
+        orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
+        res = await orchestrator.run_full_swarm(
+            industry=safe_industry,
+            location=safe_location,
+            enable_screening=enable_screening,
+            mock_mode=mock_mode,
+            sources=sources,
+            require_uploaded_resume=require_uploaded_resume,
+            enabled_stages=enabled_stages,
+            task_id=str(task_id),
+            resume_from_stages=saved_stages,
+        )
+        async with AsyncSessionLocal() as session:
+            t_row = await session.get(AgentTask, task_id)
+            if t_row:
+                setattr(t_row, "output_data", res)
+                setattr(t_row, "completed_at", datetime.now(timezone.utc))
+                if res.get("error"):
+                    setattr(t_row, "status", AgentTaskStatus.FAILED)
+                    setattr(t_row, "error_message", str(res["error"]))
+                else:
+                    setattr(t_row, "status", AgentTaskStatus.COMPLETED)
+                await session.commit()
+
+    background_tasks.add_task(_resume_and_persist)
+    return {
+        "message": "Swarm pipeline resumed from checkpoint",
+        "status": "active",
+        "task_id": str(task_id),
+        "resumed_from_checkpoint": task.current_checkpoint,
     }
 
 

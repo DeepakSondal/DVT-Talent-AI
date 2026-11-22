@@ -243,6 +243,33 @@ class AgentOrchestrator:
         # pyrefly: ignore[bad-raise]
         raise last_error
 
+    async def _save_checkpoint(
+        self,
+        task_id: Optional[str],
+        checkpoint: str,
+        results: Dict[str, Any],
+    ) -> None:
+        """Persists stage outputs and current_checkpoint to AgentTask for resumable execution."""
+        results["checkpoint"] = checkpoint
+        if not task_id or not self.tenant_id or self.tenant_id == "default":
+            return
+        try:
+            task_uuid = uuid.UUID(str(task_id))
+            tenant_uuid = uuid.UUID(str(self.tenant_id))
+        except (ValueError, TypeError):
+            return
+        try:
+            from db.models import AgentTask, AsyncSessionLocal
+
+            async with AsyncSessionLocal() as session:
+                t_row = await session.get(AgentTask, task_uuid)
+                if t_row and t_row.tenant_id == tenant_uuid:
+                    setattr(t_row, "current_checkpoint", checkpoint)
+                    setattr(t_row, "output_data", dict(results))
+                    await session.commit()
+        except Exception as exc:
+            log.warning("save_checkpoint_failed", task_id=task_id, checkpoint=checkpoint, error=str(exc))
+
     async def run_full_swarm(
         self,
         industry: str = "technology",
@@ -252,6 +279,9 @@ class AgentOrchestrator:
         mock_mode: bool = False,
         sources: Optional[List[str]] = None,
         require_uploaded_resume: bool = False,
+        enabled_stages: Optional[List[str]] = None,
+        task_id: Optional[str] = None,
+        resume_from_stages: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Alias for compatibility with api routes and legacy task runners."""
         return await self.run_full_pipeline(
@@ -262,6 +292,9 @@ class AgentOrchestrator:
             mock_mode=mock_mode,
             sources=sources,
             require_uploaded_resume=require_uploaded_resume,
+            enabled_stages=enabled_stages,
+            task_id=task_id,
+            resume_from_stages=resume_from_stages,
         )
 
     async def run_full_pipeline(
@@ -273,13 +306,31 @@ class AgentOrchestrator:
         mock_mode: bool = False,
         sources: Optional[List[str]] = None,
         require_uploaded_resume: bool = False,
+        enabled_stages: Optional[List[str]] = None,
+        task_id: Optional[str] = None,
+        resume_from_stages: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Runs the complete 5/6-stage recruitment swarm pipeline."""
+        """Runs the checkpointed 5/6-stage recruitment swarm pipeline with stage toggles and resume support."""
         pipeline_start = datetime.now(timezone.utc)
         safe_industry = _sanitize_prompt_input(industry)
         safe_location = _sanitize_prompt_input(location)
-        log.info("unified_pipeline_started", industry=safe_industry, location=safe_location)
-        results: Dict[str, Any] = {"stages": {}}
+        log.info("unified_pipeline_started", industry=safe_industry, location=safe_location, task_id=task_id)
+
+        if enabled_stages is not None:
+            active_stages = {str(s).strip().lower() for s in enabled_stages if str(s).strip()}
+            active_stages.add("sourcing")  # Sourcing is always the core stage
+            if enable_screening:
+                active_stages.add("screening")
+        else:
+            active_stages = {"discovery", "sourcing", "critic", "outreach", "analytics"}
+            if enable_screening:
+                active_stages.add("screening")
+
+        effective_enable_screening = enable_screening or ("screening" in active_stages)
+        results: Dict[str, Any] = {
+            "stages": dict(resume_from_stages or {}),
+            "enabled_stages": sorted(active_stages),
+        }
 
         if not self.tenant_id or self.tenant_id.strip().lower() == "default":
             raise ValueError("A valid tenant_id is required for AgentOrchestrator.run_full_pipeline")
@@ -297,80 +348,75 @@ class AgentOrchestrator:
 
             try:
                 # 1. Discovery + Concurrent Deterministic Sourcing Pre-Fetch
-                broadcast_signal("Agent 'discovery' extracting JD constraints...", "agent_start", self.tenant_id)
                 is_sourcing_mocked = mock_mode or hasattr(sourcing_agent.run, "_mock_name")
+                prefetched_block = ""
 
-                if not is_sourcing_mocked:
-                    discovery_res, prefetched_signals = await asyncio.gather(
-                        self._run_agent_with_retry(
+                if "discovery" in results["stages"]:
+                    disc_data = results["stages"]["discovery"]
+                    if "sourcing" not in results["stages"] and not is_sourcing_mocked:
+                        prefetched_signals = await prefetch_all_sourcing_signals(
+                            deps,
+                            f"{safe_industry} {safe_location}",
+                            sources=sources,
+                            require_uploaded_resume=require_uploaded_resume,
+                        )
+                        prefetched_block = f"\n\nPre-fetched candidate signals:\n{_sanitize_prompt_input(prefetched_signals)}"
+                elif "discovery" in active_stages:
+                    broadcast_signal("Agent 'discovery' extracting JD constraints...", "agent_start", self.tenant_id)
+                    if not is_sourcing_mocked and "sourcing" not in results["stages"]:
+                        discovery_res, prefetched_signals = await asyncio.gather(
+                            self._run_agent_with_retry(
+                                discovery_agent,
+                                f"Identify leads and extract JD for {safe_industry} in {safe_location}",
+                                deps=deps,
+                                model=dynamic_model,
+                                model_settings={"max_tokens": 1200},
+                            ),
+                            prefetch_all_sourcing_signals(
+                                deps,
+                                f"{safe_industry} {safe_location}",
+                                sources=sources,
+                                require_uploaded_resume=require_uploaded_resume,
+                            ),
+                        )
+                        prefetched_block = f"\n\nPre-fetched candidate signals:\n{_sanitize_prompt_input(prefetched_signals)}"
+                    else:
+                        discovery_res = await self._run_agent_with_retry(
                             discovery_agent,
                             f"Identify leads and extract JD for {safe_industry} in {safe_location}",
                             deps=deps,
                             model=dynamic_model,
                             model_settings={"max_tokens": 1200},
-                        ),
-                        prefetch_all_sourcing_signals(
+                        )
+                    disc_data = _get_agent_data(discovery_res)
+                    results["stages"]["discovery"] = _serialize(disc_data)
+                    await self._save_checkpoint(task_id, "discovery_complete", results)
+                    broadcast_signal("Agent 'discovery' completed JD extraction.", "agent_success", self.tenant_id)
+                else:
+                    disc_data = {"extracted_jd": {"title": safe_industry}, "skipped": True}
+                    results["stages"]["discovery"] = disc_data
+                    if not is_sourcing_mocked and "sourcing" not in results["stages"]:
+                        prefetched_signals = await prefetch_all_sourcing_signals(
                             deps,
                             f"{safe_industry} {safe_location}",
                             sources=sources,
                             require_uploaded_resume=require_uploaded_resume,
-                        ),
-                    )
-                    prefetched_block = f"\n\nPre-fetched candidate signals:\n{_sanitize_prompt_input(prefetched_signals)}"
-                else:
-                    discovery_res = await self._run_agent_with_retry(
-                        discovery_agent,
-                        f"Identify leads and extract JD for {safe_industry} in {safe_location}",
-                        deps=deps,
-                        model=dynamic_model,
-                        model_settings={"max_tokens": 1200},
-                    )
-                    prefetched_block = ""
-
-                broadcast_signal("Agent 'discovery' completed JD extraction.", "agent_success", self.tenant_id)
+                        )
+                        prefetched_block = f"\n\nPre-fetched candidate signals:\n{_sanitize_prompt_input(prefetched_signals)}"
+                    await self._save_checkpoint(task_id, "discovery_complete", results)
 
                 # 2. Sourcing with Pre-Fetched Signals & Self-Healing Fallback Loop
-                broadcast_signal("Agent 'sourcing' initiated node discovery...", "agent_start", self.tenant_id)
-                disc_data = _get_agent_data(discovery_res)
                 extracted_jd_data = self._format_jd_context(disc_data)
                 safe_jd_data = _sanitize_prompt_input(extracted_jd_data)
 
-                sourcing_res = await self._run_agent_with_retry(
-                    sourcing_agent,
-                    f"Find candidates for {safe_industry} roles in {safe_location} matching constraints: {safe_jd_data}{prefetched_block}",
-                    deps=deps,
-                    model=dynamic_model,
-                    model_settings={"max_tokens": 1200},
-                )
-                sourc_data = _get_agent_data(sourcing_res)
-                candidates = self._extract_candidates(sourc_data)
-
-                # Sourcing Self-Healing Fallback Protocol
-                if len(candidates) < _MIN_SOURCING_CANDIDATE_THRESHOLD:
-                    broadcast_signal(
-                        "WARNING: Sourcing threshold unmet (0-2 nodes found). Initiating fallback to Discovery...",
-                        "agent_info",
-                        self.tenant_id,
-                    )
-                    discovery_res = await self._run_agent_with_retry(
-                        discovery_agent,
-                        f"Extract JD for {safe_industry} in {safe_location}. PREVIOUS EXTRACTION YIELDED NO CANDIDATES. LOOSEN THE 'MUST-HAVE' CONSTRAINTS IMMEDIATELY.",
-                        deps=deps,
-                        model=dynamic_model,
-                        model_settings={"max_tokens": 1200},
-                    )
-                    disc_data = _get_agent_data(discovery_res)
-                    extracted_jd_data = self._format_jd_context(disc_data)
-                    safe_jd_data = _sanitize_prompt_input(extracted_jd_data)
-
-                    broadcast_signal(
-                        "Agent 'sourcing' re-initiating hunt with loosened market constraints...",
-                        "agent_start",
-                        self.tenant_id,
-                    )
+                if "sourcing" in results["stages"]:
+                    sourc_data = results["stages"]["sourcing"]
+                    candidates = self._extract_candidates(sourc_data)
+                else:
+                    broadcast_signal("Agent 'sourcing' initiated node discovery...", "agent_start", self.tenant_id)
                     sourcing_res = await self._run_agent_with_retry(
                         sourcing_agent,
-                        f"Find candidates for {safe_industry} roles in {safe_location} matching loosened constraints: {safe_jd_data}{prefetched_block}",
+                        f"Find candidates for {safe_industry} roles in {safe_location} matching constraints: {safe_jd_data}{prefetched_block}",
                         deps=deps,
                         model=dynamic_model,
                         model_settings={"max_tokens": 1200},
@@ -378,40 +424,89 @@ class AgentOrchestrator:
                     sourc_data = _get_agent_data(sourcing_res)
                     candidates = self._extract_candidates(sourc_data)
 
-                broadcast_signal("Agent 'sourcing' completed node discovery.", "agent_success", self.tenant_id)
+                    # Sourcing Self-Healing Fallback Protocol
+                    if len(candidates) < _MIN_SOURCING_CANDIDATE_THRESHOLD and "discovery" in active_stages:
+                        broadcast_signal(
+                            "WARNING: Sourcing threshold unmet (0-2 nodes found). Initiating fallback to Discovery...",
+                            "agent_info",
+                            self.tenant_id,
+                        )
+                        discovery_res = await self._run_agent_with_retry(
+                            discovery_agent,
+                            f"Extract JD for {safe_industry} in {safe_location}. PREVIOUS EXTRACTION YIELDED NO CANDIDATES. LOOSEN THE 'MUST-HAVE' CONSTRAINTS IMMEDIATELY.",
+                            deps=deps,
+                            model=dynamic_model,
+                            model_settings={"max_tokens": 1200},
+                        )
+                        disc_data = _get_agent_data(discovery_res)
+                        results["stages"]["discovery"] = _serialize(disc_data)
+                        extracted_jd_data = self._format_jd_context(disc_data)
+                        safe_jd_data = _sanitize_prompt_input(extracted_jd_data)
+
+                        broadcast_signal(
+                            "Agent 'sourcing' re-initiating hunt with loosened market constraints...",
+                            "agent_start",
+                            self.tenant_id,
+                        )
+                        sourcing_res = await self._run_agent_with_retry(
+                            sourcing_agent,
+                            f"Find candidates for {safe_industry} roles in {safe_location} matching loosened constraints: {safe_jd_data}{prefetched_block}",
+                            deps=deps,
+                            model=dynamic_model,
+                            model_settings={"max_tokens": 1200},
+                        )
+                        sourc_data = _get_agent_data(sourcing_res)
+                        candidates = self._extract_candidates(sourc_data)
+
+                    results["stages"]["sourcing"] = _serialize(sourc_data)
+                    await self._save_checkpoint(task_id, "sourcing_complete", results)
+                    broadcast_signal("Agent 'sourcing' completed node discovery.", "agent_success", self.tenant_id)
 
                 # 3. Logic Audit (Critic) with Payload Trimming
-                results["stages"]["discovery"] = _serialize(disc_data)
-                results["stages"]["sourcing"] = _serialize(sourc_data)
-
-                broadcast_signal("Agent 'critic' initiating logic audit...", "agent_start", self.tenant_id)
                 role_desc = self._extract_role_summary(disc_data, safe_industry)
                 safe_role_desc = _sanitize_prompt_input(role_desc)
-                sanitized_candidates = _trim_candidates_for_critic(candidates)
-                safe_critic_candidates = _sanitize_prompt_input(sanitized_candidates)
-                audit_res = await self._run_agent_with_retry(
-                    critic_agent,
-                    f"Audit these trimmed candidates for role '{safe_role_desc}': {safe_critic_candidates}",
-                    deps=deps,
-                    model=dynamic_model,
-                    model_settings={"max_tokens": 1200},
-                )
-                c_data = _get_agent_data(audit_res)
-                results["stages"]["critic"] = _serialize(c_data)
-                audit_passed = getattr(c_data, "passed", True) if not isinstance(c_data, dict) else c_data.get("passed", True)
-                broadcast_signal(
-                    f"Agent 'critic' audit complete: {'Trust verified.' if audit_passed else 'Issues flagged for human review.'}",
-                    "agent_success",
-                    self.tenant_id,
-                )
 
-                # Persist sourced candidates and AI Decision Ledger records for real tenant workspaces
-                if not mock_mode:
-                    await self._persist_sourcing_and_ledger(
-                        candidates=candidates,
-                        audit_data=_serialize(c_data),
-                        role_title=safe_role_desc,
+                if "critic" in results["stages"]:
+                    c_data = results["stages"]["critic"]
+                    audit_passed = getattr(c_data, "passed", True) if not isinstance(c_data, dict) else c_data.get("passed", True)
+                elif "critic" in active_stages:
+                    broadcast_signal("Agent 'critic' initiating logic audit...", "agent_start", self.tenant_id)
+                    sanitized_candidates = _trim_candidates_for_critic(candidates)
+                    safe_critic_candidates = _sanitize_prompt_input(sanitized_candidates)
+                    audit_res = await self._run_agent_with_retry(
+                        critic_agent,
+                        f"Audit these trimmed candidates for role '{safe_role_desc}': {safe_critic_candidates}",
+                        deps=deps,
+                        model=dynamic_model,
+                        model_settings={"max_tokens": 1200},
                     )
+                    c_data = _get_agent_data(audit_res)
+                    results["stages"]["critic"] = _serialize(c_data)
+                    audit_passed = getattr(c_data, "passed", True) if not isinstance(c_data, dict) else c_data.get("passed", True)
+                    broadcast_signal(
+                        f"Agent 'critic' audit complete: {'Trust verified.' if audit_passed else 'Issues flagged for human review.'}",
+                        "agent_success",
+                        self.tenant_id,
+                    )
+
+                    if not mock_mode:
+                        await self._persist_sourcing_and_ledger(
+                            candidates=candidates,
+                            audit_data=_serialize(c_data),
+                            role_title=safe_role_desc,
+                        )
+                    await self._save_checkpoint(task_id, "critic_complete", results)
+                else:
+                    c_data = {"passed": True, "skipped": True}
+                    results["stages"]["critic"] = c_data
+                    audit_passed = True
+                    if not mock_mode:
+                        await self._persist_sourcing_and_ledger(
+                            candidates=candidates,
+                            audit_data=c_data,
+                            role_title=safe_role_desc,
+                        )
+                    await self._save_checkpoint(task_id, "critic_complete", results)
 
                 # 4, 5 & 6. Concurrent Post-Sourcing Execution (Outreach gated by critic + Analytics + Optional Screening)
                 candidate_names = [
@@ -423,43 +518,45 @@ class AgentOrchestrator:
                 post_keys: List[str] = []
                 post_tasks: List[Any] = []
 
-                if audit_passed:
-                    broadcast_signal("Agent 'outreach' drafting personalized sequences in bulk...", "agent_start", self.tenant_id)
-                    post_keys.append("outreach")
+                if "outreach" in active_stages and "outreach" not in results["stages"]:
+                    if audit_passed:
+                        broadcast_signal("Agent 'outreach' drafting personalized sequences in bulk...", "agent_start", self.tenant_id)
+                        post_keys.append("outreach")
+                        post_tasks.append(
+                            self._run_agent_with_retry(
+                                outreach_agent,
+                                f"Draft personalized outreach for these candidates: {safe_candidate_names} for role {safe_role_desc}",
+                                deps=deps,
+                                model=dynamic_model,
+                                model_settings={"max_tokens": 1200},
+                            )
+                        )
+                    else:
+                        results["stages"]["outreach"] = {
+                            "gated": True,
+                            "reason": "Blocked pending human review: critic audit flagged issues.",
+                        }
+                        broadcast_signal(
+                            "Agent 'outreach' paused: critic audit flagged issues for human review.",
+                            "agent_warning",
+                            self.tenant_id,
+                        )
+
+                if "analytics" in active_stages and "analytics" not in results["stages"]:
+                    broadcast_signal("Agent 'analytics' generating run report...", "agent_start", self.tenant_id)
+                    post_keys.append("analytics")
+                    safe_audit_payload = _sanitize_prompt_input(_serialize(c_data))
                     post_tasks.append(
                         self._run_agent_with_retry(
-                            outreach_agent,
-                            f"Draft personalized outreach for these candidates: {safe_candidate_names} for role {safe_role_desc}",
+                            analytics_agent,
+                            f"Generate report for this run: role={safe_role_desc}, sourced_candidates={len(candidates)}, audit={safe_audit_payload}",
                             deps=deps,
                             model=dynamic_model,
                             model_settings={"max_tokens": 1200},
                         )
                     )
-                else:
-                    results["stages"]["outreach"] = {
-                        "gated": True,
-                        "reason": "Blocked pending human review: critic audit flagged issues.",
-                    }
-                    broadcast_signal(
-                        "Agent 'outreach' paused: critic audit flagged issues for human review.",
-                        "agent_warning",
-                        self.tenant_id,
-                    )
 
-                broadcast_signal("Agent 'analytics' generating run report...", "agent_start", self.tenant_id)
-                post_keys.append("analytics")
-                safe_audit_payload = _sanitize_prompt_input(_serialize(c_data))
-                post_tasks.append(
-                    self._run_agent_with_retry(
-                        analytics_agent,
-                        f"Generate report for this run: role={safe_role_desc}, sourced_candidates={len(candidates)}, audit={safe_audit_payload}",
-                        deps=deps,
-                        model=dynamic_model,
-                        model_settings={"max_tokens": 1200},
-                    )
-                )
-
-                if enable_screening:
+                if effective_enable_screening and "screening_guide" not in results["stages"]:
                     broadcast_signal("Agent 'screening' generating interview guide...", "agent_start", self.tenant_id)
                     post_keys.append("screening_guide")
                     post_tasks.append(
@@ -472,7 +569,7 @@ class AgentOrchestrator:
                         )
                     )
 
-                post_results = await asyncio.gather(*post_tasks)
+                post_results = await asyncio.gather(*post_tasks) if post_tasks else []
                 post_map = dict(zip(post_keys, post_results, strict=True))
 
                 if "outreach" in post_map:
@@ -480,14 +577,17 @@ class AgentOrchestrator:
                     results["stages"]["outreach"] = _serialize(out_data)
                     broadcast_signal("Agent 'outreach' sequence drafting complete.", "agent_success", self.tenant_id)
 
-                a_data = _get_agent_data(post_map["analytics"])
-                results["stages"]["analytics"] = _serialize(a_data)
-                broadcast_signal("Agent 'analytics' report generated.", "agent_success", self.tenant_id)
+                if "analytics" in post_map:
+                    a_data = _get_agent_data(post_map["analytics"])
+                    results["stages"]["analytics"] = _serialize(a_data)
+                    broadcast_signal("Agent 'analytics' report generated.", "agent_success", self.tenant_id)
 
                 if "screening_guide" in post_map:
                     s_item = _get_agent_data(post_map["screening_guide"])
                     results["stages"]["screening_guide"] = _serialize(s_item)
                     broadcast_signal("Agent 'screening' completed interview guide.", "agent_success", self.tenant_id)
+
+                await self._save_checkpoint(task_id, "post_complete", results)
 
             except Exception as e:
                 log.error("pipeline_failed", error=str(e))
