@@ -41,7 +41,7 @@ test.describe('Framer Motion Animation & App Router Safety Suite', () => {
   });
 
   test('test case 2: verifies AnimatePresence modals in core views define unique keys and animated backdrops', async () => {
-    const teamPath = path.resolve(__dirname, '../src/app/dashboard/team/page.tsx');
+    const teamPath = path.resolve(__dirname, '../src/app/dashboard/team/TeamClient.tsx');
     const portalLayoutPath = path.resolve(__dirname, '../src/app/portal/layout.tsx');
     const candidatesPath = path.resolve(__dirname, '../src/app/dashboard/candidates/CandidatesClient.tsx');
 
