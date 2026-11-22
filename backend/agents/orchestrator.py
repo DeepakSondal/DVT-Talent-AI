@@ -930,7 +930,7 @@ class AgentOrchestrator:
         results: List[Dict[str, Any]],
         job: Dict[str, Any],
     ) -> None:
-        """Persists an EmailCampaign and EmailSent rows and dispatches via EmailService."""
+        """Persists draft EmailCampaign/EmailSent rows and PENDING_REVIEW approval ledger entries (never auto-sends)."""
         if not self.tenant_id or self.tenant_id == "default" or not results:
             return
         try:
@@ -939,9 +939,12 @@ class AgentOrchestrator:
             return
 
         try:
+            import hashlib
+
             from sqlalchemy import select
 
             from db.models import (
+                AIDecisionLedger,
                 AsyncSessionLocal,
                 Candidate,
                 EmailCampaign,
@@ -949,7 +952,14 @@ class AgentOrchestrator:
                 EmailStatus,
                 User,
             )
-            from services.email_service import EmailService
+
+            job_uuid = None
+            raw_job_id = job.get("id") or self.job_id
+            if raw_job_id:
+                try:
+                    job_uuid = uuid.UUID(str(raw_job_id))
+                except (ValueError, TypeError):
+                    job_uuid = None
 
             job_title = job.get("title") or job.get("role") or "Target Role"
             async with AsyncSessionLocal() as session:
@@ -1005,12 +1015,37 @@ class AgentOrchestrator:
                         status=EmailStatus.DRAFT,
                     )
                     session.add(email_row)
+                    await session.flush()
+
+                    input_hash = hashlib.sha256(
+                        f"{tenant_uuid}:{email_row.id}:{to_email}:{subject}".encode()
+                    ).hexdigest()
+                    session.add(
+                        AIDecisionLedger(
+                            tenant_id=tenant_uuid,
+                            job_id=job_uuid,
+                            candidate_id=cand_obj.id if cand_obj else None,
+                            decision_type="outreach_approval",
+                            model_provider="Groq",
+                            model_name=getattr(settings, "groq_model", "llama-3.3-70b-versatile"),
+                            prompt_version="v2.0",
+                            input_data_hash=input_hash,
+                            qualification_score=90,
+                            confidence_level="HIGH",
+                            evidence_signals={
+                                "email_sent_id": str(email_row.id),
+                                "campaign_id": str(campaign.id),
+                                "candidate_name": cand_name,
+                                "candidate_email": str(to_email),
+                                "role_title": job_title,
+                                "subject": subject,
+                            },
+                            reasoning_summary=f"Drafted outreach for {cand_name} ({to_email}) awaiting human approval.",
+                            human_action="PENDING_REVIEW",
+                        )
+                    )
 
                 await session.commit()
-                campaign_id_str = str(campaign.id)
-
-            email_srv = EmailService()
-            await email_srv.send_campaign(campaign_id_str)
         except Exception as e:
             log.warning("persist_outreach_campaign_failed", error=str(e), tenant_id=self.tenant_id)
 
