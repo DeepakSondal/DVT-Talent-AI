@@ -337,6 +337,8 @@ class TeamApiKeys(Base, TimestampMixin):
     openai_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     serper_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     anthropic_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    monster_api_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    dice_api_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
 
 class User(Base, TimestampMixin):

@@ -662,11 +662,15 @@ class TeamApiKeysConfig(BaseModel):
     openai_key: Optional[str] = None
     serper_key: Optional[str] = None
     anthropic_key: Optional[str] = None
+    monster_api_key: Optional[str] = None
+    dice_api_key: Optional[str] = None
 
 class TeamApiKeysOut(BaseModel):
     openai_key_hint: Optional[str] = None
     serper_key_hint: Optional[str] = None
     anthropic_key_hint: Optional[str] = None
+    monster_api_key_hint: Optional[str] = None
+    dice_api_key_hint: Optional[str] = None
     configured: bool
 
 def _mask_api_key(encrypted: Any) -> Optional[str]:
@@ -711,11 +715,21 @@ async def get_team_api_keys(
     res_keys = await db.execute(stmt_keys)
     keys = res_keys.scalar_one_or_none()
     
-    configured = bool(keys and (keys.openai_key or keys.serper_key or keys.anthropic_key))
+    configured = bool(
+        keys and (
+            keys.openai_key
+            or keys.serper_key
+            or keys.anthropic_key
+            or keys.monster_api_key
+            or keys.dice_api_key
+        )
+    )
     return TeamApiKeysOut(
         openai_key_hint=_mask_api_key(keys.openai_key) if keys else None,
         serper_key_hint=_mask_api_key(keys.serper_key) if keys else None,
         anthropic_key_hint=_mask_api_key(keys.anthropic_key) if keys else None,
+        monster_api_key_hint=_mask_api_key(keys.monster_api_key) if keys else None,
+        dice_api_key_hint=_mask_api_key(keys.dice_api_key) if keys else None,
         configured=configured
     )
 
@@ -743,7 +757,15 @@ async def save_team_api_keys(
         setattr(keys, "serper_key", encrypt_pii(payload.serper_key) if payload.serper_key.strip() else None)
     if payload.anthropic_key is not None:
         setattr(keys, "anthropic_key", encrypt_pii(payload.anthropic_key) if payload.anthropic_key.strip() else None)
+    if payload.monster_api_key is not None:
+        setattr(keys, "monster_api_key", encrypt_pii(payload.monster_api_key) if payload.monster_api_key.strip() else None)
+    if payload.dice_api_key is not None:
+        setattr(keys, "dice_api_key", encrypt_pii(payload.dice_api_key) if payload.dice_api_key.strip() else None)
         
     await db.commit()
+
+    from agents.pydantic_config import invalidate_tenant_keys_cache
+    invalidate_tenant_keys_cache(str(team.tenant_id))
+
     return {"status": "saved", "message": "Team API keys saved and encrypted successfully"}
 

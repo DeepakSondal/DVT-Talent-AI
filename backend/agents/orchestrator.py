@@ -13,7 +13,6 @@ elif __name__.startswith("agents."):
 import asyncio
 import json
 import re
-import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -157,52 +156,9 @@ class AgentOrchestrator:
 
     async def _resolve_tenant_keys(self) -> Dict[str, Optional[str]]:
         """Queries DB to decrypt Team API Keys with 60-second in-memory TTL caching."""
-        keys_dict: Dict[str, Optional[str]] = {
-            "openai_key": None,
-            "serper_key": None,
-            "anthropic_key": None,
-        }
-        if not self.tenant_id or self.tenant_id == "default":
-            return keys_dict
+        from .pydantic_config import resolve_tenant_api_keys
 
-        try:
-            tenant_uuid = uuid.UUID(self.tenant_id) if not isinstance(self.tenant_id, uuid.UUID) else self.tenant_id
-        except (ValueError, TypeError):
-            return keys_dict
-
-        cache_key = str(tenant_uuid)
-        now = time.monotonic()
-        cached_entry = _TENANT_KEYS_CACHE.get(cache_key)
-        if cached_entry and (now - cached_entry[0]) < 60.0:
-            return dict(cached_entry[1])
-
-        try:
-            from sqlalchemy import select
-
-            from db.models import AsyncSessionLocal, Team, TeamApiKeys
-            from services.security_service import decrypt_pii
-
-            async with AsyncSessionLocal() as session:
-                stmt = (
-                    select(TeamApiKeys)
-                    .join(Team, Team.id == TeamApiKeys.team_id)
-                    .where(Team.tenant_id == tenant_uuid)
-                    .limit(1)
-                )
-                res_keys = await session.execute(stmt)
-                keys = res_keys.scalar_one_or_none()
-                if keys:
-                    if keys.openai_key:
-                        keys_dict["openai_key"] = decrypt_pii(keys.openai_key)
-                    if keys.serper_key:
-                        keys_dict["serper_key"] = decrypt_pii(keys.serper_key)
-                    if keys.anthropic_key:
-                        keys_dict["anthropic_key"] = decrypt_pii(keys.anthropic_key)
-            _TENANT_KEYS_CACHE[cache_key] = (now, dict(keys_dict))
-        except Exception as e:
-            log.warning("failed_to_resolve_tenant_keys", error=str(e), tenant_id=self.tenant_id)
-
-        return keys_dict
+        return await resolve_tenant_api_keys(self.tenant_id)
 
     async def _run_agent_with_retry(
         self,
@@ -343,6 +299,8 @@ class AgentOrchestrator:
                 serper_key=t_keys.get("serper_key") or settings.serper_api_key,
                 openai_key=t_keys.get("openai_key"),
                 anthropic_key=t_keys.get("anthropic_key"),
+                monster_api_key=t_keys.get("monster_api_key") or settings.monster_api_key,
+                dice_api_key=t_keys.get("dice_api_key") or settings.dice_api_key,
             )
             dynamic_model = get_pydantic_model(deps=deps)
 
@@ -613,6 +571,8 @@ class AgentOrchestrator:
                 serper_key=t_keys.get("serper_key") or settings.serper_api_key,
                 openai_key=t_keys.get("openai_key"),
                 anthropic_key=t_keys.get("anthropic_key"),
+                monster_api_key=t_keys.get("monster_api_key") or settings.monster_api_key,
+                dice_api_key=t_keys.get("dice_api_key") or settings.dice_api_key,
             )
 
             if phase == "discovery":

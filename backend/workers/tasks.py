@@ -165,13 +165,19 @@ def run_agent_task(self, agent_name: str, params: Optional[Dict[str, Any]] = Non
             
         agent = agents_map[agent_name]
         
-        # Use httpx client for agent deps
+        # Use httpx client for agent deps with per-tenant BYOK credentials
         async def _run():
+            from agents.pydantic_config import build_tenant_agent_deps, get_pydantic_model
+
             async with httpx.AsyncClient() as client:
-                deps = AgentDeps(http_client=client, tenant_id=safe_tenant_id)
-                # Run the Pydantic AI agent
+                deps = await build_tenant_agent_deps(client, safe_tenant_id)
                 safe_params, _ = sanitizer_service.sanitize(json.dumps(params, default=str))
-                result = await agent.run(f"Process task with params: {safe_params}", deps=deps)
+                result = await agent.run(
+                    f"Process task with params: {safe_params}",
+                    deps=deps,
+                    model=get_pydantic_model(deps=deps),
+                    model_settings={"max_tokens": 2500},
+                )
                 return result.output.model_dump()
 
         import httpx

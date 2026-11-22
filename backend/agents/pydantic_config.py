@@ -180,3 +180,90 @@ class AgentDeps:
     anthropic_key: Optional[str] = None
     monster_api_key: str = settings.monster_api_key
     dice_api_key: str = settings.dice_api_key
+
+
+_TENANT_KEYS_CACHE: Dict[str, tuple[float, Dict[str, Optional[str]]]] = {}
+_TENANT_KEYS_TTL_SECONDS = 60.0
+
+
+def invalidate_tenant_keys_cache(tenant_id: Optional[str]) -> None:
+    """Clears cached BYOK credentials for a tenant after key updates."""
+    if not tenant_id:
+        return
+    _TENANT_KEYS_CACHE.pop(str(tenant_id).strip(), None)
+
+
+async def resolve_tenant_api_keys(tenant_id: Optional[str]) -> Dict[str, Optional[str]]:
+    """
+    Fetches and decrypts per-tenant TeamApiKeys (LLM + Serper + Monster/Dice) with a 60s TTL cache.
+    Shared across AgentOrchestrator, Celery workers, and API routes.
+    """
+    import time
+    import uuid as _uuid
+
+    keys_dict: Dict[str, Optional[str]] = {
+        "openai_key": None,
+        "serper_key": None,
+        "anthropic_key": None,
+        "monster_api_key": None,
+        "dice_api_key": None,
+    }
+    if not tenant_id or str(tenant_id).strip().lower() == "default":
+        return keys_dict
+    try:
+        tenant_uuid = _uuid.UUID(str(tenant_id))
+    except (ValueError, TypeError):
+        return keys_dict
+
+    cache_key = str(tenant_uuid)
+    now = time.monotonic()
+    cached = _TENANT_KEYS_CACHE.get(cache_key)
+    if cached and (now - cached[0]) < _TENANT_KEYS_TTL_SECONDS:
+        return dict(cached[1])
+
+    try:
+        from sqlalchemy import select
+
+        try:
+            from backend.db.models import AsyncSessionLocal, Team, TeamApiKeys
+            from backend.services.security_service import decrypt_pii
+        except ImportError:
+            from db.models import AsyncSessionLocal, Team, TeamApiKeys  # pyrefly: ignore[missing-import]  # type: ignore
+            from services.security_service import decrypt_pii  # pyrefly: ignore[missing-import]  # type: ignore
+
+        async with AsyncSessionLocal() as session:
+            stmt = (
+                select(TeamApiKeys)
+                .join(Team, Team.id == TeamApiKeys.team_id)
+                .where(Team.tenant_id == tenant_uuid)
+                .limit(1)
+            )
+            keys = (await session.execute(stmt)).scalar_one_or_none()
+            if keys:
+                for field in ("openai_key", "serper_key", "anthropic_key", "monster_api_key", "dice_api_key"):
+                    raw_val = getattr(keys, field, None)
+                    if raw_val:
+                        keys_dict[field] = decrypt_pii(str(raw_val))
+        _TENANT_KEYS_CACHE[cache_key] = (now, dict(keys_dict))
+    except Exception:  # noqa: S110
+        pass
+
+    return keys_dict
+
+
+async def build_tenant_agent_deps(
+    http_client: httpx.AsyncClient,
+    tenant_id: str,
+    mock_mode: bool = False,
+) -> AgentDeps:
+    """Builds AgentDeps populated with decrypted per-tenant BYOK credentials falling back to system settings."""
+    t_keys = {} if mock_mode else await resolve_tenant_api_keys(tenant_id)
+    return AgentDeps(
+        http_client=http_client,
+        tenant_id=tenant_id,
+        serper_key=t_keys.get("serper_key") or settings.serper_api_key,
+        openai_key=t_keys.get("openai_key"),
+        anthropic_key=t_keys.get("anthropic_key"),
+        monster_api_key=t_keys.get("monster_api_key") or settings.monster_api_key,
+        dice_api_key=t_keys.get("dice_api_key") or settings.dice_api_key,
+    )

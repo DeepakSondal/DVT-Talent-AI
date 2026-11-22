@@ -18,11 +18,15 @@ export function ApiKeysSettings() {
   const [showOpenAI, setShowOpenAI] = useState(false);
   const [showSerper, setShowSerper] = useState(false);
   const [showAnthropic, setShowAnthropic] = useState(false);
+  const [showMonster, setShowMonster] = useState(false);
+  const [showDice, setShowDice] = useState(false);
 
   const [form, setForm] = useState<any>({
     openai_key: "",
     serper_key: "",
     anthropic_key: "",
+    monster_api_key: "",
+    dice_api_key: "",
   });
 
   const loadConfig = useCallback(async () => {
@@ -42,12 +46,19 @@ export function ApiKeysSettings() {
   }, [loadConfig]);
 
   const handleSave = async () => {
+    const nonEmptyPayload = Object.fromEntries(
+      Object.entries(form).filter(([, v]) => typeof v === "string" && v.trim() !== "")
+    );
+    if (Object.keys(nonEmptyPayload).length === 0) {
+      toast.info("Enter at least one API key to update.");
+      return;
+    }
     setSaving(true);
     try {
-      const res = await teamApi.saveKeys(form);
+      const res = await teamApi.saveKeys(nonEmptyPayload as any);
       toast.success("API Keys saved!", { description: res.message });
       await loadConfig();
-      setForm({ openai_key: "", serper_key: "", anthropic_key: "" });
+      setForm({ openai_key: "", serper_key: "", anthropic_key: "", monster_api_key: "", dice_api_key: "" });
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Failed to save API keys.";
       toast.error("Error", { description: detail });
@@ -181,6 +192,52 @@ export function ApiKeysSettings() {
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showSerper ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              Monster.com API Key (Outbound Sourcing)
+            </label>
+            <div className="relative">
+              <Input
+                id="monster-api-key"
+                type={showMonster ? "text" : "password"}
+                placeholder={config?.monster_api_key_hint ? `Current: ${config.monster_api_key_hint}` : "Enter Monster.com partner API key"}
+                value={form.monster_api_key}
+                onChange={(e) => setForm({ ...form, monster_api_key: e.target.value })}
+                className="bg-background pr-10 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setShowMonster((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showMonster ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              Dice.com API Key (Outbound Sourcing)
+            </label>
+            <div className="relative">
+              <Input
+                id="dice-api-key"
+                type={showDice ? "text" : "password"}
+                placeholder={config?.dice_api_key_hint ? `Current: ${config.dice_api_key_hint}` : "Enter Dice.com partner API key"}
+                value={form.dice_api_key}
+                onChange={(e) => setForm({ ...form, dice_api_key: e.target.value })}
+                className="bg-background pr-10 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setShowDice((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showDice ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
