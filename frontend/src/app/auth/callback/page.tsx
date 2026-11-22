@@ -15,13 +15,12 @@ function AuthContent() {
     const role = searchParams.get("role");
     const redirectParam = searchParams.get("redirect");
 
-    const finishSignIn = (resolvedToken: string, resolvedTenantId?: string | null, resolvedRole?: string | null) => {
-      localStorage.setItem("dvt_token", resolvedToken);
+    const finishSignIn = (resolvedTenantId?: string | null, resolvedRole?: string | null) => {
+      // Backend sets HttpOnly dvt_token & dvt_refresh_token cookies; only keep non-sensitive tenant_id for UI display.
+      localStorage.removeItem("dvt_token");
       if (resolvedTenantId) {
         localStorage.setItem("tenant_id", resolvedTenantId);
       }
-      const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
-      document.cookie = `dvt_token=${resolvedToken}; path=/; max-age=86400; SameSite=Lax${isSecure}`;
 
       toast.success("Successfully signed in!");
       const dest =
@@ -42,16 +41,20 @@ function AuthContent() {
         document.title,
         cleanQuery ? `${window.location.pathname}?${cleanQuery}` : window.location.pathname
       );
-      finishSignIn(token, tenantId, role);
+      finishSignIn(tenantId, role);
       return;
     }
 
     const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
-    fetch(`${apiBase}/auth/refresh`, { method: "POST", credentials: "include" })
+    fetch(`${apiBase}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.access_token) {
-          finishSignIn(data.access_token, data.tenant_id || tenantId, data.role || role);
+          finishSignIn(data.tenant_id || tenantId, data.role || role);
         } else {
           toast.error("Authentication failed. Please try again.");
           router.push("/auth/login");
