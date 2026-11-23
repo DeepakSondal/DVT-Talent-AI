@@ -12,7 +12,7 @@ import {
   KeyRound, ArrowLeft, RefreshCw,
   Chrome as Google, Github
 } from "lucide-react";
-import { resolveSocialAuthUrl } from "../login/page";
+import { resolveSocialAuthUrl } from "@/services/auth.service";
 import { authApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";

@@ -22,6 +22,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { authApi } from "@/lib/api";
+import { resolveSocialAuthUrl } from "@/services/auth.service";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -29,15 +30,6 @@ import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
-
-export function resolveSocialAuthUrl(
-  provider: "google" | "microsoft" | "github",
-  portal: "recruiter" | "candidate"
-): string {
-  const rawBase = (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/$/, "");
-  const apiPrefix = rawBase.endsWith("/api/v1") ? rawBase : `${rawBase}/api/v1`;
-  return `${apiPrefix}/auth/login/${provider}?portal=${encodeURIComponent(portal)}`;
-}
 
 const RECRUITER_HIGHLIGHTS = [
   {
@@ -116,15 +108,9 @@ function LoginContent() {
     setErrorMessage(null);
     try {
       const res = await authApi.requestPasswordReset(trimmed);
-      if (typeof window !== "undefined") {
-        if (res?.dev_code) {
-          sessionStorage.setItem("dvt_reset_dev_code", res.dev_code);
-        } else {
-          sessionStorage.removeItem("dvt_reset_dev_code");
-        }
-      }
+      const baseMsg = res.message || `If an account exists for ${trimmed}, a 6-digit code has been sent.`;
       toast.success("Password Reset Code Sent", {
-        description: res.message || `If an account exists for ${trimmed}, a 6-digit code has been sent.`,
+        description: res?.dev_code ? `${baseMsg} (Dev code: ${res.dev_code})` : baseMsg,
       });
     } catch {
       toast.success("Password Reset Code Sent", {

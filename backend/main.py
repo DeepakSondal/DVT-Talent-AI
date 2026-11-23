@@ -31,15 +31,15 @@ if _sentry_dsn:
             dsn=_sentry_dsn,
             environment=os.getenv("APP_ENV", "production"),
             integrations=[
-                FastApiIntegration(transaction_style="endpoint"),
+                FastApiIntegration(transaction_style="endpoint"),  # pyrefly: ignore[unexpected-keyword]
                 SqlalchemyIntegration(),
                 RedisIntegration(),
                 CeleryIntegration(),
                 LoggingIntegration(level=logging.WARNING, event_level=logging.ERROR),
             ],
             traces_sample_rate=0.2,       # 20% of transactions traced
-            profiles_sample_rate=0.1,     # 10% profiled
-            send_default_pii=False,       # GDPR: never send PII
+            profiles_sample_rate=0.1,     # 10% profiled  # pyrefly: ignore[unexpected-keyword]
+            send_default_pii=False,       # GDPR: never send PII  # pyrefly: ignore[unexpected-keyword]
         )
     except ImportError:
         pass

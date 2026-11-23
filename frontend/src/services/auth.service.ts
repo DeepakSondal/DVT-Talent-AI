@@ -15,6 +15,15 @@ function persistAuthSession(data: AuthResponse) {
   }
 }
 
+export function resolveSocialAuthUrl(
+  provider: "google" | "microsoft" | "github",
+  portal: "recruiter" | "candidate"
+): string {
+  const rawBase = (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/$/, "");
+  const apiPrefix = rawBase.endsWith("/api/v1") ? rawBase : `${rawBase}/api/v1`;
+  return `${apiPrefix}/auth/login/${provider}?portal=${encodeURIComponent(portal)}`;
+}
+
 export const authService = {
   login: async (creds: LoginCredentials): Promise<AuthResponse> => {
     const params = new URLSearchParams();

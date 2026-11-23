@@ -42,16 +42,6 @@ function ResetPasswordContent() {
   const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const cachedDevCode = sessionStorage.getItem("dvt_reset_dev_code");
-      if (cachedDevCode) {
-        setDevOtpHint(cachedDevCode);
-        sessionStorage.removeItem("dvt_reset_dev_code");
-      }
-    }
-  }, []);
-
-  useEffect(() => {
     if (resendCooldown > 0) {
       const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
       return () => clearTimeout(timer);
