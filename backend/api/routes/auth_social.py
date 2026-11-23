@@ -20,7 +20,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.routes.auth import create_access_token, create_refresh_token
 from config import settings
-from db.models import Tenant, User, get_db
+from db.models import (
+    Candidate,
+    CandidateStatus,
+    CreditTransaction,
+    CreditTransactionType,
+    Tenant,
+    User,
+    UserRole,
+    get_db,
+)
 from services.email_service import email_service
 from services.redis_service import consume_oauth_link_nonce, store_oauth_link_nonce
 
@@ -161,7 +170,7 @@ def _resolve_frontend_origin(request: Request) -> str:
 
 
 @router.get("/login/{provider}")
-async def social_login(provider: str, request: Request):
+async def social_login(provider: str, request: Request, portal: Optional[str] = None):
     """Initiate social login redirect"""
     safe_provider = _SOCIAL_PROVIDERS.get(provider.strip().lower())
     if not safe_provider:
@@ -170,13 +179,20 @@ async def social_login(provider: str, request: Request):
     if not client:
         raise HTTPException(status_code=400, detail="Invalid provider")
 
+    clean_portal: Optional[str] = None
+    if portal is not None:
+        clean_portal = "candidate" if portal.strip().lower() == "candidate" else "recruiter"
+        if "session" in request.scope:
+            request.session["oauth_portal"] = clean_portal
+
     client_id = str(getattr(settings, f"{safe_provider}_client_id", "") or "").strip()
     client_secret = str(getattr(settings, f"{safe_provider}_client_secret", "") or "").strip()
     if not client_id or not client_secret:
         log.warning("oauth_provider_not_configured", provider=safe_provider)
         frontend_origin = _resolve_frontend_origin(request)
+        portal_suffix = f"&portal={clean_portal}" if clean_portal else ""
         return RedirectResponse(
-            url=f"{frontend_origin}/auth/login?error=oauth_not_configured&provider={safe_provider}",
+            url=f"{frontend_origin}/auth/login?error=oauth_not_configured&provider={safe_provider}{portal_suffix}",
             status_code=302,
         )
 
@@ -194,6 +210,10 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
     client = oauth.create_client(provider)
     if not client:
         raise HTTPException(status_code=400, detail="Invalid provider")
+
+    session_portal = request.session.pop("oauth_portal", None) if "session" in request.scope else None
+    requested_portal = str(session_portal or request.query_params.get("portal") or "recruiter").strip().lower()
+    is_candidate_signup = requested_portal == "candidate"
 
     # Validate OAuth state/nonce against session BEFORE any DB read or write
     try:
@@ -231,20 +251,35 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
     user = result.scalars().first()
 
     if not user:
-        # Find or create a default workspace tenant for the new social user
-        email_domain = email.split("@")[-1].lower()
-        common_domains = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "example.com", "test.com", "proton.me", "protonmail.com"}
-        existing_tenant = (await db.execute(select(Tenant).where(Tenant.domain == email_domain))).scalar_one_or_none()
-        tenant_domain = f"{email_domain}-{uuid.uuid4().hex[:6]}" if (email_domain in common_domains or existing_tenant) else email_domain
+        full_name = str((user_info or {}).get("name") or (user_info or {}).get("login") or email.split("@")[0])
+        tenant_id: Optional[uuid.UUID] = None
+        if not is_candidate_signup:
+            # Find or create a default workspace tenant for the new social recruiter user
+            email_domain = email.split("@")[-1].lower()
+            common_domains = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "example.com", "test.com", "proton.me", "protonmail.com"}
+            existing_tenant = (await db.execute(select(Tenant).where(Tenant.domain == email_domain))).scalar_one_or_none()
+            tenant_domain = f"{email_domain}-{uuid.uuid4().hex[:6]}" if (email_domain in common_domains or existing_tenant) else email_domain
 
-        full_name = (user_info or {}).get("name") or (user_info or {}).get("login") or email.split("@")[0]
-        tenant = Tenant(
-            name=f"{full_name}'s Workspace",
-            domain=tenant_domain,
-            is_active=True
-        )
-        db.add(tenant)
-        await db.flush()
+            tenant = Tenant(
+                name=f"{full_name}'s Workspace",
+                domain=tenant_domain,
+                is_active=True,
+                sender_name=full_name,
+                sender_email=email,
+                credits_balance=50,
+                credits_last_reset_at=datetime.now(timezone.utc),
+            )
+            db.add(tenant)
+            await db.flush()
+            tenant_id = tenant.id
+            db.add(
+                CreditTransaction(
+                    tenant_id=tenant.id,
+                    amount=50,
+                    type=CreditTransactionType.CREDIT,
+                    description="Welcome Pilot Credits (50 Free Trial Credits)",
+                )
+            )
 
         # Create new OAuth-only user (NULL hashed_password, never a sentinel string)
         user = User(
@@ -252,13 +287,45 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
             full_name=full_name,
             provider=provider,
             provider_id=provider_id,
+            role=UserRole.CANDIDATE if is_candidate_signup else UserRole.ADMIN,
             is_active=True,
             is_verified=True,
-            tenant_id=tenant.id,
+            tenant_id=tenant_id,
             hashed_password=None,
         )
         db.add(user)
-        log.info("social_user_created", email=email, provider=provider)
+        await db.flush()
+
+        if is_candidate_signup:
+            cand_res = await db.execute(
+                select(Candidate).where(
+                    func.lower(Candidate.email) == email,
+                    Candidate.tenant_id.is_(None),
+                )
+            )
+            existing_cand = cand_res.scalars().first()
+            name_parts = full_name.strip().split(" ", 1)
+            first_name = name_parts[0]
+            last_name = name_parts[1] if len(name_parts) > 1 else ""
+            if existing_cand is not None and getattr(existing_cand, "user_id", None) is None:
+                setattr(existing_cand, "user_id", user.id)
+                if not existing_cand.first_name:
+                    setattr(existing_cand, "first_name", first_name)
+                if not existing_cand.last_name:
+                    setattr(existing_cand, "last_name", last_name)
+            else:
+                db.add(
+                    Candidate(
+                        user_id=user.id,
+                        first_name=first_name,
+                        last_name=last_name or "Candidate",
+                        email=email,
+                        status=CandidateStatus.SOURCED,
+                        is_searchable=True,
+                    )
+                )
+
+        log.info("social_user_created", email=email, provider=provider, role=user.role.value)
     else:
         if not user.is_active:
             raise HTTPException(status_code=400, detail="Account is disabled")

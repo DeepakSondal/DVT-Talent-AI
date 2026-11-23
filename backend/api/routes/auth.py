@@ -691,6 +691,7 @@ async def forgot_password(
     )
     clean_email = payload.email.strip().lower()
     user = (await db.execute(select(User).where(func.lower(User.email) == clean_email))).scalar_one_or_none()
+    reset_code: Optional[str] = None
     if user and user.is_active:
         reset_code = f"{secrets.randbelow(900000) + 100000:06d}"
         await store_email_otp(f"reset:{clean_email}", reset_code, ttl_seconds=600)
@@ -709,7 +710,8 @@ async def forgot_password(
         except Exception as exc:
             log.warning("password_reset_email_failed", error=str(exc))
     return {
-        "message": f"If an account exists for {payload.email}, password reset instructions have been sent."
+        "message": f"If an account exists for {payload.email}, password reset instructions have been sent.",
+        "dev_code": reset_code if settings.dev_mode else None,
     }
 
 

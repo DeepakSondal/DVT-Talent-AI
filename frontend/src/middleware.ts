@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const PROTECTED_PREFIXES = ["/dashboard", "/portal", "/candidates", "/campaigns", "/analytics", "/settings"];
-const PUBLIC_PATHS = ["/auth/login", "/auth/register", "/auth/callback", "/api"];
+const PUBLIC_PATHS = ["/auth/login", "/auth/register", "/auth/callback", "/auth/reset-password", "/auth/link-oauth", "/api"];
 
 function parseJwtPayload(rawToken: string): Record<string, any> | null {
   try {
