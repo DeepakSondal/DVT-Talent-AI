@@ -13,7 +13,6 @@ import { toast } from "sonner";
 import { teamService, type ValidateInvitationResponse } from "@/services/team.service";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
@@ -223,9 +222,6 @@ function AcceptInvitationContent() {
   // 4. Active Acceptance Form
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans text-foreground">
-      <div className="absolute top-6 right-6 z-20">
-        <ThemeToggle />
-      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 16 }}

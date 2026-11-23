@@ -25,7 +25,6 @@ import { resolveSocialAuthUrl } from "@/services/auth.service";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
@@ -253,8 +252,8 @@ function LoginContent() {
 
       {/* Right Column: Interactive Login Card */}
       <div className="flex flex-col items-center justify-center p-4 sm:p-8 relative z-10 min-h-screen">
-        {/* Top bar: Mobile Brand Link + Theme Toggle */}
-        <div className="w-full max-w-[460px] flex items-center justify-between mb-4 lg:mb-0 lg:absolute lg:top-6 lg:right-6 lg:w-auto">
+        {/* Top bar: Mobile Brand Link */}
+        <div className="w-full max-w-[460px] flex items-center justify-between mb-4 lg:hidden">
           <Link
             href="/"
             className="lg:hidden inline-flex items-center gap-2 text-sm font-bold text-foreground"
@@ -269,7 +268,6 @@ function LoginContent() {
             </div>
             <span>DVT Talent AI</span>
           </Link>
-          <ThemeToggle />
         </div>
 
         <motion.div

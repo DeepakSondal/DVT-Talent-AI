@@ -16,7 +16,6 @@ import { toast } from "sonner";
 import { authApi } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
 
@@ -73,9 +72,6 @@ function LinkOAuthContent() {
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none" />
 
-      <div className="absolute top-6 right-6 z-20">
-        <ThemeToggle />
-      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 16 }}

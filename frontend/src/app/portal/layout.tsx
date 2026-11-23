@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useSyncExternalStore } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Briefcase, Target, FileText, CheckCircle2,
   Compass, Shield, LogOut, Search, User,
-  Award, ArrowUpRight, Zap, Menu, X, Sun, Moon
+  Award, ArrowUpRight, Zap, Menu, X
 } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { candidatePortalApi, type CandidateProfile } from "@/lib/api";
@@ -14,29 +14,6 @@ import authService from "@/services/auth.service";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "sonner";
-
-const PORTAL_THEME_KEY = "dvt_portal_theme";
-const PORTAL_THEME_EVENT = "dvt-portal-theme-change";
-
-function subscribePortalTheme(callback: () => void) {
-  window.addEventListener("storage", callback);
-  window.addEventListener(PORTAL_THEME_EVENT, callback);
-  return () => {
-    window.removeEventListener("storage", callback);
-    window.removeEventListener(PORTAL_THEME_EVENT, callback);
-  };
-}
-
-function getPortalThemeSnapshot(): "light" | "dark" {
-  if (typeof window === "undefined") return "light";
-  const saved = localStorage.getItem(PORTAL_THEME_KEY);
-  if (saved === "light" || saved === "dark") return saved;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-function getServerPortalThemeSnapshot(): "light" | "dark" {
-  return "light";
-}
 
 export default function CandidatePortalLayout({
   children,
@@ -47,25 +24,15 @@ export default function CandidatePortalLayout({
   const router = useRouter();
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const theme = useSyncExternalStore(
-    subscribePortalTheme,
-    getPortalThemeSnapshot,
-    getServerPortalThemeSnapshot
-  );
 
   useEffect(() => {
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
+    document.documentElement.classList.remove("dark");
+    try {
+      localStorage.removeItem("dvt_portal_theme");
+    } catch {
+      // Ignore storage access errors
     }
-  }, [theme]);
-
-  const toggleTheme = () => {
-    const next = theme === "light" ? "dark" : "light";
-    localStorage.setItem(PORTAL_THEME_KEY, next);
-    window.dispatchEvent(new Event(PORTAL_THEME_EVENT));
-  };
+  }, []);
 
   useEffect(() => {
     candidatePortalApi
@@ -94,9 +61,7 @@ export default function CandidatePortalLayout({
   ];
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${
-      theme === "dark" ? "dark bg-slate-950 text-slate-100 selection:bg-indigo-500/30" : "bg-slate-50 text-slate-900 selection:bg-indigo-500/20"
-    }`}>
+    <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-900 selection:bg-indigo-500/20">
       {/* Top Banner Navigation */}
       <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -156,19 +121,6 @@ export default function CandidatePortalLayout({
               </div>
             )}
 
-            {/* Dark Mode Toggle */}
-            <button
-              onClick={toggleTheme}
-              aria-label="Toggle dark mode"
-              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors"
-              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {theme === "dark" ? (
-                <Sun className="w-4 h-4 text-amber-400" />
-              ) : (
-                <Moon className="w-4 h-4 text-slate-600" />
-              )}
-            </button>
 
             <Button
               variant="outline"

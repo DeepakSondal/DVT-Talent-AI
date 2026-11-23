@@ -15,7 +15,6 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { TopOmnibar } from "@/components/layout/TopOmnibar";
 

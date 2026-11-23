@@ -11,7 +11,6 @@ import {
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 interface TopOmnibarProps {
@@ -233,8 +232,6 @@ export function TopOmnibar({
           </AnimatePresence>
         </div>
 
-        {/* Theme Toggle */}
-        <ThemeToggle />
 
         {/* User Avatar Initials */}
         <div className="flex items-center gap-2 pl-1 border-l border-border/60">
