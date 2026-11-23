@@ -15,6 +15,15 @@ function persistAuthSession(data: AuthResponse) {
   }
 }
 
+export function resolveSocialAuthUrl(
+  provider: "google" | "microsoft" | "github",
+  portal: "recruiter" | "candidate"
+): string {
+  const rawBase = (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/$/, "");
+  const apiPrefix = rawBase.endsWith("/api/v1") ? rawBase : `${rawBase}/api/v1`;
+  return `${apiPrefix}/auth/login/${provider}?portal=${encodeURIComponent(portal)}`;
+}
+
 export const authService = {
   login: async (creds: LoginCredentials): Promise<AuthResponse> => {
     const params = new URLSearchParams();
@@ -38,8 +47,8 @@ export const authService = {
     return res.data;
   },
 
-  requestPasswordReset: async (email: string): Promise<{ message: string }> => {
-    const res = await http.post<{ message: string }>("/auth/forgot-password", { email });
+  requestPasswordReset: async (email: string): Promise<{ message: string; dev_code?: string | null }> => {
+    const res = await http.post<{ message: string; dev_code?: string | null }>("/auth/forgot-password", { email });
     return res.data;
   },
 
@@ -49,6 +58,11 @@ export const authService = {
     new_password: string;
   }): Promise<{ status: string; message: string }> => {
     const res = await http.post<{ status: string; message: string }>("/auth/reset-password", payload);
+    return res.data;
+  },
+
+  linkOAuthProvider: async (token: string): Promise<{ status: string; provider: string }> => {
+    const res = await http.post<{ status: string; provider: string }>("/auth/link-oauth", { token });
     return res.data;
   },
 
