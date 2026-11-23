@@ -9,8 +9,10 @@ import {
   Mail, ArrowRight, Lock, User,
   CheckCircle2, Briefcase, UserCheck,
   Eye, EyeOff, Loader2, Building2,
-  KeyRound, ArrowLeft, RefreshCw
+  KeyRound, ArrowLeft, RefreshCw,
+  Chrome as Google, Github
 } from "lucide-react";
+import { resolveSocialAuthUrl } from "@/services/auth.service";
 import { authApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
@@ -433,6 +435,56 @@ function RegisterContent() {
                   )}
                 </Button>
               </form>
+
+              {/* Social Sign-in Divider */}
+              <div className="relative pt-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-card px-2.5 text-muted-foreground font-medium">Or continue with</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = resolveSocialAuthUrl("google", portal);
+                  }}
+                  className="h-10 rounded-xl bg-muted/30 border border-border hover:bg-muted transition-colors flex items-center justify-center gap-2 text-xs font-medium text-foreground"
+                >
+                  <Google className="w-4 h-4 text-slate-500" />
+                  <span>Google</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = resolveSocialAuthUrl("microsoft", portal);
+                  }}
+                  className="h-10 rounded-xl bg-muted/30 border border-border hover:bg-muted transition-colors flex items-center justify-center gap-2 text-xs font-medium text-foreground"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 21 21" aria-hidden="true">
+                    <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                    <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                    <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                    <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+                  </svg>
+                  <span>Microsoft</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = resolveSocialAuthUrl("github", portal);
+                  }}
+                  className="h-10 rounded-xl bg-muted/30 border border-border hover:bg-muted transition-colors flex items-center justify-center gap-2 text-xs font-medium text-foreground"
+                >
+                  <Github className="w-4 h-4 text-foreground" />
+                  <span>GitHub</span>
+                </button>
+              </div>
             </>
           )}
 
