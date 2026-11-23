@@ -42,8 +42,22 @@ export function ApiKeysSettings() {
   }, []);
 
   useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
+    let active = true;
+    teamApi
+      .getKeys()
+      .then((data) => {
+        if (active) setConfig(data);
+      })
+      .catch(() => {
+        if (active) toast.error("Failed to load team keys");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSave = async () => {
     const nonEmptyPayload = Object.fromEntries(

@@ -74,7 +74,34 @@ function ProviderPanel({ provider }: { provider: typeof PROVIDERS[0] }) {
     }
   }, [provider.id]);
 
-  useEffect(() => { fetchStatus(); }, [fetchStatus]);
+  useEffect(() => {
+    let active = true;
+    api
+      .get(`/integrations/${provider.id}/status`)
+      .then(async (res) => {
+        if (!active) return;
+        setStatus(res.data);
+        setAutoExport(res.data.auto_export_enabled ?? false);
+
+        if (res.data.connected) {
+          const [jobsRes, logsRes] = await Promise.all([
+            api.get(`/integrations/${provider.id}/jobs?limit=10`),
+            api.get(`/integrations/${provider.id}/export-logs?limit=10`),
+          ]);
+          if (!active) return;
+          setJobs(jobsRes.data);
+          setExportLogs(logsRes.data);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setStatus({ connected: false, provider: provider.id, auto_export_enabled: false, last_sync_at: null });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [provider.id]);
 
   const handleConnect = async () => {
     if (!apiKey.trim()) { setError("API key cannot be empty"); return; }

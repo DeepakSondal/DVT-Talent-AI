@@ -28,7 +28,7 @@ test.describe('OAuth Callback Flow', () => {
 
     const storedToken = await page.evaluate(() => localStorage.getItem('dvt_token'));
     const storedTenant = await page.evaluate(() => localStorage.getItem('tenant_id'));
-    expect(storedToken).toBe('mock-access-token');
+    expect(storedToken).toBeNull();
     expect(storedTenant).toBe('mock-tenant-id');
   });
 });

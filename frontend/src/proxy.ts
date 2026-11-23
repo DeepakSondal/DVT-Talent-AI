@@ -1,5 +1,5 @@
 /**
- * DVT Talent AI — Next.js Auth Middleware
+ * DVT Talent AI — Next.js Proxy (Auth Guard)
  * Protects /dashboard, /portal, and all workspace sub-routes.
  * Validates JWT presence and expiry before allowing navigation.
  */
@@ -30,7 +30,7 @@ function isJwtExpired(rawToken: string): boolean {
   return payload.exp * 1000 < Date.now();
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
   const token = request.cookies.get("dvt_token")?.value;
 

@@ -47,7 +47,7 @@ export default function SwarmCommandCenter() {
     const [sourcingChannels, setSourcingChannels] = useState<string[]>(["internal", "github", "stackoverflow", "web"]);
     const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
     const [failedTaskId, setFailedTaskId] = useState<string | null>(null);
-    const [pollCount, setPollCount] = useState(0);
+    const pollCountRef = useRef(0);
     const [logs, setLogs] = useState<string[]>([
         "AI agent pipeline connected via real-time WebSocket.",
         "System state: 7 AI Recruiting Agents ready and standing by."
@@ -62,7 +62,7 @@ export default function SwarmCommandCenter() {
         { id: "analytics", name: "Analytics", role: "Recruiting Funnel Telemetry", icon: BarChart3, status: "idle", enabled: true, color: "cyan" },
     ]);
 
-    const { lastMessage } = useWebSocket();
+    const { subscribe } = useWebSocket();
 
     const updateAgentStatus = useCallback((id: string, status: AgentStatus) => {
         setAgents(prev => prev.map(a => a.id === id ? { ...a, status } : a));
@@ -81,10 +81,8 @@ export default function SwarmCommandCenter() {
     }, [updateAgentStatus]);
 
     useEffect(() => {
-        if (lastMessage) {
-            handleSignal(lastMessage);
-        }
-    }, [lastMessage, handleSignal]);
+        return subscribe(handleSignal);
+    }, [subscribe, handleSignal]);
 
     const toggleSourcingChannel = (channelId: string) => {
         setSourcingChannels(prev =>
@@ -113,62 +111,62 @@ export default function SwarmCommandCenter() {
         });
     };
 
-    const { data: taskStatusData } = useQuery({
+    useQuery({
         queryKey: ["swarm", "status", activeTaskId],
         queryFn: async () => {
-            setPollCount((c) => c + 1);
-            return agentsApi.getStatus(activeTaskId!);
+            const taskId = activeTaskId!;
+            const nextCount = pollCountRef.current + 1;
+            pollCountRef.current = nextCount;
+            const taskStatusData = await agentsApi.getStatus(taskId);
+
+            const currentStatus = taskStatusData?.status || "running";
+            const checkpoint: string | null = taskStatusData?.current_checkpoint || null;
+
+            if (checkpoint === "discovery_complete") {
+                setProgress((p) => Math.max(p, 35));
+                updateAgentStatus("discovery", "success");
+                updateAgentStatus("sourcing", "thinking");
+            } else if (checkpoint === "sourcing_complete") {
+                setProgress((p) => Math.max(p, 60));
+                updateAgentStatus("discovery", "success");
+                updateAgentStatus("sourcing", "success");
+                updateAgentStatus("critic", "thinking");
+            } else if (checkpoint === "critic_complete") {
+                setProgress((p) => Math.max(p, 80));
+                updateAgentStatus("critic", "success");
+                updateAgentStatus("outreach", "thinking");
+                updateAgentStatus("analytics", "thinking");
+                updateAgentStatus("screening", "thinking");
+            } else if (checkpoint === "post_complete") {
+                setProgress((p) => Math.max(p, 95));
+            }
+
+            if (currentStatus === "completed") {
+                setActiveTaskId(null);
+                setFailedTaskId(null);
+                setAgents(prev => prev.map(a => a.enabled ? { ...a, status: "success" } : a));
+                setStatus("complete");
+                setProgress(100);
+                setLogs(prev => [...prev, `[PIPELINE] Task ${taskId.slice(0, 8)} completed successfully.`]);
+                toast.success("Automated recruitment workflow completed!", {
+                    description: `Sourced and screened candidates for '${targetRole}'. Candidates saved to Candidate Pipeline.`
+                });
+            } else if (currentStatus === "failed") {
+                setActiveTaskId(null);
+                setFailedTaskId(taskId);
+                setStatus("idle");
+                setLogs(prev => [...prev, `[ERROR] Task ${taskId.slice(0, 8)} failed at checkpoint '${checkpoint || "start"}': ${taskStatusData?.error || "Execution error"}`]);
+                toast.error(taskStatusData?.error || "Swarm pipeline execution failed.");
+            } else if (nextCount >= 40) {
+                setActiveTaskId(null);
+                setLogs(prev => [...prev, `[PIPELINE] Task ${taskId.slice(0, 8)} is continuing asynchronously in the background.`]);
+            }
+
+            return taskStatusData;
         },
         enabled: Boolean(activeTaskId),
         refetchInterval: 3000,
     });
-
-    useEffect(() => {
-        if (!activeTaskId || !taskStatusData) return;
-        const currentStatus = taskStatusData?.status || "running";
-        const checkpoint: string | null = taskStatusData?.current_checkpoint || null;
-
-        if (checkpoint === "discovery_complete") {
-            setProgress((p) => Math.max(p, 35));
-            updateAgentStatus("discovery", "success");
-            updateAgentStatus("sourcing", "thinking");
-        } else if (checkpoint === "sourcing_complete") {
-            setProgress((p) => Math.max(p, 60));
-            updateAgentStatus("discovery", "success");
-            updateAgentStatus("sourcing", "success");
-            updateAgentStatus("critic", "thinking");
-        } else if (checkpoint === "critic_complete") {
-            setProgress((p) => Math.max(p, 80));
-            updateAgentStatus("critic", "success");
-            updateAgentStatus("outreach", "thinking");
-            updateAgentStatus("analytics", "thinking");
-            updateAgentStatus("screening", "thinking");
-        } else if (checkpoint === "post_complete") {
-            setProgress((p) => Math.max(p, 95));
-        }
-
-        if (currentStatus === "completed") {
-            setActiveTaskId(null);
-            setFailedTaskId(null);
-            setAgents(prev => prev.map(a => a.enabled ? { ...a, status: "success" } : a));
-            setStatus("complete");
-            setProgress(100);
-            setLogs(prev => [...prev, `[PIPELINE] Task ${activeTaskId.slice(0, 8)} completed successfully.`]);
-            toast.success("Automated recruitment workflow completed!", {
-                description: `Sourced and screened candidates for '${targetRole}'. Candidates saved to Candidate Pipeline.`
-            });
-        } else if (currentStatus === "failed") {
-            const failedId = activeTaskId;
-            setActiveTaskId(null);
-            setFailedTaskId(failedId);
-            setStatus("idle");
-            setLogs(prev => [...prev, `[ERROR] Task ${failedId.slice(0, 8)} failed at checkpoint '${checkpoint || "start"}': ${taskStatusData?.error || "Execution error"}`]);
-            toast.error(taskStatusData?.error || "Swarm pipeline execution failed.");
-        } else if (pollCount >= 40) {
-            setActiveTaskId(null);
-            setLogs(prev => [...prev, `[PIPELINE] Task ${activeTaskId.slice(0, 8)} is continuing asynchronously in the background.`]);
-        }
-    }, [activeTaskId, taskStatusData, pollCount, targetRole, updateAgentStatus]);
 
     const runSwarmMutation = useMutation({
         mutationFn: () => {
@@ -188,7 +186,7 @@ export default function SwarmCommandCenter() {
             setLogs(prev => [...prev, `✓ Swarm Dispatched: Task ${res?.task_id ? res.task_id.slice(0, 8) : "active"} queued on backend orchestrator.`]);
             setProgress(20);
             if (res?.task_id) {
-                setPollCount(0);
+                pollCountRef.current = 0;
                 setActiveTaskId(res.task_id);
             } else {
                 setAgents(prev => prev.map(a => a.enabled ? { ...a, status: "success" } : a));
@@ -208,7 +206,7 @@ export default function SwarmCommandCenter() {
         onSuccess: (res, taskId) => {
             setFailedTaskId(null);
             setStatus("running");
-            setPollCount(0);
+            pollCountRef.current = 0;
             setActiveTaskId(taskId);
             setLogs(prev => [...prev, `[PIPELINE] Resuming Task ${taskId.slice(0, 8)} from checkpoint '${res?.resumed_from_checkpoint || "start"}'...`]);
             toast.info("Resuming pipeline from last saved checkpoint...");

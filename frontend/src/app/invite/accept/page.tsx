@@ -25,9 +25,12 @@ function AcceptInvitationContent() {
   const shouldReduceMotion = useReducedMotion();
 
   // Token is stored strictly in memory state, NEVER in localStorage or sessionStorage
-  const [token, setToken] = useState<string | null>(null);
-  const [isValidating, setIsValidating] = useState(true);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const rawToken = searchParams.get("token")?.trim() || null;
+  const [token] = useState<string | null>(rawToken);
+  const [isValidating, setIsValidating] = useState(() => Boolean(rawToken));
+  const [validationError, setValidationError] = useState<string | null>(() =>
+    rawToken ? null : "Missing invitation token. Please check your invitation link."
+  );
   const [invitationData, setInvitationData] = useState<ValidateInvitationResponse | null>(null);
 
   // Form inputs
@@ -44,15 +47,9 @@ function AcceptInvitationContent() {
     if (hasInitializedRef.current) return;
     hasInitializedRef.current = true;
 
-    const rawToken = searchParams.get("token");
-    if (!rawToken || !rawToken.trim()) {
-      setIsValidating(false);
-      setValidationError("Missing invitation token. Please check your invitation link.");
+    if (!token) {
       return;
     }
-
-    const cleanToken = rawToken.trim();
-    setToken(cleanToken);
 
     // Strip the raw token from the visible URL bar to prevent shoulder-surfing and history leakage
     if (typeof window !== "undefined" && window.history && window.history.replaceState) {
@@ -61,7 +58,7 @@ function AcceptInvitationContent() {
 
     // Pre-flight validate invitation token
     teamService
-      .validateInvitation(cleanToken)
+      .validateInvitation(token)
       .then((data) => {
         setInvitationData(data);
         setIsValidating(false);
@@ -75,7 +72,7 @@ function AcceptInvitationContent() {
           setValidationError("This invitation is invalid, expired, or has already been accepted.");
         }
       });
-  }, [searchParams]);
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

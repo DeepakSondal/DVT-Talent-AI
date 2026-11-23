@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   CheckCircle2, Circle, ArrowRight, Sparkles, Rocket,
@@ -91,14 +91,14 @@ export function OnboardingWorkflow({
   const [droppedFiles, setDroppedFiles] = useState<string[]>([]);
 
   // Local storage checklist dismissal tracking
-  const [isDismissed, setIsDismissed] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const dismissed = localStorage.getItem("dvt_onboarding_dismissed");
-      if (dismissed === "true") setIsDismissed(true);
-    }
-  }, []);
+  const isDismissed = useSyncExternalStore(
+    (cb) => {
+      window.addEventListener("storage", cb);
+      return () => window.removeEventListener("storage", cb);
+    },
+    () => localStorage.getItem("dvt_onboarding_dismissed") === "true",
+    () => false
+  );
 
   const hasJob = stats.actions > 0 || stats.candidates > 0 || isDemoActive;
   const hasSourced = stats.candidates > 0 || isDemoActive;

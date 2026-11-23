@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useSyncExternalStore } from "react";
 
 type Theme = "light" | "dark";
 
@@ -11,36 +11,43 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const THEME_STORAGE_KEY = "dvt_theme";
+const THEME_EVENT = "dvt-theme-change";
+
+function subscribeTheme(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener(THEME_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(THEME_EVENT, callback);
+  };
+}
+
+function getThemeSnapshot(): Theme {
+  if (typeof window === "undefined") return "dark";
+  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+}
+
+function getServerThemeSnapshot(): Theme {
+  return "dark";
+}
+
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const [theme, setTheme] = useState<Theme>("dark");
-  const [mounted, setMounted] = useState(false);
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot);
 
   useEffect(() => {
-    // Initial mount check to handle hydration mismatch
-    const stored = localStorage.getItem("dvt_theme") as Theme | null;
     const root = window.document.documentElement;
-    
-    if (stored === "light") {
-      setTheme("light");
+    if (theme === "light") {
       root.classList.remove("dark");
     } else {
-      setTheme("dark");
       root.classList.add("dark");
     }
-    setMounted(true);
-  }, []);
+  }, [theme]);
 
   const toggleTheme = () => {
-    const root = window.document.documentElement;
-    if (theme === "dark") {
-      setTheme("light");
-      root.classList.remove("dark");
-      localStorage.setItem("dvt_theme", "light");
-    } else {
-      setTheme("dark");
-      root.classList.add("dark");
-      localStorage.setItem("dvt_theme", "dark");
-    }
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_STORAGE_KEY, next);
+    window.dispatchEvent(new Event(THEME_EVENT));
   };
 
   return (

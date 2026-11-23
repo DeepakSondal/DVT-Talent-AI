@@ -68,7 +68,7 @@ http.interceptors.response.use(
         localStorage.removeItem("dvt_token");
         localStorage.removeItem("tenant_id");
         if (!window.location.pathname.startsWith("/auth/")) {
-          window.location.href = "/auth/login";
+          window.location.replace("/auth/login");
         }
       }
     }

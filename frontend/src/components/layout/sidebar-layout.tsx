@@ -38,12 +38,14 @@ interface NavGroup {
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
+  const [mobileOpenPath, setMobileOpenPath] = useState<string | null>(null);
+  const mobileOpen = mobileOpenPath === pathname;
+  const setMobileOpen = (open: boolean) => setMobileOpenPath(open ? pathname : null);
   const [commandOpen, setCommandOpen] = useState(false);
   const [user, setUser] = useState<UserOut | null>(null);
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
   const { isConnected } = useWebSocket();
-  const pathname = usePathname();
   const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
 
@@ -51,11 +53,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     usersApi.me().then(setUser).catch(() => { });
     api.get("/billing/credits").then(r => setCreditsBalance(r.data.credits_balance)).catch(() => { });
   }, []);
-
-  // Close mobile drawer on route change
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
 
   const handleLogout = async () => {
     await authService.logout();

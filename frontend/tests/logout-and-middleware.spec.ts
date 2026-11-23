@@ -59,7 +59,7 @@ test.describe('Logout and Middleware Refresh Cookie Handling', () => {
       'Access-Control-Allow-Origin': 'http://localhost:3000',
       'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Requested-With',
     };
     await page.route('**/api/v1/**', async (route) => {
       if (route.request().method() === 'OPTIONS') {
@@ -90,6 +90,7 @@ test.describe('Logout and Middleware Refresh Cookie Handling', () => {
         return;
       }
       logoutCalled = true;
+      await context.clearCookies();
       await route.fulfill({ status: 200, headers: corsHeaders, contentType: 'application/json', body: '{"message":"Logged out"}' });
     });
 
