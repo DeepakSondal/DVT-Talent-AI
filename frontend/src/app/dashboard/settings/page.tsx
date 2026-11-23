@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { EmailSenderSettings } from "@/components/settings/EmailSenderTab";
 import { ApiKeysSettings } from "@/components/settings/TeamKeysTab";
+import { AdminMfaCard } from "@/components/settings/AdminMfaCard";
 
 export default function SettingsPage() {
   const [tenant, setTenant] = useState<any>({ name: "", logo_url: "" });
@@ -108,6 +109,12 @@ export default function SettingsPage() {
             className="data-[state=active]:bg-card data-[state=active]:shadow-sm font-semibold text-sm py-2 px-5 rounded-md"
           >
             <Users className="w-4 h-4 mr-2" /> Team
+          </TabsTrigger>
+          <TabsTrigger
+            value="security"
+            className="data-[state=active]:bg-card data-[state=active]:shadow-sm font-semibold text-sm py-2 px-5 rounded-md"
+          >
+            <ShieldCheck className="w-4 h-4 mr-2" /> Security &amp; 2FA
           </TabsTrigger>
         </TabsList>
 
@@ -207,6 +214,11 @@ export default function SettingsPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── Security & 2FA Tab ── */}
+        <TabsContent value="security">
+          <AdminMfaCard />
         </TabsContent>
       </Tabs>
     </div>

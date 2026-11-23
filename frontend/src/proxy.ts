@@ -66,8 +66,15 @@ export function proxy(request: NextRequest) {
 
   if (token && !pathname.startsWith("/portal")) {
     const payload = parseJwtPayload(token);
-    if (payload?.role === "candidate") {
+    const role = String(payload?.role || "").toLowerCase();
+    if (role === "candidate") {
       return NextResponse.redirect(new URL("/portal", request.url));
+    }
+    if (pathname.startsWith("/dashboard/monitoring") && role !== "admin") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    if (pathname.startsWith("/dashboard/team") && role !== "admin" && role !== "manager") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
 

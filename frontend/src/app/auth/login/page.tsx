@@ -78,6 +78,8 @@ function LoginContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
+  const [totpCode, setTotpCode] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const errorParam = searchParams.get("error");
@@ -140,6 +142,15 @@ function LoginContent() {
     setIsLoading(true);
     try {
       const res = await authApi.login({ email: email.trim().toLowerCase(), password });
+      if (res.mfa_required && res.challenge_token) {
+        setMfaChallengeToken(res.challenge_token);
+        setTotpCode("");
+        toast.info("Two-Factor Verification Required", {
+          description: "Enter the 6-digit code from your authenticator app.",
+        });
+        return;
+      }
+
       const isCandidateUser = res.role ? res.role === "candidate" : portal === "candidate";
 
       toast.success("Welcome back!", {
@@ -161,6 +172,38 @@ function LoginContent() {
       toast.error("Sign In Failed", {
         description: cleanMsg,
       });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaChallengeToken || totpCode.trim().length !== 6) {
+      setErrorMessage("Please enter a valid 6-digit authenticator code.");
+      return;
+    }
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const res = await authApi.verifyMfaChallenge({
+        challenge_token: mfaChallengeToken,
+        code: totpCode.trim(),
+      });
+      const isCandidateUser = res.role ? res.role === "candidate" : portal === "candidate";
+      toast.success("Two-Factor Verified", {
+        description: "Signed in securely.",
+        icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
+      });
+      const fromParam = searchParams.get("from");
+      const safeFrom =
+        fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") ? fromParam : null;
+      router.push(safeFrom || (isCandidateUser ? "/portal" : "/dashboard"));
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || "Invalid authenticator code.";
+      const cleanMsg = typeof msg === "string" ? msg : "Please try again.";
+      setErrorMessage(cleanMsg);
+      toast.error("2FA Verification Failed", { description: cleanMsg });
     } finally {
       setIsLoading(false);
     }
@@ -358,6 +401,67 @@ function LoginContent() {
             )}
 
             {/* Form */}
+            {mfaChallengeToken ? (
+              <form onSubmit={handleMfaSubmit} className="space-y-4">
+                <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/25 text-xs text-foreground space-y-1">
+                  <div className="font-bold text-primary flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" />
+                    Admin Two-Factor Verification
+                  </div>
+                  <p className="text-muted-foreground">
+                    Enter the 6-digit code from your authenticator app for <span className="font-semibold text-foreground">{email}</span>.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground" htmlFor="login-mfa-code">
+                    6-Digit Authenticator Code
+                  </label>
+                  <input
+                    id="login-mfa-code"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    autoFocus
+                    placeholder="123456"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/[^0-9]/g, ""))}
+                    className="w-full px-4 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-base font-mono tracking-[0.35em] text-center text-foreground transition-colors"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setMfaChallengeToken(null);
+                      setTotpCode("");
+                      setErrorMessage(null);
+                    }}
+                    className="h-11 rounded-xl text-xs font-semibold px-4"
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    id="login-mfa-submit-btn"
+                    type="submit"
+                    disabled={isLoading || totpCode.length !== 6}
+                    className="flex-1 h-11 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Verifying...
+                      </span>
+                    ) : (
+                      "Verify & Sign In"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            ) : (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground" htmlFor="login-email">
@@ -439,6 +543,7 @@ function LoginContent() {
                 )}
               </Button>
             </form>
+            )}
 
             {/* Social Sign-in Divider */}
             <div className="relative pt-2">

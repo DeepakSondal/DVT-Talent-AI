@@ -371,7 +371,7 @@ _in_memory_otp_attempts: Dict[str, int] = {}  # email -> failed verification cou
 _otp_lock = asyncio.Lock()
 
 
-async def store_email_otp(email: str, otp: str, ttl_seconds: int = 600) -> None:
+async def store_email_otp(email: str, otp: str, ttl_seconds: int = 300) -> None:
     """Store 6-digit email OTP with SHA-256 hash, reset attempt counter, and set expiry."""
     otp_hash = hashlib.sha256(otp.encode("utf-8")).hexdigest()
     now = time.time()
@@ -431,7 +431,7 @@ async def verify_email_otp(email: str, otp: str) -> bool:
 
                 new_attempts = await client.incr(attempts_key)
                 if new_attempts == 1:
-                    await client.expire(attempts_key, 600)
+                    await client.expire(attempts_key, 300)
                 if new_attempts >= MAX_OTP_VERIFY_ATTEMPTS:
                     await client.delete(otp_key, attempts_key)
                     async with _otp_lock:
@@ -471,6 +471,94 @@ async def verify_email_otp(email: str, otp: str) -> bool:
             _in_memory_otp_attempts[clean_email] = new_attempts
 
     return False
+
+
+# ── Single-Use High-Entropy Password Reset Tokens (SHA-256 hashed) ─────────────
+_in_memory_reset_tokens: Dict[str, Tuple[str, float]] = {}  # token_hash -> (email, expires_at)
+_reset_token_lock = asyncio.Lock()
+
+
+async def store_password_reset_token(token: str, email: str, ttl_seconds: int = 300) -> None:
+    """Stores a SHA-256 hash of a single-use 256-bit password reset token with a 5-minute default TTL."""
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    clean_email = email.strip().lower()
+    now = time.time()
+    expires_at = now + ttl_seconds
+
+    async with _reset_token_lock:
+        _in_memory_reset_tokens[token_hash] = (clean_email, expires_at)
+
+    client = get_redis_client()
+    if client:
+        try:
+            await client.setex(f"pwreset_token:{token_hash}", ttl_seconds, clean_email)
+        except Exception:
+            _circuit_state["available"] = False
+            _circuit_state["last_checked"] = now
+
+
+async def consume_password_reset_token(token: str) -> Optional[str]:
+    """Atomically retrieves and consumes a single-use password reset token, returning its email or None."""
+    clean_token = (token or "").strip()
+    if not clean_token:
+        return None
+    token_hash = hashlib.sha256(clean_token.encode("utf-8")).hexdigest()
+    now = time.time()
+
+    client = get_redis_client()
+    if client:
+        try:
+            key = f"pwreset_token:{token_hash}"
+            pipe = client.pipeline()
+            pipe.get(key)
+            pipe.delete(key)
+            email_val, _ = await pipe.execute()
+            if email_val is not None:
+                async with _reset_token_lock:
+                    _in_memory_reset_tokens.pop(token_hash, None)
+                return email_val.decode("utf-8") if isinstance(email_val, bytes) else str(email_val)
+        except Exception:
+            _circuit_state["available"] = False
+            _circuit_state["last_checked"] = now
+
+    async with _reset_token_lock:
+        entry = _in_memory_reset_tokens.pop(token_hash, None)
+        if not entry:
+            return None
+        stored_email, expires_at = entry
+        if now > expires_at:
+            return None
+        return stored_email
+
+
+# ── TOTP Replay Protection (Single-Use Time Step) ─────────────────────────────
+_in_memory_totp_steps: Dict[str, float] = {}  # "user_id:step" -> expires_at
+_totp_step_lock = asyncio.Lock()
+
+
+async def mark_totp_step_used(user_id: str, step: int, ttl_seconds: int = 90) -> bool:
+    """Marks a 30s TOTP time-step as consumed for user_id. Returns False if already used (replay)."""
+    now = time.time()
+    mem_key = f"{user_id}:{step}"
+    redis_key = f"mfa_totp_used:{mem_key}"
+
+    client = get_redis_client()
+    if client:
+        try:
+            acquired = await client.set(redis_key, "1", ex=ttl_seconds, nx=True)
+            return bool(acquired)
+        except Exception:
+            _circuit_state["available"] = False
+            _circuit_state["last_checked"] = now
+
+    async with _totp_step_lock:
+        expired_keys = [k for k, exp in _in_memory_totp_steps.items() if now > exp]
+        for k in expired_keys:
+            _in_memory_totp_steps.pop(k, None)
+        if mem_key in _in_memory_totp_steps:
+            return False
+        _in_memory_totp_steps[mem_key] = now + ttl_seconds
+        return True
 
 
 # ── Single-use OAuth Link Confirmation Nonces ─────────────────────────────────

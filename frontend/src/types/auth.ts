@@ -16,17 +16,21 @@ export interface UserOut {
   role: UserRole;
   is_active: boolean;
   is_verified: boolean;
+  mfa_enabled?: boolean;
   avatar_url?: string;
   last_login?: string;
   created_at: string;
 }
 
 export interface AuthResponse {
-  access_token: string;
+  access_token?: string;
   token_type?: string;
-  user_id: string;
+  user_id?: string;
   tenant_id?: string | null;
-  email: string;
-  full_name: string;
+  email?: string;
+  full_name?: string;
   role: string;
+  mfa_required?: boolean;
+  challenge_token?: string;
+  mfa_enabled?: boolean;
 }

@@ -360,6 +360,8 @@ class User(Base, TimestampMixin):
     monthly_credit_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     provider: Mapped[Optional[str]] = mapped_column(String(50))  # e.g. "google", "github", "linkedin"
     provider_id: Mapped[Optional[str]] = mapped_column(String(255))
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mfa_secret_encrypted: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
 
     # Relationships
     tenant: Mapped[Optional["Tenant"]] = relationship("Tenant")
