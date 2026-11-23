@@ -120,7 +120,7 @@ export default function BillingPage() {
         setUtrInput("");
         setCheckingOut(null);
       } else if (res?.checkout_url) {
-        window.location.href = res.checkout_url;
+        window.location.assign(res.checkout_url);
       } else {
         toast.error("Checkout Error", {
           description: "No checkout URL returned by billing service."

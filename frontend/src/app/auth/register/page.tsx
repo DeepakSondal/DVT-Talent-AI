@@ -9,9 +9,9 @@ import {
   Mail, ArrowRight, Lock, User,
   CheckCircle2, Briefcase, UserCheck,
   Eye, EyeOff, Loader2, Building2,
-  KeyRound, ArrowLeft, RefreshCw,
-  Chrome as Google, Github
+  KeyRound, ArrowLeft, RefreshCw
 } from "lucide-react";
+import { GoogleIcon as Google, GithubIcon as Github } from "@/components/ui/BrandIcons";
 import { resolveSocialAuthUrl } from "@/services/auth.service";
 import { authApi } from "@/lib/api";
 import { toast } from "sonner";

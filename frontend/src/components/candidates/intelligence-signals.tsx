@@ -2,11 +2,12 @@
 
 import React from "react";
 import { 
-  Zap, Github, 
+  Zap,
   Terminal, Globe, MessageSquare, 
   Quote, TrendingUp, Award,
   Cpu, Rocket, Heart
 } from "lucide-react";
+import { GithubIcon as Github } from "@/components/ui/BrandIcons";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";

@@ -8,8 +8,6 @@ import {
   Bot,
   Target,
   Mail,
-  Chrome as Google,
-  Github,
   ArrowRight,
   Loader2,
   Eye,
@@ -21,6 +19,7 @@ import {
   Layers,
   AlertCircle,
 } from "lucide-react";
+import { GoogleIcon as Google, GithubIcon as Github } from "@/components/ui/BrandIcons";
 import { authApi } from "@/lib/api";
 import { resolveSocialAuthUrl } from "@/services/auth.service";
 import { toast } from "sonner";

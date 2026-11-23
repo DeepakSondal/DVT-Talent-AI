@@ -34,7 +34,7 @@ const SignalItem = React.memo(({ s }: SignalItemProps) => (
         className="flex items-start gap-3 text-xs py-2.5 px-4 font-mono hover:bg-slate-900/60 rounded-xl transition-colors duration-150 border-b border-slate-800/40 last:border-0"
     >
         <span className="text-slate-400 font-bold shrink-0">
-            [{s.timestamp?.split('T')[1]?.substring(0, 8) || new Date(s.timestamp || Date.now()).toLocaleTimeString()}]
+            [{s.timestamp?.split('T')[1]?.substring(0, 8) || (s.timestamp ? new Date(s.timestamp).toLocaleTimeString() : "live")}]
         </span>
         <span className={`font-black uppercase w-32 shrink-0 ${
             s.type?.includes('error') || s.type?.includes('failed') ? 'text-rose-400' :
