@@ -56,7 +56,7 @@ export default function MonitoringPage() {
     const [hourlyRate, setHourlyRate] = useState<number>(45);
     const [filterCategory, setFilterCategory] = useState<string>("all");
     const [isPaused, setIsPaused] = useState<boolean>(false);
-    const { lastMessage } = useWebSocket();
+    const { subscribe } = useWebSocket();
 
     const { data: historySignals = [], refetch: refetchSignals } = useQuery({
         queryKey: ["monitoring", "signals"],
@@ -93,14 +93,16 @@ export default function MonitoringPage() {
 
     // WebSocket Live Signal Handler
     useEffect(() => {
-        if (lastMessage && !isPaused) {
-            setLiveSignals(prev => [{ 
-                ...lastMessage, 
-                id: Date.now(), 
-                timestamp: new Date().toISOString() 
-            }, ...prev].slice(0, 30));
-        }
-    }, [lastMessage, isPaused]);
+        return subscribe((msg) => {
+            if (!isPaused) {
+                setLiveSignals(prev => [{
+                    ...msg,
+                    id: Date.now(),
+                    timestamp: new Date().toISOString()
+                }, ...prev].slice(0, 30));
+            }
+        });
+    }, [subscribe, isPaused]);
 
     const activeTasks = tasks.filter(t => t.status === "running" || t.status === "pending").length;
     const completedTasks = tasks.filter(t => t.status === "completed").length;

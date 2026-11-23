@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   User, Shield, Upload, CheckCircle2,
@@ -15,58 +15,53 @@ import { Badge } from "@/components/ui/Badge";
 import { toast } from "sonner";
 
 export default function CandidateProfilePage() {
-  const queryClient = useQueryClient();
-
   const { data: profile, isLoading } = useQuery({
     queryKey: ["candidate-profile"],
     queryFn: candidatePortalApi.getProfile,
   });
 
+  if (isLoading) {
+    return (
+      <div className="p-16 text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto" />
+      </div>
+    );
+  }
+
+  return (
+    <CandidateProfileForm
+      key={`${profile?.id || "empty"}:${profile?.resume_name || ""}`}
+      profile={profile}
+    />
+  );
+}
+
+function CandidateProfileForm({ profile }: { profile?: CandidateProfile }) {
+  const queryClient = useQueryClient();
+
   const [formData, setFormData] = useState({
-    first_name: "",
-    last_name: "",
-    title: "",
-    location: "",
-    linkedin_url: "",
-    github_url: "",
-    portfolio_url: "",
-    experience_years: 0,
-    current_company: "",
-    current_salary: 0,
-    expected_salary: 0,
-    availability: "Immediate",
-    is_searchable: true,
+    first_name: profile?.first_name || "",
+    last_name: profile?.last_name || "",
+    title: profile?.title || "",
+    location: profile?.location || "",
+    linkedin_url: profile?.linkedin_url || "",
+    github_url: profile?.github_url || "",
+    portfolio_url: profile?.portfolio_url || "",
+    experience_years: profile?.experience_years || 0,
+    current_company: profile?.current_company || "",
+    current_salary: profile?.current_salary || 0,
+    expected_salary: profile?.expected_salary || 0,
+    availability: profile?.availability || "Immediate",
+    is_searchable: profile?.is_searchable ?? true,
   });
 
-  const [skillsList, setSkillsList] = useState<string[]>([]);
+  const [skillsList, setSkillsList] = useState<string[]>(profile?.skills || []);
   const [newSkillInput, setNewSkillInput] = useState("");
 
-  const [blockedCompanies, setBlockedCompanies] = useState<string[]>([]);
+  const [blockedCompanies, setBlockedCompanies] = useState<string[]>(profile?.hide_from_companies || []);
   const [newBlockedInput, setNewBlockedInput] = useState("");
 
   const [uploadingResume, setUploadingResume] = useState(false);
-
-  useEffect(() => {
-    if (profile) {
-      setFormData({
-        first_name: profile.first_name || "",
-        last_name: profile.last_name || "",
-        title: profile.title || "",
-        location: profile.location || "",
-        linkedin_url: profile.linkedin_url || "",
-        github_url: profile.github_url || "",
-        portfolio_url: profile.portfolio_url || "",
-        experience_years: profile.experience_years || 0,
-        current_company: profile.current_company || "",
-        current_salary: profile.current_salary || 0,
-        expected_salary: profile.expected_salary || 0,
-        availability: profile.availability || "Immediate",
-        is_searchable: profile.is_searchable ?? true,
-      });
-      setSkillsList(profile.skills || []);
-      setBlockedCompanies(profile.hide_from_companies || []);
-    }
-  }, [profile]);
 
   // Update profile mutation
   const updateMutation = useMutation({
@@ -178,14 +173,6 @@ export default function CandidateProfilePage() {
       });
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="p-16 text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto" />
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSave} className="space-y-8 max-w-4xl">

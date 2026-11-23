@@ -41,6 +41,11 @@ const COMMANDS: CommandItem[] = [
 ];
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+  if (!open) return null;
+  return <CommandPaletteModal open={open} onOpenChange={onOpenChange} />;
+}
+
+function CommandPaletteModal({ open, onOpenChange }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const router = useRouter();
@@ -64,12 +69,9 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   // Focus input when opened
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [open]);
+    const timer = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Filter commands
   const filtered = COMMANDS.filter((cmd) => {

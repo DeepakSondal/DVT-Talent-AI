@@ -48,6 +48,44 @@ export function DashboardOverviewClient({ initialData = null }: { initialData?: 
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isDemoActive, setIsDemoActive] = useState(false);
 
+    const applyDashboardPayload = (
+        tasks: any[],
+        kpisRes: any,
+        candsRes: any
+    ) => {
+        const dbCands = candsRes?.items || (Array.isArray(candsRes) ? candsRes : []);
+        const totalCandidates = kpisRes?.candidates?.total ?? dbCands.length;
+        const avgScore = dbCands.length > 0
+            ? Math.round(dbCands.reduce((a: number, c: any) => a + normalizeCandidateScore(c.score, 88), 0) / dbCands.length)
+            : 0;
+        setStats({
+            candidates: totalCandidates,
+            actions: tasks.length,
+            hours: Math.floor(tasks.length * 1.5),
+            matchScore: avgScore,
+        });
+        setPipelineCounts({
+            sourced: dbCands.filter((c: any) => !c.status || c.status.toLowerCase() === "sourced").length,
+            screened: dbCands.filter((c: any) => c.status?.toLowerCase() === "screened").length,
+            shortlisted: dbCands.filter((c: any) => c.status?.toLowerCase() === "shortlisted").length,
+            contacted: dbCands.filter((c: any) => c.status?.toLowerCase() === "contacted").length,
+            interviewing: dbCands.filter((c: any) => ["interviewing", "interviewed", "offered"].includes(c.status?.toLowerCase())).length,
+        });
+        if (dbCands.length > 0) {
+            setTopMatches(dbCands.slice(0, 3).map((c: any) => ({
+                id: String(c.id),
+                name: `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Candidate",
+                title: c.title || "Software Engineer",
+                company: c.current_company || "Organization",
+                score: normalizeCandidateScore(c.score, 90),
+                stage: (c.status || "Sourced"),
+                href: `/dashboard/candidates/${c.id}`,
+            })));
+        } else {
+            setTopMatches([]);
+        }
+    };
+
     const fetchStats = async () => {
         try {
             setIsRefreshing(true);
@@ -56,37 +94,7 @@ export function DashboardOverviewClient({ initialData = null }: { initialData?: 
                 api.get("/analytics/dashboard").then(r => r.data).catch(() => null),
                 candidatesApi.list({ page: 1 }).catch(() => ({ items: [] })),
             ]);
-            const dbCands = (candsRes as any)?.items || (Array.isArray(candsRes) ? candsRes : []);
-            const totalCandidates = kpisRes?.candidates?.total ?? dbCands.length;
-            const avgScore = dbCands.length > 0
-                ? Math.round(dbCands.reduce((a: number, c: any) => a + normalizeCandidateScore(c.score, 88), 0) / dbCands.length)
-                : 0;
-            setStats({
-                candidates: totalCandidates,
-                actions: tasks.length,
-                hours: Math.floor(tasks.length * 1.5),
-                matchScore: avgScore,
-            });
-            setPipelineCounts({
-                sourced: dbCands.filter((c: any) => !c.status || c.status.toLowerCase() === "sourced").length,
-                screened: dbCands.filter((c: any) => c.status?.toLowerCase() === "screened").length,
-                shortlisted: dbCands.filter((c: any) => c.status?.toLowerCase() === "shortlisted").length,
-                contacted: dbCands.filter((c: any) => c.status?.toLowerCase() === "contacted").length,
-                interviewing: dbCands.filter((c: any) => ["interviewing", "interviewed", "offered"].includes(c.status?.toLowerCase())).length,
-            });
-            if (dbCands.length > 0) {
-                setTopMatches(dbCands.slice(0, 3).map((c: any) => ({
-                    id: String(c.id),
-                    name: `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Candidate",
-                    title: c.title || "Software Engineer",
-                    company: c.current_company || "Organization",
-                    score: normalizeCandidateScore(c.score, 90),
-                    stage: (c.status || "Sourced"),
-                    href: `/dashboard/candidates/${c.id}`,
-                })));
-            } else {
-                setTopMatches([]);
-            }
+            applyDashboardPayload(tasks, kpisRes, candsRes);
         } catch (e) {
             console.error("Signal fetch error:", e);
         } finally {
@@ -96,7 +104,19 @@ export function DashboardOverviewClient({ initialData = null }: { initialData?: 
 
     useEffect(() => {
         if (initialData !== null) return;
-        fetchStats();
+        let active = true;
+        Promise.all([
+            monitoringApi.getRecentSignals(100).catch(() => []),
+            api.get("/analytics/dashboard").then(r => r.data).catch(() => null),
+            candidatesApi.list({ page: 1 }).catch(() => ({ items: [] })),
+        ])
+            .then(([tasks, kpisRes, candsRes]) => {
+                if (active) applyDashboardPayload(tasks, kpisRes, candsRes);
+            })
+            .catch((e) => console.error("Signal fetch error:", e));
+        return () => {
+            active = false;
+        };
     }, [initialData]);
 
     const navigationCards = [

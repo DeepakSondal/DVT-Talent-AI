@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -15,6 +15,29 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { toast } from "sonner";
 
+const PORTAL_THEME_KEY = "dvt_portal_theme";
+const PORTAL_THEME_EVENT = "dvt-portal-theme-change";
+
+function subscribePortalTheme(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener(PORTAL_THEME_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(PORTAL_THEME_EVENT, callback);
+  };
+}
+
+function getPortalThemeSnapshot(): "light" | "dark" {
+  if (typeof window === "undefined") return "light";
+  const saved = localStorage.getItem(PORTAL_THEME_KEY);
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function getServerPortalThemeSnapshot(): "light" | "dark" {
+  return "light";
+}
+
 export default function CandidatePortalLayout({
   children,
 }: {
@@ -24,32 +47,24 @@ export default function CandidatePortalLayout({
   const router = useRouter();
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const theme = useSyncExternalStore(
+    subscribePortalTheme,
+    getPortalThemeSnapshot,
+    getServerPortalThemeSnapshot
+  );
 
   useEffect(() => {
-    const saved = localStorage.getItem("dvt_portal_theme") as "light" | "dark" | null;
-    if (saved) {
-      setTheme(saved);
-      if (saved === "dark") {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setTheme("dark");
-      document.documentElement.classList.add("dark");
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const next = theme === "light" ? "dark" : "light";
-    setTheme(next);
-    localStorage.setItem("dvt_portal_theme", next);
-    if (next === "dark") {
+    if (theme === "dark") {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    const next = theme === "light" ? "dark" : "light";
+    localStorage.setItem(PORTAL_THEME_KEY, next);
+    window.dispatchEvent(new Event(PORTAL_THEME_EVENT));
   };
 
   useEffect(() => {

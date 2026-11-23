@@ -23,22 +23,18 @@ import { cn } from "@/lib/utils";
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
 
 function RegisterContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const shouldReduceMotion = useReducedMotion();
   const portalParam = searchParams.get("portal");
+  return <RegisterContentForm key={portalParam || "default"} portalParam={portalParam} />;
+}
+
+function RegisterContentForm({ portalParam }: { portalParam: string | null }) {
+  const router = useRouter();
+  const shouldReduceMotion = useReducedMotion();
 
   const [portal, setPortal] = useState<"recruiter" | "candidate">(
     portalParam === "candidate" ? "candidate" : "recruiter"
   );
-
-  useEffect(() => {
-    if (portalParam === "candidate") {
-      setPortal("candidate");
-    } else if (portalParam === "recruiter") {
-      setPortal("recruiter");
-    }
-  }, [portalParam]);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");

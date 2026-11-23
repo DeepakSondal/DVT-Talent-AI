@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Users, UserPlus, Search, Filter, 
   MoreVertical, Shield, ShieldCheck, ShieldAlert,
@@ -23,6 +24,7 @@ export interface TeamClientProps {
 }
 
 export function TeamClient({ initialMe = null, initialTeamData = null }: TeamClientProps) {
+  const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
   const { data: me } = useQuery({
     queryKey: ["me"],
@@ -145,7 +147,7 @@ export function TeamClient({ initialMe = null, initialTeamData = null }: TeamCli
               <h2 className="text-2xl font-bold text-foreground break-words">Access Restricted</h2>
               <p className="text-sm font-medium text-muted-foreground max-w-sm mx-auto">Admin authorization required to manage team members.</p>
            </div>
-           <Button variant="outline" className="mt-4" onClick={() => window.location.href='/dashboard'}>Return to Dashboard</Button>
+           <Button variant="outline" className="mt-4" onClick={() => router.push('/dashboard')}>Return to Dashboard</Button>
         </div>
      );
   }

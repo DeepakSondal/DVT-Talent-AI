@@ -69,6 +69,7 @@ export function EmailSenderSettings() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
     const oauthStatus = params?.get("status");
     const oauthProvider = params?.get("oauth");
@@ -77,28 +78,40 @@ export function EmailSenderSettings() {
     if (oauthError) {
       toast.error("OAuth Connection Error", { description: oauthError });
       window.history.replaceState({}, "", window.location.pathname);
-      loadConfig();
-      return;
-    }
-
-    if (oauthStatus === "connected" && (oauthProvider === "google" || oauthProvider === "microsoft")) {
+    } else if (oauthStatus === "connected" && (oauthProvider === "google" || oauthProvider === "microsoft")) {
       window.history.replaceState({}, "", window.location.pathname);
-      loadConfig().then((data) => {
-        if (data?.configured && data?.sender_verified) {
-          toast.success("Mailbox connected!", {
-            description: `Verified ${data.sender_email || oauthProvider} mailbox.`,
-          });
-        } else {
-          toast.error("OAuth Connection Error", {
-            description: "Mailbox authorization did not complete verification.",
-          });
-        }
-      });
-      return;
     }
 
-    loadConfig();
-  }, [loadConfig]);
+    emailSenderApi
+      .getConfig()
+      .then((data) => {
+        if (!active) return;
+        setConfig(data);
+        setSenderName(data.sender_name || "");
+        setSenderEmail(data.sender_email || "");
+        if (oauthStatus === "connected" && (oauthProvider === "google" || oauthProvider === "microsoft")) {
+          if (data?.configured && data?.sender_verified) {
+            toast.success("Mailbox connected!", {
+              description: `Verified ${data.sender_email || oauthProvider} mailbox.`,
+            });
+          } else {
+            toast.error("OAuth Connection Error", {
+              description: "Mailbox authorization did not complete verification.",
+            });
+          }
+        }
+      })
+      .catch(() => {
+        if (active) toast.error("Failed to load sender config");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!pendingProvider) return;

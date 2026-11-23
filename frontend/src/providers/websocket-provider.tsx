@@ -1,18 +1,20 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface WebSocketContextType {
   lastMessage: any;
   isConnected: boolean;
   sendMessage: (msg: any) => void;
+  subscribe: (listener: (msg: any) => void) => () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType>({
   lastMessage: null,
   isConnected: false,
   sendMessage: () => {},
+  subscribe: () => () => {},
 });
 
 export const useWebSocket = () => useContext(WebSocketContext);
@@ -21,6 +23,14 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<any>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const listenersRef = useRef<Set<(msg: any) => void>>(new Set());
+
+  const subscribe = useCallback((listener: (msg: any) => void) => {
+    listenersRef.current.add(listener);
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -70,6 +80,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
           }
           
           setLastMessage(data);
+          listenersRef.current.forEach((listener) => listener(data));
 
           // Critical global event toasting
           if (data.type === "agent_success") {
@@ -120,7 +131,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
   };
 
   return (
-    <WebSocketContext.Provider value={{ lastMessage, isConnected, sendMessage }}>
+    <WebSocketContext.Provider value={{ lastMessage, isConnected, sendMessage, subscribe }}>
       {children}
     </WebSocketContext.Provider>
   );

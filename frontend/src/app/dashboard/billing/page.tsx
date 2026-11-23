@@ -102,7 +102,25 @@ export default function BillingPage() {
   };
 
   useEffect(() => {
-    fetchBillingData();
+    let active = true;
+    Promise.all([billingService.getPlans(), billingService.getCredits()])
+      .then(([plansData, statusData]) => {
+        if (!active) return;
+        if (plansData && plansData.length > 0) {
+          setPlans(plansData);
+        }
+        setStatus(statusData);
+      })
+      .catch((err) => {
+        console.error("Billing fetch failed:", err);
+        if (active) toast.error("Failed to load billing details");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleUpgrade = async (planId: string, methodOverride?: "google_pay" | "all") => {

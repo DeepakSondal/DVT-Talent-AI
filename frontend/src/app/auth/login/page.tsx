@@ -82,18 +82,24 @@ function LoginContent() {
 
   const errorParam = searchParams.get("error");
   const providerParam = searchParams.get("provider");
+  const oauthProviderLabel = providerParam
+    ? providerParam.charAt(0).toUpperCase() + providerParam.slice(1)
+    : "Social";
+  const oauthErrorMessage =
+    errorParam === "oauth_not_configured"
+      ? `${oauthProviderLabel} Sign-In is not configured on this server.`
+      : null;
+
   useEffect(() => {
     if (errorParam === "oauth_not_configured") {
-      const label = providerParam
-        ? providerParam.charAt(0).toUpperCase() + providerParam.slice(1)
-        : "Social";
-      const msg = `Set ${label.toUpperCase()}_CLIENT_ID and ${label.toUpperCase()}_CLIENT_SECRET in backend/.env to enable ${label} login.`;
-      setErrorMessage(`${label} Sign-In is not configured on this server.`);
-      toast.error(`${label} Sign-In Not Configured`, {
+      const msg = `Set ${oauthProviderLabel.toUpperCase()}_CLIENT_ID and ${oauthProviderLabel.toUpperCase()}_CLIENT_SECRET in backend/.env to enable ${oauthProviderLabel} login.`;
+      toast.error(`${oauthProviderLabel} Sign-In Not Configured`, {
         description: msg,
       });
     }
-  }, [errorParam, providerParam]);
+  }, [errorParam, oauthProviderLabel]);
+
+  const displayedError = errorMessage || oauthErrorMessage;
 
   const transitionConfig = shouldReduceMotion ? { duration: 0 } : springPreset;
 
@@ -341,13 +347,13 @@ function LoginContent() {
               </p>
             </div>
 
-            {errorMessage && (
+            {displayedError && (
               <div
                 role="alert"
                 className="flex items-start gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-xs text-destructive"
               >
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{errorMessage}</span>
+                <span>{displayedError}</span>
               </div>
             )}
 

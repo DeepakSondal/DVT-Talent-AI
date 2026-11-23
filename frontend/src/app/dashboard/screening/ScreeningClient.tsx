@@ -43,6 +43,22 @@ interface ScreeningClientProps {
 export function ScreeningClient({ initialJobs = null, initialJobId = null }: ScreeningClientProps) {
   const searchParams = useSearchParams();
   const jobIdParam = searchParams.get("job_id") || initialJobId;
+  return (
+    <ScreeningClientInner
+      key={jobIdParam || "default"}
+      initialJobs={initialJobs}
+      jobIdParam={jobIdParam}
+    />
+  );
+}
+
+function ScreeningClientInner({
+  initialJobs,
+  jobIdParam,
+}: {
+  initialJobs: Job[] | null;
+  jobIdParam: string | null;
+}) {
   const shouldReduceMotion = useReducedMotion();
   const springTransition = shouldReduceMotion ? { duration: 0 } : { type: "spring" as const, stiffness: 400, damping: 30 };
 
@@ -63,18 +79,12 @@ export function ScreeningClient({ initialJobs = null, initialJobId = null }: Scr
 
   useEffect(() => {
     if (initialJobs && initialJobs.length > 0) {
-      if (jobIdParam) {
-        const matched = initialJobs.find((j) => j.id === jobIdParam);
-        if (matched) {
-          setSelectedJobId(matched.id);
-          setRoleTitle(matched.title);
-          setJobDescription(matched.description || "");
-        }
-      }
       return;
     }
+    let active = true;
     jobsApi.list()
       .then((res) => {
+        if (!active) return;
         const items = res?.items || [];
         setJobs(items);
         if (items.length > 0) {
@@ -85,6 +95,9 @@ export function ScreeningClient({ initialJobs = null, initialJobId = null }: Scr
         }
       })
       .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [jobIdParam, initialJobs]);
 
   const handleSelectJob = (jobId: string) => {

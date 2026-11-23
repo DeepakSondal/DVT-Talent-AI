@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -26,11 +26,7 @@ function InterviewPrepContent() {
   });
 
   // Auto-select first job if none specified
-  useEffect(() => {
-    if (!selectedJobId && jobs.length > 0) {
-      setSelectedJobId(jobs[0].id);
-    }
-  }, [selectedJobId, jobs]);
+  const effectiveJobId = selectedJobId || jobs[0]?.id || "";
 
   // Load STAR prep cards for selected job with error tracking
   const {
@@ -39,9 +35,9 @@ function InterviewPrepContent() {
     isError,
     refetch,
   } = useQuery({
-    queryKey: ["interview-prep", selectedJobId],
-    queryFn: () => candidatePortalApi.getInterviewPrep(selectedJobId),
-    enabled: !!selectedJobId,
+    queryKey: ["interview-prep", effectiveJobId],
+    queryFn: () => candidatePortalApi.getInterviewPrep(effectiveJobId),
+    enabled: !!effectiveJobId,
     retry: 2,
   });
 
@@ -74,7 +70,7 @@ function InterviewPrepContent() {
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">Target Role:</span>
             <select
-              value={selectedJobId}
+              value={effectiveJobId}
               onChange={(e) => {
                 setSelectedJobId(e.target.value);
                 setActiveCardIndex(0);
