@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   User, Mail, Phone, MapPin,
-  Linkedin, Github, ExternalLink,
+  ExternalLink,
   FileText, Calendar, ShieldCheck,
   ChevronLeft, MoreHorizontal,
   Briefcase, GraduationCap, Globe,
@@ -15,6 +15,7 @@ import {
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
+import { GithubIcon as Github, LinkedinIcon as Linkedin } from "@/components/ui/BrandIcons";
 import { candidatesApi, agentsApi, Candidate } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";

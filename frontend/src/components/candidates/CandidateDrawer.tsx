@@ -4,9 +4,10 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { 
   X, ExternalLink, Sparkles, Mail, Phone, MapPin, 
-  Linkedin, Github, Briefcase, FileText, CheckCircle2, 
+  Briefcase, FileText, CheckCircle2, 
   Send, Clock, Download, ChevronRight, User, ShieldCheck
 } from "lucide-react";
+import { GithubIcon as Github, LinkedinIcon as Linkedin } from "@/components/ui/BrandIcons";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";

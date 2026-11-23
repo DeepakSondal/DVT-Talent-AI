@@ -6,9 +6,10 @@ import {
     Target, Sparkles, Search, Filter, 
     Cpu, ShieldCheck, Play, Loader2, 
     Network, Database, Users, Code,
-    Mail, Phone, ExternalLink, Github, Linkedin,
+    Mail, Phone, ExternalLink,
     CheckCircle2, ArrowRight, UserCheck, RefreshCw, Zap
 } from "lucide-react";
+import { GithubIcon as Github, LinkedinIcon as Linkedin } from "@/components/ui/BrandIcons";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";

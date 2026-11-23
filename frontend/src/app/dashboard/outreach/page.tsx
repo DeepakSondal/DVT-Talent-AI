@@ -8,9 +8,10 @@ import {
     Zap, ShieldCheck, Play, Loader2, 
     AtSign, Clock, CheckCircle2, User,
     MapPin, ExternalLink, Globe, Phone,
-    Linkedin, Github, CheckSquare, Square,
+    CheckSquare, Square,
     ArrowRight, ChevronDown, ChevronUp, AlertCircle, Plus
 } from "lucide-react";
+import { GithubIcon as Github, LinkedinIcon as Linkedin } from "@/components/ui/BrandIcons";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";

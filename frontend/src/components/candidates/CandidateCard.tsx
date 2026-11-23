@@ -3,10 +3,11 @@
 import React from "react";
 import Link from "next/link";
 import { 
-  Mail, ExternalLink, Linkedin, Github, 
+  Mail, ExternalLink,
   MapPin, Briefcase, Eye, ChevronRight, 
   Sparkles, CheckCircle2, MoreHorizontal
 } from "lucide-react";
+import { GithubIcon as Github, LinkedinIcon as Linkedin } from "@/components/ui/BrandIcons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";

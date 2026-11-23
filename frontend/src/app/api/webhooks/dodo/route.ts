@@ -1,1 +1,2 @@
-export { POST, dynamic } from "../../webhook/route";
+export const dynamic = "force-dynamic";
+export { POST } from "../../webhook/route";

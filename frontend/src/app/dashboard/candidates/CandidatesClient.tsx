@@ -8,7 +8,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { 
     Search, Filter, Plus, MoreHorizontal, 
     CheckSquare, Square, Mail, Trash2, 
-    ArrowUpRight, Loader2, Linkedin, Github, 
+    ArrowUpRight, Loader2,
     Globe, Briefcase, Sparkles, ShieldCheck,
     Zap, Activity, Download, Users, Upload,
     FileText, X, Check, CheckCircle2, Phone, MapPin, ExternalLink,
