@@ -26,6 +26,8 @@ async def ensure_db_tables():
         _in_memory_otp_attempts,
         _in_memory_otps,
         _in_memory_ratelimit,
+        _in_memory_reset_tokens,
+        _in_memory_totp_steps,
     )
 
     _in_memory_ratelimit.clear()
@@ -33,6 +35,8 @@ async def ensure_db_tables():
     _in_memory_oauth_links.clear()
     _in_memory_otps.clear()
     _in_memory_otp_attempts.clear()
+    _in_memory_reset_tokens.clear()
+    _in_memory_totp_steps.clear()
 
     try:
         async with engine.begin() as conn:

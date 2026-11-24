@@ -8,6 +8,7 @@ import {
   Compass, Zap, Plus, X, ArrowRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { authApi } from "@/lib/api";
 
 export interface CommandItem {
   id: string;
@@ -17,6 +18,7 @@ export interface CommandItem {
   href?: string;
   action?: () => void;
   keywords?: string[];
+  superadminOnly?: boolean;
 }
 
 export interface CommandPaletteProps {
@@ -34,7 +36,7 @@ const COMMANDS: CommandItem[] = [
   { id: "compliance", title: "AI Governance & NYC LL144", category: "Navigation", icon: ShieldCheck, href: "/dashboard/compliance", keywords: ["audit", "bias", "disparity", "aedt"] },
   { id: "billing", title: "Billing & Credits", category: "Navigation", icon: CreditCard, href: "/dashboard/billing", keywords: ["plans", "capacity", "tokens", "dodo"] },
   { id: "outreach", title: "Outreach Campaigns", category: "Navigation", icon: Mail, href: "/dashboard/outreach", keywords: ["email", "sequence", "templates"] },
-  { id: "monitoring", title: "System Telemetry & Health", category: "Navigation", icon: Zap, href: "/dashboard/monitoring", keywords: ["logs", "telemetry", "status"] },
+  { id: "monitoring", title: "System Telemetry & Health", category: "Navigation", icon: Zap, href: "/dashboard/monitoring", keywords: ["logs", "telemetry", "status"], superadminOnly: true },
   { id: "settings", title: "Platform Settings & Integrations", category: "Navigation", icon: Settings, href: "/dashboard/settings", keywords: ["keys", "ats", "greenhouse", "ceipal"] },
   { id: "portal", title: "Candidate Experience Portal", category: "Portal", icon: Compass, href: "/portal", keywords: ["applicant", "jobs", "apply"] },
   { id: "interview-prep", title: "STAR Interview Prep", category: "Portal", icon: Compass, href: "/portal/interview-prep", keywords: ["behavioral", "practice", "questions"] },
@@ -48,8 +50,16 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 function CommandPaletteModal({ open, onOpenChange }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    authApi
+      .me()
+      .then((u) => setIsSuperadmin(Boolean(u?.is_superadmin)))
+      .catch(() => setIsSuperadmin(false));
+  }, []);
 
   // Global keyboard shortcut
   useEffect(() => {
@@ -75,6 +85,7 @@ function CommandPaletteModal({ open, onOpenChange }: CommandPaletteProps) {
 
   // Filter commands
   const filtered = COMMANDS.filter((cmd) => {
+    if (cmd.superadminOnly && !isSuperadmin) return false;
     if (!query.trim()) return true;
     const q = query.toLowerCase();
     const titleMatch = cmd.title.toLowerCase().includes(q);

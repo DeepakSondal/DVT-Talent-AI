@@ -28,8 +28,8 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
             await page.waitForLoadState('networkidle');
-            await page.fill('input[name="email"]', 'admin@dvt.com');
-            await page.fill('input[name="password"]', 'admin123');
+            await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com');
+            await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || '');
             await page.click('button[type="submit"]');
             await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 15000 });
         });
@@ -56,8 +56,8 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
             await page.waitForLoadState('networkidle');
-            await page.fill('input[name="email"]', 'admin@dvt.com');
-            await page.fill('input[name="password"]', 'admin123');
+            await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com');
+            await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || '');
             await page.click('button[type="submit"]');
             await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 15000 });
         });
@@ -123,8 +123,8 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
             await page.waitForLoadState('networkidle');
-            await page.fill('input[name="email"]', 'admin@dvt.com');
-            await page.fill('input[name="password"]', 'admin123');
+            await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com');
+            await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || '');
             await page.click('button[type="submit"]');
             await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 15000 });
         });
@@ -158,8 +158,8 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
             await page.waitForLoadState('networkidle');
-            await page.fill('input[name="email"]', 'admin@dvt.com');
-            await page.fill('input[name="password"]', 'admin123');
+            await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com');
+            await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || '');
             await page.click('button[type="submit"]');
             await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 15000 });
         });
@@ -190,8 +190,8 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
             await page.waitForLoadState('networkidle');
-            await page.fill('input[name="email"]', 'admin@dvt.com');
-            await page.fill('input[name="password"]', 'admin123');
+            await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com');
+            await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || '');
             await page.click('button[type="submit"]');
             await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 15000 });
         });
@@ -231,8 +231,8 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
         test.beforeEach(async ({ page }) => {
             await page.goto('/auth/login');
             await page.waitForLoadState('networkidle');
-            await page.fill('input[name="email"]', 'admin@dvt.com');
-            await page.fill('input[name="password"]', 'admin123');
+            await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com');
+            await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || '');
             await page.click('button[type="submit"]');
             await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 15000 });
         });
@@ -261,8 +261,8 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
             await page.setViewportSize({ width: 375, height: 667 });
             await page.goto('/auth/login');
             await page.waitForLoadState('networkidle');
-            await page.fill('input[name="email"]', 'admin@dvt.com');
-            await page.fill('input[name="password"]', 'admin123');
+            await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com');
+            await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || '');
             await page.click('button[type="submit"]');
             await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 20000 });
 
@@ -279,8 +279,8 @@ test.describe('DVT Talent AI — Comprehensive Quality & Usability Audit', () =>
             await page.setViewportSize({ width: 768, height: 1024 });
             await page.goto('/auth/login');
             await page.waitForLoadState('networkidle');
-            await page.fill('input[name="email"]', 'admin@dvt.com');
-            await page.fill('input[name="password"]', 'admin123');
+            await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com');
+            await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || '');
             await page.click('button[type="submit"]');
             await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 20000 });
             await expect(page.locator('h1')).toBeVisible();

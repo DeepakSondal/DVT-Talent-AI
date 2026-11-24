@@ -39,6 +39,7 @@ class UserOut(BaseModel):
     role: str
     is_active: bool
     is_verified: bool
+    is_superadmin: bool = False
     avatar_url: Optional[str]
     last_login: Optional[datetime]
     created_at: datetime
@@ -158,6 +159,7 @@ async def update_user_role(
         raise HTTPException(status_code=404, detail="User not found")
     setattr(user, "role", resolved_role)
     await db.commit()
+    await revoke_user_tokens(str(user.id))
     return {"message": f"Role updated to {resolved_role.value}", "user_id": str(user_id)}
 
 @router.patch("/{user_id}/deactivate")

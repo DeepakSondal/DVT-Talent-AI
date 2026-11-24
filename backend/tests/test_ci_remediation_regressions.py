@@ -50,7 +50,7 @@ async def test_send_registration_otp_logs_email_delivery_error_without_crashing(
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "success"
-    assert payload["expires_in"] == 600
+    assert payload["expires_in"] == 300
 
 
 def test_vector_store_hybrid_search_and_cosine_strict_matching():

@@ -17,6 +17,8 @@ from api.routes.auth import (
     create_refresh_token,
     get_current_user,
     hash_password,
+    resolve_post_login_redirect,
+    set_session_cookies,
 )
 from config import settings
 from db.models import (
@@ -461,6 +463,7 @@ async def accept_team_invitation(
         email=invitation.email,
         full_name=clean_name,
         role=invitation.role,  # Role strictly bound to invitation, preventing privilege escalation
+        is_superadmin=False,
         hashed_password=hashed_pwd,
         is_active=True,
         is_verified=True,
@@ -541,6 +544,7 @@ async def accept_team_invitation(
         "email": new_user.email,
         "role": new_user.role.value if hasattr(new_user.role, "value") else str(new_user.role),
         "tenant_id": str(new_user.tenant_id),
+        "is_superadmin": False,
     }
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
@@ -554,29 +558,14 @@ async def accept_team_invitation(
             "full_name": new_user.full_name,
             "role": new_user.role.value if hasattr(new_user.role, "value") else str(new_user.role),
             "tenant_id": str(new_user.tenant_id),
+            "is_superadmin": False,
         },
         "access_token": access_token,
         "token_type": "bearer",
+        "redirect_to": resolve_post_login_redirect(new_user),
     }
     response = JSONResponse(content=content)
-    response.set_cookie(
-        key="dvt_token",
-        value=f"Bearer {access_token}",
-        httponly=True,
-        path="/",
-        max_age=settings.access_token_expire_minutes * 60,
-        samesite="lax",
-        secure=settings.is_production,
-    )
-    response.set_cookie(
-        key="dvt_refresh_token",
-        value=refresh_token,
-        httponly=True,
-        path="/",
-        max_age=30 * 24 * 60 * 60,
-        samesite="lax",
-        secure=settings.is_production,
-    )
+    set_session_cookies(response, access_token, refresh_token)
     return response
 
 @router.get("/members")

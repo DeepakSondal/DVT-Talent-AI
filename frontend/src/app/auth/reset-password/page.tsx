@@ -19,7 +19,6 @@ import { toast } from "sonner";
 import { authApi } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
@@ -30,7 +29,9 @@ function ResetPasswordContent() {
   const shouldReduceMotion = useReducedMotion();
 
   const portal = searchParams.get("portal") === "candidate" ? "candidate" : "recruiter";
+  const urlToken = searchParams.get("token") || "";
   const [email, setEmail] = useState(searchParams.get("email") || "");
+  const [resetToken, setResetToken] = useState(urlToken);
   const [otp, setOtp] = useState(searchParams.get("otp") || "");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -61,15 +62,18 @@ function ResetPasswordContent() {
     setIsSendingCode(true);
     try {
       const res = await authApi.requestPasswordReset(cleanEmail);
+      if (res?.dev_token) {
+        setResetToken(res.dev_token);
+      }
       if (res?.dev_code) {
         setDevOtpHint(res.dev_code);
       }
       setResendCooldown(30);
-      toast.success("Password Reset Code Sent", {
-        description: res.message || `If an account exists for ${cleanEmail}, a 6-digit code has been sent.`,
+      toast.success("Password Reset Link Sent", {
+        description: res.message || `If an account exists for ${cleanEmail}, reset instructions have been sent (5 min expiry).`,
       });
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || "Could not send password reset code. Please try again.";
+      const detail = err?.response?.data?.detail || "Could not send password reset link. Please try again.";
       toast.error(detail);
     } finally {
       setIsSendingCode(false);
@@ -79,12 +83,9 @@ function ResetPasswordContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) {
-      toast.error("Please enter your email address.");
-      return;
-    }
-    if (!otp.trim()) {
-      toast.error("Please enter the verification code sent to your email.");
+    const trimmedToken = resetToken.trim();
+    if (!trimmedToken && (!cleanEmail || !otp.trim())) {
+      toast.error("Please open your emailed reset link or paste your reset token.");
       return;
     }
     if (newPassword.length < 8) {
@@ -98,17 +99,17 @@ function ResetPasswordContent() {
 
     setIsSubmitting(true);
     try {
-      const res = await authApi.resetPassword({
-        email: cleanEmail,
-        otp: otp.trim(),
-        new_password: newPassword,
-      });
+      const res = await authApi.resetPassword(
+        trimmedToken
+          ? { token: trimmedToken, new_password: newPassword }
+          : { email: cleanEmail, otp: otp.trim(), new_password: newPassword }
+      );
       toast.success(res.message || "Password has been reset successfully.", {
         icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
       });
-      router.push(`/auth/login?portal=${portal}`);
+      router.push("/auth/login");
     } catch (err: any) {
-      const detail = err?.response?.data?.detail || "Invalid or expired password reset code.";
+      const detail = err?.response?.data?.detail || "Invalid or expired password reset token.";
       toast.error(detail);
     } finally {
       setIsSubmitting(false);
@@ -121,10 +122,6 @@ function ResetPasswordContent() {
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none" />
 
-      <div className="absolute top-6 right-6 z-20">
-        <ThemeToggle />
-      </div>
-
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -134,7 +131,7 @@ function ResetPasswordContent() {
         <Card className="bg-card border-border shadow-md p-6 sm:p-10 space-y-6 rounded-xl">
           <div className="space-y-2">
             <Link
-              href={`/auth/login?portal=${portal}`}
+              href="/auth/login"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
@@ -156,13 +153,14 @@ function ResetPasswordContent() {
                   Reset your password
                 </h1>
                 <p className="text-xs text-muted-foreground">
-                  Request or enter your 6-digit email verification code below.
+                  Request a single-use reset link or paste your token below (5-minute expiry).
                 </p>
               </div>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {!urlToken && (
             <div className="space-y-1.5">
               <label htmlFor="reset-email" className="text-xs font-semibold text-foreground">
                 Email address
@@ -173,7 +171,7 @@ function ResetPasswordContent() {
                   <input
                     id="reset-email"
                     type="email"
-                    required
+                    required={!resetToken}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@company.com"
@@ -195,29 +193,31 @@ function ResetPasswordContent() {
                   <span>
                     {resendCooldown > 0
                       ? `Resend (${resendCooldown}s)`
-                      : devOtpHint
-                        ? "Resend Code"
-                        : "Send Code"}
+                      : resetToken || devOtpHint
+                        ? "Resend Link"
+                        : "Send Reset Link"}
                   </span>
                 </button>
               </div>
             </div>
+            )}
 
             <div className="space-y-1.5">
-              <label htmlFor="reset-otp" className="text-xs font-semibold text-foreground">
-                6-Digit Reset Code
+              <label htmlFor="reset-token" className="text-xs font-semibold text-foreground">
+                Single-Use Reset Token
               </label>
               <div className="relative">
                 <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
-                  id="reset-otp"
+                  id="reset-token"
                   type="text"
-                  required
-                  maxLength={6}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ""))}
-                  placeholder="123456"
-                  className="w-full pl-10 pr-4 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-sm font-mono tracking-widest text-foreground placeholder:text-muted-foreground/60 transition-colors"
+                  value={resetToken || otp}
+                  onChange={(e) => {
+                    setResetToken(e.target.value);
+                    setOtp("");
+                  }}
+                  placeholder="Paste reset token from your email link"
+                  className="w-full pl-10 pr-4 h-11 bg-muted/40 border border-border focus:border-primary focus:bg-background rounded-xl text-xs font-mono text-foreground placeholder:text-muted-foreground/60 transition-colors"
                 />
               </div>
               {devOtpHint && (
@@ -225,7 +225,7 @@ function ResetPasswordContent() {
                   id="reset-dev-otp-hint"
                   className="text-[11px] bg-primary/10 text-primary border border-primary/20 p-2 rounded-lg text-center font-medium"
                 >
-                  Dev mode reset code: <span className="font-mono font-bold">{devOtpHint}</span>
+                  Dev mode code: <span className="font-mono font-bold">{devOtpHint}</span>
                 </p>
               )}
             </div>

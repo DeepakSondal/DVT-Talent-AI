@@ -30,6 +30,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -360,11 +361,24 @@ class User(Base, TimestampMixin):
     monthly_credit_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     provider: Mapped[Optional[str]] = mapped_column(String(50))  # e.g. "google", "github", "linkedin"
     provider_id: Mapped[Optional[str]] = mapped_column(String(255))
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    mfa_secret_encrypted: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Relationships
     tenant: Mapped[Optional["Tenant"]] = relationship("Tenant")
     leads: Mapped[List["Lead"]] = relationship("Lead", back_populates="owner", foreign_keys="[Lead.owner_id]")
     campaigns: Mapped[List["EmailCampaign"]] = relationship("EmailCampaign", back_populates="owner")
+
+    __table_args__ = (
+        Index(
+            "uq_users_single_superadmin",
+            "is_superadmin",
+            unique=True,
+            postgresql_where=text("is_superadmin = true"),
+            sqlite_where=text("is_superadmin = 1"),
+        ),
+    )
 
 
 class TeamInvitation(Base, TimestampMixin):

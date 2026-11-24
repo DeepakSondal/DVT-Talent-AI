@@ -19,8 +19,8 @@ set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 TENANT_NAME="Pilot Customer"
-ADMIN_EMAIL="pilot@example.com"
-ADMIN_PASSWORD="PilotAccess2026!"
+ADMIN_EMAIL=""
+ADMIN_PASSWORD=""
 PILOT_CREDITS=10000
 BACKEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/backend"
 
@@ -34,6 +34,15 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown argument: $1"; exit 1 ;;
   esac
 done
+
+if [[ -z "${ADMIN_EMAIL}" || -z "${ADMIN_PASSWORD}" ]]; then
+  echo "Error: Both --email and --password are required (no default credentials allowed)." >&2
+  exit 1
+fi
+if [[ ${#ADMIN_PASSWORD} -lt 12 ]]; then
+  echo "Error: --password must be at least 12 characters." >&2
+  exit 1
+fi
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -124,6 +133,7 @@ async def create_pilot_tenant():
                 email=ADMIN_EMAIL,
                 full_name="Pilot Admin",
                 role=UserRole.ADMIN,
+                is_superadmin=False,
                 hashed_password=hash_password(ADMIN_PASS),
                 is_active=True,
                 is_verified=True,

@@ -39,8 +39,12 @@ export function proxy(request: NextRequest) {
       const payload = parseJwtPayload(token);
       const fromParam = searchParams.get("from");
       const safeFrom =
-        fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") ? fromParam : null;
-      const defaultDest = payload?.role === "candidate" ? "/portal" : "/dashboard";
+        fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") && !fromParam.includes("\\") ? fromParam : null;
+      const defaultDest = payload?.is_superadmin
+        ? "/dashboard/monitoring"
+        : payload?.role === "candidate"
+          ? "/portal"
+          : "/dashboard";
       return NextResponse.redirect(new URL(safeFrom || defaultDest, request.url));
     }
     return NextResponse.next();
@@ -66,8 +70,16 @@ export function proxy(request: NextRequest) {
 
   if (token && !pathname.startsWith("/portal")) {
     const payload = parseJwtPayload(token);
-    if (payload?.role === "candidate") {
+    const role = String(payload?.role || "").toLowerCase();
+    const isSuperadmin = Boolean(payload?.is_superadmin);
+    if (role === "candidate") {
       return NextResponse.redirect(new URL("/portal", request.url));
+    }
+    if (pathname.startsWith("/dashboard/monitoring") && !isSuperadmin) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
+    if (pathname.startsWith("/dashboard/team") && role !== "admin" && role !== "manager") {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
     }
   }
 

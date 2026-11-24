@@ -140,7 +140,7 @@ function RegisterContentForm({ portalParam }: { portalParam: string | null }) {
       });
 
       const isCandidateUser = (res as any)?.role ? (res as any).role === "candidate" : portal === "candidate";
-      const destination = isCandidateUser ? "/portal" : "/dashboard";
+      const destination = (res as any)?.redirect_to || (isCandidateUser ? "/portal" : "/dashboard");
       router.push(destination);
     } catch (err: any) {
       const msg = err.response?.data?.detail || "Invalid or expired verification code.";
@@ -488,7 +488,7 @@ function RegisterContentForm({ portalParam }: { portalParam: string | null }) {
           <p className="text-center text-xs text-muted-foreground pt-1">
             Already have an account?{" "}
             <Link
-              href={`/auth/login?portal=${portal}`}
+              href="/auth/login"
               className="text-primary font-bold hover:underline"
             >
               Sign in
