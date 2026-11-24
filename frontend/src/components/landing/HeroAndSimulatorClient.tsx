@@ -653,7 +653,7 @@ export function HeroAndSimulatorClient() {
                   </Button>
                 </motion.div>
               </Link>
-              <Link href="/auth/login?portal=recruiter" id="recruiter-signin-hero-btn">
+              <Link href="/auth/login" id="recruiter-signin-hero-btn">
                 <motion.div
                   whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                   whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
@@ -663,7 +663,7 @@ export function HeroAndSimulatorClient() {
                     variant="outline"
                     className="h-12 px-8 text-sm font-bold bg-card/80 hover:bg-muted border-border text-foreground rounded-xl transition-colors duration-150 whitespace-nowrap"
                   >
-                    Recruiter Sign In
+                    Sign In
                   </Button>
                 </motion.div>
               </Link>
@@ -712,7 +712,7 @@ export function HeroAndSimulatorClient() {
                   </Button>
                 </motion.div>
               </Link>
-              <Link href="/auth/login?portal=candidate" id="candidate-signin-hero-btn">
+              <Link href="/auth/login" id="candidate-signin-hero-btn">
                 <motion.div
                   whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
                   whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
@@ -722,7 +722,7 @@ export function HeroAndSimulatorClient() {
                     variant="outline"
                     className="h-12 px-8 text-sm font-bold bg-card/80 hover:bg-muted border-border text-foreground rounded-xl transition-colors duration-150 whitespace-nowrap"
                   >
-                    Candidate Sign In
+                    Sign In
                   </Button>
                 </motion.div>
               </Link>

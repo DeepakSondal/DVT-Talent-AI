@@ -353,11 +353,11 @@ export default function LandingPage() {
             <Link href="/privacy" className="hover:text-foreground transition-colors">
               Privacy
             </Link>
-            <Link href="/auth/login?portal=candidate" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
-              Candidate Hub
+            <Link href="/auth/login" className="hover:text-foreground transition-colors">
+              Sign In
             </Link>
-            <Link href="/auth/login?portal=recruiter" className="hover:text-primary transition-colors">
-              Recruiter Sign In
+            <Link href="/auth/register" className="hover:text-primary transition-colors">
+              Create Account
             </Link>
           </div>
         </div>

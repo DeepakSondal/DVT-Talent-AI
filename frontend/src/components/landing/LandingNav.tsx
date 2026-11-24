@@ -61,21 +61,21 @@ export function LandingNav() {
         </nav>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Link href="/auth/login?portal=candidate" id="nav-candidate-portal-btn" className="hidden sm:inline-block">
+          <Link href="/auth/login" id="nav-signin-btn" className="hidden sm:inline-block">
             <Button
               variant="ghost"
               size="sm"
-              className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 text-xs font-semibold border border-emerald-500/30 hover:bg-emerald-500/10 h-9 px-3 rounded-xl transition-colors duration-150 whitespace-nowrap"
+              className="text-foreground hover:bg-muted text-xs font-semibold border border-border h-9 px-3.5 rounded-xl transition-colors duration-150 whitespace-nowrap"
             >
-              Candidate Portal
+              Sign In
             </Button>
           </Link>
-          <Link href="/auth/login?portal=recruiter" id="nav-recruiter-login-btn" className="hidden sm:inline-block">
+          <Link href="/auth/register" id="nav-register-btn" className="hidden sm:inline-block">
             <Button
               size="sm"
               className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold h-9 px-3.5 rounded-xl shadow-md shadow-primary/25 transition-colors duration-150 whitespace-nowrap"
             >
-              Recruiter Sign In
+              Create Account
             </Button>
           </Link>
 
@@ -125,17 +125,17 @@ export function LandingNav() {
                 FAQ
               </a>
               <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-border/80">
-                <Link href="/auth/login?portal=candidate" onClick={() => setMobileOpen(false)}>
+                <Link href="/auth/login" onClick={() => setMobileOpen(false)}>
                   <Button
                     variant="outline"
-                    className="w-full h-10 text-xs font-semibold border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-card"
+                    className="w-full h-10 text-xs font-semibold border-border text-foreground bg-card"
                   >
-                    Candidate Portal
+                    Sign In
                   </Button>
                 </Link>
-                <Link href="/auth/login?portal=recruiter" onClick={() => setMobileOpen(false)}>
+                <Link href="/auth/register" onClick={() => setMobileOpen(false)}>
                   <Button className="w-full h-10 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground">
-                    Recruiter Sign In
+                    Create Account
                   </Button>
                 </Link>
               </div>
