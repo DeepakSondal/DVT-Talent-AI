@@ -261,46 +261,193 @@ async def test_single_superadmin_invariant_and_rbac_boundaries():
             existing_super = (
                 await session.execute(select(User).where(User.is_superadmin.is_(True)))
             ).scalar_one_or_none()
+            prev_super_id = existing_super.id if existing_super else None
             if existing_super:
                 setattr(existing_super, "is_superadmin", False)
                 await session.commit()
 
-            super_user = User(
-                email=f"super_{uuid.uuid4().hex[:8]}@dvttalent.com",
-                full_name="Canonical Superadmin",
-                role=UserRole.ADMIN,
-                is_superadmin=True,
-                is_active=True,
-                is_verified=True,
-            )
-            session.add(super_user)
-            await session.commit()
-            await session.refresh(super_user)
-            super_id = super_user.id
-
-            # Attempting a second active superadmin MUST fail via partial unique index
-            second_super = User(
-                email=f"super2_{uuid.uuid4().hex[:8]}@dvttalent.com",
-                full_name="Blocked Second Superadmin",
-                role=UserRole.ADMIN,
-                is_superadmin=True,
-                is_active=True,
-                is_verified=True,
-            )
-            session.add(second_super)
-            with pytest.raises(IntegrityError):
+            super_id = None
+            try:
+                super_user = User(
+                    email=f"super_{uuid.uuid4().hex[:8]}@dvttalent.com",
+                    full_name="Canonical Superadmin",
+                    role=UserRole.ADMIN,
+                    is_superadmin=True,
+                    is_active=True,
+                    is_verified=True,
+                )
+                session.add(super_user)
                 await session.commit()
-            await session.rollback()
+                await session.refresh(super_user)
+                super_id = super_user.id
 
-            super_token = auth_route.create_access_token(
-                {"sub": str(super_id), "role": "admin", "tenant_id": "", "is_superadmin": True}
+                # Attempting a second active superadmin MUST fail via partial unique index
+                second_super = User(
+                    email=f"super2_{uuid.uuid4().hex[:8]}@dvttalent.com",
+                    full_name="Blocked Second Superadmin",
+                    role=UserRole.ADMIN,
+                    is_superadmin=True,
+                    is_active=True,
+                    is_verified=True,
+                )
+                session.add(second_super)
+                with pytest.raises(IntegrityError):
+                    await session.commit()
+                await session.rollback()
+
+                super_token = auth_route.create_access_token(
+                    {"sub": str(super_id), "role": "admin", "tenant_id": "", "is_superadmin": True}
+                )
+                super_headers = {"Authorization": f"Bearer {super_token}"}
+                med_res = await client.get("/api/v1/monitoring/mediations", headers=super_headers)
+                assert med_res.status_code == 200
+            finally:
+                if super_id is not None:
+                    row = await session.get(User, super_id)
+                    if row:
+                        await session.delete(row)
+                if prev_super_id is not None:
+                    prev_row = await session.get(User, prev_super_id)
+                    if prev_row:
+                        setattr(prev_row, "is_superadmin", True)
+                await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_privilege_escalation_vectors_and_stale_token_invalidation():
+    """Verify request/profile/JWT tampering fails closed and revoking superadmin/role invalidates stale tokens."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Register payload injection (is_superadmin=True) MUST be ignored
+        email = f"esc_{uuid.uuid4().hex[:8]}@example.com"
+        pw = f"Esc#{uuid.uuid4().hex[:12]}"
+        captured: list[str] = []
+        real_store = auth_route.store_email_otp
+
+        async def cap(em: str, otp: str, ttl_seconds: int = 300):
+            captured.append(otp)
+            await real_store(em, otp, ttl_seconds=ttl_seconds)
+
+        with patch.object(auth_route, "store_email_otp", side_effect=cap):
+            await client.post("/api/v1/auth/register/send-otp", json={"email": email})
+        reg_res = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": email,
+                "password": pw,
+                "full_name": "Escalation Tester",
+                "role": "candidate",
+                "is_superadmin": True,
+                "otp": captured[0],
+            },
+        )
+        assert reg_res.status_code == 201
+        reg_body = reg_res.json()
+        assert reg_body["role"] == "candidate"
+        assert reg_body["is_superadmin"] is False
+        cand_headers = {"Authorization": f"Bearer {reg_body['access_token']}"}
+
+        # 2. Profile PATCH /users/me cannot elevate role or is_superadmin
+        patch_res = await client.patch(
+            "/api/v1/users/me",
+            headers=cand_headers,
+            json={"full_name": "Updated Name", "role": "admin", "is_superadmin": True},
+        )
+        assert patch_res.status_code == 200
+        assert patch_res.json()["role"] == "candidate"
+        assert patch_res.json()["is_superadmin"] is False
+
+        # 3. Direct API calls by unauthenticated client (401) & candidate cookie/header (403) fail closed server-side (Check 5)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as unauth_client:
+            assert (await unauth_client.get("/api/v1/monitoring/mediations")).status_code == 401
+        assert (await client.get("/api/v1/monitoring/mediations", headers=cand_headers)).status_code == 403
+        assert (await client.get("/health/llm", headers=cand_headers)).status_code == 403
+
+        # 4. Token tampering with claimed is_superadmin=True or role=admin MUST return 401
+        forged_super = auth_route.create_access_token(
+            {"sub": reg_body["user_id"], "role": "admin", "tenant_id": "", "is_superadmin": True}
+        )
+        forged_headers = {"Authorization": f"Bearer {forged_super}"}
+        assert (await client.get("/api/v1/auth/me", headers=forged_headers)).status_code == 401
+        assert (await client.get("/api/v1/monitoring/mediations", headers=forged_headers)).status_code == 401
+
+        # Also verify PATCH /users/{id}/role immediately revokes stale tokens of demoted user
+        _, recruiter_admin, recruiter_pw = await _register_verified_user(client, role="recruiter")
+        rec_id = uuid.UUID(recruiter_admin["user_id"])
+        rec_headers = {"Authorization": f"Bearer {recruiter_admin['access_token']}"}
+        assert (await client.get("/api/v1/auth/me", headers=rec_headers)).status_code == 200
+        demote_res = await client.patch(
+            f"/api/v1/users/{rec_id}/role?role=viewer",
+            headers=rec_headers,
+        )
+        assert demote_res.status_code == 200
+        assert (await client.get("/api/v1/auth/me", headers=rec_headers)).status_code == 401
+        assert (await client.get("/api/v1/users", headers=rec_headers)).status_code == 401
+
+        # Re-login as demoted viewer still has valid viewer role and cannot reach admin routes
+        relogin_viewer = await client.post(
+            "/api/v1/auth/login",
+            data={"username": recruiter_admin["email"], "password": recruiter_pw},
+        )
+        assert relogin_viewer.status_code == 200
+        assert relogin_viewer.json()["role"] == "viewer"
+        assert (
+            await client.get(
+                "/api/v1/users",
+                headers={"Authorization": f"Bearer {relogin_viewer.json()['access_token']}"},
             )
-            super_headers = {"Authorization": f"Bearer {super_token}"}
-            med_res = await client.get("/api/v1/monitoring/mediations", headers=super_headers)
-            assert med_res.status_code == 200
+        ).status_code == 403
 
-            # Clean up test superadmin row
-            row = await session.get(User, super_id)
-            if row:
-                await session.delete(row)
+        # 5. Stale superadmin token lifecycle: promote -> login -> revoke in DB -> old JWT & refresh cookie rejected (Check 4)
+        _, tenant_admin, admin_pw = await _register_verified_user(client, role="recruiter")
+        admin_email = tenant_admin["email"]
+        admin_id = uuid.UUID(tenant_admin["user_id"])
+
+        async with AsyncSessionLocal() as session:
+            existing_super = (
+                await session.execute(select(User).where(User.is_superadmin.is_(True)))
+            ).scalar_one_or_none()
+            prev_super_id_2 = existing_super.id if existing_super else None
+            if existing_super:
+                setattr(existing_super, "is_superadmin", False)
+            target = await session.get(User, admin_id)
+            assert target is not None
+            setattr(target, "is_superadmin", True)
+            await session.commit()
+
+        try:
+            login_super = await client.post(
+                "/api/v1/auth/login",
+                data={"username": admin_email, "password": admin_pw},
+            )
+            assert login_super.status_code == 200
+            stale_access = login_super.json()["access_token"]
+            stale_refresh = login_super.cookies.get("dvt_refresh_token")
+            assert stale_refresh
+            stale_headers = {"Authorization": f"Bearer {stale_access}"}
+            assert (await client.get("/api/v1/monitoring/mediations", headers=stale_headers)).status_code == 200
+
+            # Revoke superadmin directly in DB (without relying on Redis cache clear)
+            async with AsyncSessionLocal() as session:
+                target = await session.get(User, admin_id)
+                assert target is not None
+                setattr(target, "is_superadmin", False)
+                await session.commit()
+
+            assert (await client.get("/api/v1/monitoring/mediations", headers=stale_headers)).status_code == 401
+            assert (await client.get("/api/v1/auth/me", headers=stale_headers)).status_code == 401
+            refresh_res = await client.post(
+                "/api/v1/auth/refresh",
+                cookies={"dvt_refresh_token": stale_refresh},
+            )
+            assert refresh_res.status_code == 401
+        finally:
+            async with AsyncSessionLocal() as session:
+                target = await session.get(User, admin_id)
+                if target:
+                    setattr(target, "is_superadmin", False)
+                if prev_super_id_2 is not None:
+                    prev_row = await session.get(User, prev_super_id_2)
+                    if prev_row:
+                        setattr(prev_row, "is_superadmin", True)
                 await session.commit()

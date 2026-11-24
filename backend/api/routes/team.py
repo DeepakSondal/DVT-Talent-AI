@@ -461,6 +461,7 @@ async def accept_team_invitation(
         email=invitation.email,
         full_name=clean_name,
         role=invitation.role,  # Role strictly bound to invitation, preventing privilege escalation
+        is_superadmin=False,
         hashed_password=hashed_pwd,
         is_active=True,
         is_verified=True,

@@ -202,6 +202,22 @@ def _build_auth_session_response(user: User, status_code: int = 200) -> JSONResp
     return response
 
 
+def _ensure_token_privileges_current(payload: dict, user: User) -> None:
+    """Rejects stale or tampered tokens whose role/superadmin claims diverge from the live database user."""
+    if bool(payload.get("is_superadmin", False)) and not bool(getattr(user, "is_superadmin", False)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session privileges revoked; please sign in again",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if "role" in payload and str(payload.get("role") or "").strip().lower() != user.role.value.lower():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session role changed; please sign in again",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -258,6 +274,7 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise credentials_exception
+    _ensure_token_privileges_current(payload, user)
     request.state.user = user
     return user
 
@@ -585,6 +602,7 @@ async def refresh_token_route(
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or account disabled")
+    _ensure_token_privileges_current(payload, user)
 
     # Rotate refresh token: blacklist the consumed refresh token
     try:

@@ -82,7 +82,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     {
       heading: "Platform & Governance",
       items: [
-        { label: "Analytics & Pulse", icon: Zap, href: "/dashboard/monitoring" },
+        ...(user?.is_superadmin
+          ? [{ label: "Analytics & Pulse", icon: Zap, href: "/dashboard/monitoring" }]
+          : []),
         { label: "AI Governance", icon: ShieldCheck, href: "/dashboard/compliance" },
         ...(user?.role?.toLowerCase() === "manager" || user?.role?.toLowerCase() === "admin"
           ? [{ label: "Team Management", icon: ShieldCheck, href: "/dashboard/team" }]

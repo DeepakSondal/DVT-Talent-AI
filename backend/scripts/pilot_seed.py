@@ -30,6 +30,7 @@ from db.models import (
     UserRole,
     engine,
 )
+from services.redis_service import revoke_user_tokens
 
 
 async def seed() -> None:
@@ -126,6 +127,7 @@ async def seed() -> None:
             setattr(user, "is_superadmin", True)
             setattr(user, "is_active", True)
             setattr(user, "is_verified", True)
+            await revoke_user_tokens(str(user.id))
             print("Updated canonical platform superadmin password and claims: admin@dvttalent.com")
 
         # 3. Ensure initial pilot credits in non-production
