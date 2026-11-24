@@ -28,9 +28,9 @@ function AuthContent() {
 
       toast.success("Successfully signed in!");
       const safeRedirect =
-        resolvedRedirect && resolvedRedirect.startsWith("/") && !resolvedRedirect.startsWith("//")
+        resolvedRedirect && resolvedRedirect.startsWith("/") && !resolvedRedirect.startsWith("//") && !resolvedRedirect.includes("\\")
           ? resolvedRedirect
-          : redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+          : redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//") && !redirectParam.includes("\\")
             ? redirectParam
             : resolvedRole === "candidate"
               ? "/portal"

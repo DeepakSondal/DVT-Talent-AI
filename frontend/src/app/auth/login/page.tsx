@@ -53,10 +53,10 @@ function resolvePostLoginRoute(
   fromParam: string | null
 ): string {
   const safeFrom =
-    fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") ? fromParam : null;
+    fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") && !fromParam.includes("\\") ? fromParam : null;
   const normalizedRole = String(res?.role || "").trim().toLowerCase();
   const serverRedirect =
-    res?.redirect_to && res.redirect_to.startsWith("/") && !res.redirect_to.startsWith("//")
+    res?.redirect_to && res.redirect_to.startsWith("/") && !res.redirect_to.startsWith("//") && !res.redirect_to.includes("\\")
       ? res.redirect_to
       : null;
 

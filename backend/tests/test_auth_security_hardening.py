@@ -490,3 +490,82 @@ async def test_privilege_escalation_vectors_and_stale_token_invalidation():
                     if prev_row:
                         setattr(prev_row, "is_superadmin", True)
                 await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_mfa_gate_fail_closed_and_challenge_user_revocation():
+    """Superadmin with mfa_enabled=True and missing secret forces TOTP setup; non-superadmin fails closed; user revocation invalidates pending MFA."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        pw = f"MfaGuard#{uuid.uuid4().hex[:10]}"
+        hashed = await auth_route.hash_password(pw)
+        async with AsyncSessionLocal() as session:
+            prev_super = (
+                await session.execute(select(User).where(User.is_superadmin.is_(True)))
+            ).scalar_one_or_none()
+            prev_super_id = prev_super.id if prev_super else None
+            if prev_super:
+                setattr(prev_super, "is_superadmin", False)
+                await session.commit()
+
+            broken_super = User(
+                email=f"broken_sup_{uuid.uuid4().hex[:8]}@dvttalent.com",
+                full_name="Broken Super",
+                hashed_password=hashed,
+                role=UserRole.ADMIN,
+                is_superadmin=True,
+                is_active=True,
+                is_verified=True,
+                mfa_enabled=True,
+                mfa_secret_encrypted=None,
+            )
+            broken_recruiter = User(
+                email=f"broken_rec_{uuid.uuid4().hex[:8]}@example.com",
+                full_name="Broken Recruiter",
+                hashed_password=hashed,
+                role=UserRole.RECRUITER,
+                is_superadmin=False,
+                is_active=True,
+                is_verified=True,
+                mfa_enabled=True,
+                mfa_secret_encrypted="not-valid-fernet-ciphertext",
+            )
+            session.add_all([broken_super, broken_recruiter])
+            await session.commit()
+            await session.refresh(broken_super)
+            await session.refresh(broken_recruiter)
+            super_id = broken_super.id
+            rec_id = broken_recruiter.id
+
+        try:
+            # 1. Superadmin with mfa_enabled=True & missing secret MUST enter mfa_setup, never bypass
+            sup_res = await client.post("/api/v1/auth/login", json={"email": broken_super.email, "password": pw})
+            assert sup_res.status_code == 200
+            sup_body = sup_res.json()
+            assert sup_body["mfa_required"] is True
+            assert sup_body["mfa_setup_required"] is True
+            assert "access_token" not in sup_body
+            assert "dvt_token" not in sup_res.cookies
+
+            # 2. User-level token revocation invalidates in-flight MFA challenge/setup token
+            await auth_route.revoke_user_tokens(str(super_id))
+            revoked_pending = await client.get(
+                "/api/v1/auth/mfa/pending",
+                cookies={"dvt_mfa_challenge": sup_body["challenge_token"]},
+            )
+            assert revoked_pending.status_code == 401
+
+            # 3. Non-superadmin with mfa_enabled=True & corrupt secret fails closed (401)
+            rec_res = await client.post("/api/v1/auth/login", json={"email": broken_recruiter.email, "password": pw})
+            assert rec_res.status_code == 401
+        finally:
+            async with AsyncSessionLocal() as session:
+                for uid in (super_id, rec_id):
+                    row = await session.get(User, uid)
+                    if row:
+                        await session.delete(row)
+                if prev_super_id is not None:
+                    prev_row = await session.get(User, prev_super_id)
+                    if prev_row:
+                        setattr(prev_row, "is_superadmin", True)
+                await session.commit()

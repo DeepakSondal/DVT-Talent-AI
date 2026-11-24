@@ -222,7 +222,10 @@ def _build_auth_session_response(user: User, status_code: int = 200) -> JSONResp
 async def build_mfa_gate_if_required(user: User, db: AsyncSession) -> Optional[dict]:
     """Returns MFA challenge or mandatory Superadmin first-login enrollment payload if required."""
     is_superadmin = bool(getattr(user, "is_superadmin", False))
-    if getattr(user, "mfa_enabled", False) and getattr(user, "mfa_secret_encrypted", None):
+    mfa_enabled = bool(getattr(user, "mfa_enabled", False))
+    decrypted_secret = decrypt_mfa_secret(getattr(user, "mfa_secret_encrypted", None))
+
+    if mfa_enabled and decrypted_secret:
         return {
             "mfa_required": True,
             "mfa_setup_required": False,
@@ -230,8 +233,10 @@ async def build_mfa_gate_if_required(user: User, db: AsyncSession) -> Optional[d
             "role": user.role.value,
             "is_superadmin": is_superadmin,
         }
-    if is_superadmin and not getattr(user, "mfa_enabled", False):
+    if is_superadmin:
+        # Enforce mandatory TOTP for Superadmin whether mfa_enabled is False or secret is missing/corrupt.
         secret = generate_totp_secret()
+        setattr(user, "mfa_enabled", False)
         setattr(user, "mfa_secret_encrypted", encrypt_mfa_secret(secret))
         await db.commit()
         return {
@@ -243,6 +248,11 @@ async def build_mfa_gate_if_required(user: User, db: AsyncSession) -> Optional[d
             "role": user.role.value,
             "is_superadmin": True,
         }
+    if mfa_enabled and not decrypted_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="2FA configuration is invalid; please contact an administrator.",
+        )
     return None
 
 
@@ -741,9 +751,13 @@ async def _decode_mfa_token(raw_token: Optional[str], expected_types: tuple[str,
         token_type = claims.get("type")
         if not user_id_val or token_type not in expected_types:
             raise HTTPException(status_code=401, detail="Invalid 2FA token.")
-        return uuid.UUID(str(user_id_val)), claims, token
+        user_uuid = uuid.UUID(str(user_id_val))
     except (JWTError, ValueError) as exc:
         raise HTTPException(status_code=401, detail="Invalid or expired 2FA token.") from exc
+
+    if await is_user_token_revoked(str(user_uuid), claims.get("iat")):
+        raise HTTPException(status_code=401, detail="2FA challenge expired or already used.")
+    return user_uuid, claims, token
 
 
 async def _revoke_short_lived_token(token: str, claims: dict) -> None:

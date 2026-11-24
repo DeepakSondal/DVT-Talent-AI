@@ -39,7 +39,7 @@ export function proxy(request: NextRequest) {
       const payload = parseJwtPayload(token);
       const fromParam = searchParams.get("from");
       const safeFrom =
-        fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") ? fromParam : null;
+        fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") && !fromParam.includes("\\") ? fromParam : null;
       const defaultDest = payload?.is_superadmin
         ? "/dashboard/monitoring"
         : payload?.role === "candidate"
