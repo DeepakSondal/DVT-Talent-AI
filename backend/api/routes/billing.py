@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.rate_limit import enforce_endpoint_rate_limit, get_real_client_ip
-from api.routes.auth import get_current_user
+from api.routes.auth import get_current_user, require_superadmin
 from config import settings
 from db.models import (
     CreditTransaction,
@@ -436,16 +436,13 @@ async def confirm_upi_payment(
     }
 
 
-@router.post("/upi-approve", summary="Admin approval of a pending direct UPI UTR payment")
+@router.post("/upi-approve", summary="Platform Superadmin approval of a pending direct UPI UTR payment")
 async def approve_upi_payment(
     req: UpiConfirmRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_superadmin),
 ):
-    """Allows an admin to approve a pending 12-digit UPI UTR after verifying bank receipt."""
-    role_val = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
-    if role_val.lower() != "admin":
-        raise HTTPException(status_code=403, detail="Admin permissions required to approve UPI payments.")
+    """Allows the single platform superadmin to approve a pending 12-digit UPI UTR after verifying bank receipt."""
 
     utr_clean = re.sub(r"\s+", "", req.utr_number or "")
     if not re.fullmatch(r"\d{12}", utr_clean):

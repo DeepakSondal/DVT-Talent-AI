@@ -63,9 +63,9 @@ cd dvt-talent-ai
    ```powershell
    python -m alembic upgrade head
    ```
-   Or initialize admin user:
+   Or initialize platform superadmin user:
    ```powershell
-   python create_admin.py
+   python scripts/pilot_seed.py
    ```
 6. Start the FastAPI development server:
    ```powershell

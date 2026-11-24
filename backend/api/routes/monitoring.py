@@ -10,7 +10,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.routes.auth import get_current_user, require_admin
+from api.routes.auth import get_current_user, require_admin, require_superadmin
 from db.models import User, UserRole, get_db
 from services.redis_service import get_redis_client
 
@@ -53,9 +53,9 @@ async def get_recent_signals(
         return []
 
 
-@router.get("/mediations", summary="Get active distributed locks from Redis (real data)")
+@router.get("/mediations", summary="Get active distributed locks from Redis (Platform Superadmin only)")
 async def get_active_mediations(
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Scans Redis for active distributed locks (lock:*) and score histories.
@@ -114,9 +114,9 @@ async def get_active_mediations(
         }
 
 
-@router.get("/celery/workers", summary="Inspect live Celery workers (real data)")
+@router.get("/celery/workers", summary="Inspect live Celery workers (Platform Superadmin only)")
 async def get_celery_workers(
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_superadmin),
 ):
     """
     Uses Celery inspect to get live worker status, active tasks, and reserved tasks.

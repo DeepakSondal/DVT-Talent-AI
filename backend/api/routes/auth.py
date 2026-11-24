@@ -103,6 +103,7 @@ class UserOut(BaseModel):
     full_name: str
     role: str
     is_active: bool
+    is_superadmin: bool = False
     mfa_enabled: bool = False
     created_at: datetime
 
@@ -160,10 +161,12 @@ def create_mfa_challenge_token(user_id: uuid.UUID) -> str:
 
 def _build_auth_session_response(user: User, status_code: int = 200) -> JSONResponse:
     """Issues JWT access/refresh tokens with HttpOnly cookies for an authenticated user."""
+    is_superadmin = bool(getattr(user, "is_superadmin", False))
     token_data = {
         "sub": str(user.id),
         "role": user.role.value,
         "tenant_id": str(user.tenant_id) if user.tenant_id else "",
+        "is_superadmin": is_superadmin,
     }
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
@@ -174,6 +177,7 @@ def _build_auth_session_response(user: User, status_code: int = 200) -> JSONResp
         "email": user.email,
         "full_name": user.full_name,
         "role": user.role.value,
+        "is_superadmin": is_superadmin,
         "mfa_enabled": bool(getattr(user, "mfa_enabled", False)),
     }
     response = JSONResponse(content=content, status_code=status_code)
@@ -261,6 +265,12 @@ async def get_current_user(
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
+
+
+async def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.ADMIN or not getattr(current_user, "is_superadmin", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Platform superadmin access required")
     return current_user
 
 
@@ -409,6 +419,7 @@ async def register(
         full_name=user_data.full_name,
         hashed_password=await hash_password(user_data.password),
         role=UserRole.CANDIDATE if is_candidate else UserRole.ADMIN,
+        is_superadmin=False,
         tenant_id=tenant_id,
     )
     db.add(user)

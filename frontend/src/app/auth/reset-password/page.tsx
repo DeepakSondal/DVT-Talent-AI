@@ -19,7 +19,6 @@ import { toast } from "sonner";
 import { authApi } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/utils";
 
 const springPreset = { type: "spring" as const, stiffness: 400, damping: 30 };
@@ -108,7 +107,7 @@ function ResetPasswordContent() {
       toast.success(res.message || "Password has been reset successfully.", {
         icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
       });
-      router.push(`/auth/login?portal=${portal}`);
+      router.push("/auth/login");
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Invalid or expired password reset token.";
       toast.error(detail);
@@ -123,10 +122,6 @@ function ResetPasswordContent() {
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none" />
 
-      <div className="absolute top-6 right-6 z-20">
-        <ThemeToggle />
-      </div>
-
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -136,7 +131,7 @@ function ResetPasswordContent() {
         <Card className="bg-card border-border shadow-md p-6 sm:p-10 space-y-6 rounded-xl">
           <div className="space-y-2">
             <Link
-              href={`/auth/login?portal=${portal}`}
+              href="/auth/login"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" />

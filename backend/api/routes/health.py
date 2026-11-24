@@ -9,7 +9,7 @@ import structlog
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 
-from api.routes.auth import require_admin
+from api.routes.auth import require_superadmin
 from db.models import User
 
 log = structlog.get_logger(__name__)
@@ -70,8 +70,8 @@ async def health_redis():
                             content={"status": "unhealthy", "service": "redis", "error": "Redis connectivity check failed"})
 
 
-@router.get("/health/llm", tags=["Health"], summary="LLM API key & connectivity check (Admin only)")
-async def health_llm(current_user: User = Depends(require_admin)):
+@router.get("/health/llm", tags=["Health"], summary="LLM API key & connectivity check (Platform Superadmin only)")
+async def health_llm(current_user: User = Depends(require_superadmin)):
     """Calls the configured LLM with a minimal prompt to verify API key works. Restricted to admins to prevent cost exhaustion."""
     try:
         from openai import AsyncOpenAI

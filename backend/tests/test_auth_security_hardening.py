@@ -11,8 +11,11 @@ from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from api.routes import auth as auth_route
+from db.models import AsyncSessionLocal, User, UserRole
 from main import app
 from services.mfa_service import compute_totp_for_step
 
@@ -226,3 +229,78 @@ async def test_admin_totp_2fa_enrollment_login_challenge_replay_and_disable():
         )
         assert dis_res.status_code == 200, dis_res.text
         assert dis_res.json()["mfa_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_single_superadmin_invariant_and_rbac_boundaries():
+    """Verify workspace admins cannot reach superadmin platform routes and DB blocks multiple superadmins."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        _, tenant_admin, _ = await _register_verified_user(client, role="recruiter")
+        assert tenant_admin["role"] == "admin"
+        assert tenant_admin["is_superadmin"] is False
+        tenant_headers = {"Authorization": f"Bearer {tenant_admin['access_token']}"}
+
+        # Tenant admin keeps access to tenant-scoped endpoints
+        assert (await client.get("/api/v1/monitoring/audit-logs", headers=tenant_headers)).status_code == 200
+        assert (await client.get("/api/v1/users", headers=tenant_headers)).status_code == 200
+
+        # Tenant admin MUST receive 403 on platform-wide superadmin routes
+        assert (await client.get("/api/v1/monitoring/mediations", headers=tenant_headers)).status_code == 403
+        assert (await client.get("/api/v1/monitoring/celery/workers", headers=tenant_headers)).status_code == 403
+        assert (await client.get("/health/llm", headers=tenant_headers)).status_code == 403
+        upi_res = await client.post(
+            "/api/v1/billing/upi-approve",
+            headers=tenant_headers,
+            json={"utr_number": "123456789012", "plan_id": str(uuid.uuid4())},
+        )
+        assert upi_res.status_code == 403
+
+        # Promote one canonical superadmin and confirm platform endpoint allows it
+        async with AsyncSessionLocal() as session:
+            existing_super = (
+                await session.execute(select(User).where(User.is_superadmin.is_(True)))
+            ).scalar_one_or_none()
+            if existing_super:
+                setattr(existing_super, "is_superadmin", False)
+                await session.commit()
+
+            super_user = User(
+                email=f"super_{uuid.uuid4().hex[:8]}@dvttalent.com",
+                full_name="Canonical Superadmin",
+                role=UserRole.ADMIN,
+                is_superadmin=True,
+                is_active=True,
+                is_verified=True,
+            )
+            session.add(super_user)
+            await session.commit()
+            await session.refresh(super_user)
+            super_id = super_user.id
+
+            # Attempting a second active superadmin MUST fail via partial unique index
+            second_super = User(
+                email=f"super2_{uuid.uuid4().hex[:8]}@dvttalent.com",
+                full_name="Blocked Second Superadmin",
+                role=UserRole.ADMIN,
+                is_superadmin=True,
+                is_active=True,
+                is_verified=True,
+            )
+            session.add(second_super)
+            with pytest.raises(IntegrityError):
+                await session.commit()
+            await session.rollback()
+
+            super_token = auth_route.create_access_token(
+                {"sub": str(super_id), "role": "admin", "tenant_id": "", "is_superadmin": True}
+            )
+            super_headers = {"Authorization": f"Bearer {super_token}"}
+            med_res = await client.get("/api/v1/monitoring/mediations", headers=super_headers)
+            assert med_res.status_code == 200
+
+            # Clean up test superadmin row
+            row = await session.get(User, super_id)
+            if row:
+                await session.delete(row)
+                await session.commit()

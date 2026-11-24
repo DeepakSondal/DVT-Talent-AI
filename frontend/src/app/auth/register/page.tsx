@@ -488,7 +488,7 @@ function RegisterContentForm({ portalParam }: { portalParam: string | null }) {
           <p className="text-center text-xs text-muted-foreground pt-1">
             Already have an account?{" "}
             <Link
-              href={`/auth/login?portal=${portal}`}
+              href="/auth/login"
               className="text-primary font-bold hover:underline"
             >
               Sign in

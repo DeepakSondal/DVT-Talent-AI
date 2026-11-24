@@ -16,6 +16,7 @@ export interface UserOut {
   role: UserRole;
   is_active: boolean;
   is_verified: boolean;
+  is_superadmin?: boolean;
   mfa_enabled?: boolean;
   avatar_url?: string;
   last_login?: string;
@@ -30,6 +31,7 @@ export interface AuthResponse {
   email?: string;
   full_name?: string;
   role: string;
+  is_superadmin?: boolean;
   mfa_required?: boolean;
   challenge_token?: string;
   mfa_enabled?: boolean;

@@ -74,7 +74,7 @@ export default function CandidatePortalLayout({
       .catch((err) => {
         // If unauthorized, redirect to candidate login
         if (err.response?.status === 401) {
-          router.push("/auth/login?portal=candidate");
+          router.push("/auth/login");
         }
       });
   }, [router]);
@@ -82,7 +82,7 @@ export default function CandidatePortalLayout({
   const handleLogout = async () => {
     await authService.logout();
     toast.info("Logged out successfully");
-    router.push("/auth/login?portal=candidate");
+    router.push("/auth/login");
   };
 
   const NAV_ITEMS = [

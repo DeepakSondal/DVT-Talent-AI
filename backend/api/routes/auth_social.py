@@ -288,6 +288,7 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
             provider=provider,
             provider_id=provider_id,
             role=UserRole.CANDIDATE if is_candidate_signup else UserRole.ADMIN,
+            is_superadmin=False,
             is_active=True,
             is_verified=True,
             tenant_id=tenant_id,
@@ -395,6 +396,7 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
         "sub": str(user.id),
         "role": role_str,
         "tenant_id": str(user.tenant_id) if user.tenant_id else "",
+        "is_superadmin": bool(getattr(user, "is_superadmin", False)),
     }
     access_token = create_access_token(data=token_data)
     refresh_token = create_refresh_token(data=token_data)

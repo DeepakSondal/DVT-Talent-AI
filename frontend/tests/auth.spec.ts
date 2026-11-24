@@ -1,17 +1,28 @@
 import { test, expect } from '@playwright/test';
 
+const TEST_ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com';
+const TEST_ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || '';
+
 test.describe('Authentication Flow', () => {
   test('redirects from dashboard to login when unauthenticated', async ({ page }) => {
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/.*\/auth\/login/);
   });
 
+  test('renders unified candidate and recruiter login without portal tab toggle', async ({ page }) => {
+    await page.goto('/auth/login');
+    await expect(page.locator('#login-email')).toBeVisible();
+    await expect(page.locator('#login-password')).toBeVisible();
+    await expect(page.locator('#login-recruiter-tab')).toHaveCount(0);
+    await expect(page.locator('#login-candidate-tab')).toHaveCount(0);
+  });
+
   test('successfully logs in with valid credentials', async ({ page }) => {
+    test.skip(!TEST_ADMIN_PASSWORD, 'Set TEST_ADMIN_PASSWORD env var to run live credential login E2E.');
     await page.goto('/auth/login');
     
-    // Fill in credentials (using the default admin ones we set up)
-    await page.fill('input[name="email"]', 'admin@dvt.com');
-    await page.fill('input[name="password"]', 'admin123');
+    await page.fill('input[name="email"]', TEST_ADMIN_EMAIL);
+    await page.fill('input[name="password"]', TEST_ADMIN_PASSWORD);
     
     // Submit the login form
     await page.click('button[type="submit"]', { force: true });

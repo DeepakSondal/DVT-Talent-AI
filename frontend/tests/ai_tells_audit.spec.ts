@@ -23,8 +23,8 @@ test.describe('AI Tells UI Remediation & Verification Suite', () => {
         test.setTimeout(45000);
         // Recruiter login
         await page.goto('/auth/login');
-        await page.fill('input[name="email"]', 'admin@dvt.com');
-        await page.fill('input[name="password"]', 'admin123');
+        await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@dvttalent.com');
+        await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || '');
         await page.click('button[type="submit"]');
         await expect(page).toHaveURL(/.*\/dashboard/, { timeout: 20000 });
 

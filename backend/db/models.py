@@ -362,6 +362,7 @@ class User(Base, TimestampMixin):
     provider_id: Mapped[Optional[str]] = mapped_column(String(255))
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     mfa_secret_encrypted: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    is_superadmin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Relationships
     tenant: Mapped[Optional["Tenant"]] = relationship("Tenant")

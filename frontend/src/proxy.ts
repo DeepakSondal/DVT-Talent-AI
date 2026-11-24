@@ -67,10 +67,11 @@ export function proxy(request: NextRequest) {
   if (token && !pathname.startsWith("/portal")) {
     const payload = parseJwtPayload(token);
     const role = String(payload?.role || "").toLowerCase();
+    const isSuperadmin = Boolean(payload?.is_superadmin);
     if (role === "candidate") {
       return NextResponse.redirect(new URL("/portal", request.url));
     }
-    if (pathname.startsWith("/dashboard/monitoring") && role !== "admin") {
+    if (pathname.startsWith("/dashboard/monitoring") && !isSuperadmin) {
       return NextResponse.redirect(new URL("/dashboard", request.url));
     }
     if (pathname.startsWith("/dashboard/team") && role !== "admin" && role !== "manager") {
