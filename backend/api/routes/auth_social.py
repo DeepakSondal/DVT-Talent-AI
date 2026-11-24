@@ -23,6 +23,7 @@ from api.routes.auth import (
     create_access_token,
     create_refresh_token,
     resolve_post_login_redirect,
+    set_mfa_challenge_cookie,
     set_session_cookies,
 )
 from config import settings
@@ -398,23 +399,14 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
             await db.commit()
 
     # Enforce TOTP 2FA gate on OAuth logins whenever enabled or required for Superadmin
-    mfa_gate = await build_mfa_gate_if_required(user, db)
+    mfa_gate = await build_mfa_gate_if_required(user, db, include_secret=False)
     if mfa_gate:
         mode = "setup" if mfa_gate.get("mfa_setup_required") else "challenge"
         mfa_response = RedirectResponse(
             url=f"{settings.frontend_url}/auth/login?mfa={mode}",
             status_code=302,
         )
-        mfa_response.set_cookie(
-            key="dvt_mfa_challenge",
-            value=mfa_gate["challenge_token"],
-            httponly=True,
-            path="/",
-            max_age=300,
-            expires=300,
-            samesite="lax",
-            secure=settings.is_production,
-        )
+        set_mfa_challenge_cookie(mfa_response, str(mfa_gate["challenge_token"]))
         return mfa_response
 
     role_str = user.role.value if hasattr(user.role, "value") else str(user.role)

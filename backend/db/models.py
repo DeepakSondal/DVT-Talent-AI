@@ -30,6 +30,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -368,6 +369,16 @@ class User(Base, TimestampMixin):
     tenant: Mapped[Optional["Tenant"]] = relationship("Tenant")
     leads: Mapped[List["Lead"]] = relationship("Lead", back_populates="owner", foreign_keys="[Lead.owner_id]")
     campaigns: Mapped[List["EmailCampaign"]] = relationship("EmailCampaign", back_populates="owner")
+
+    __table_args__ = (
+        Index(
+            "uq_users_single_superadmin",
+            "is_superadmin",
+            unique=True,
+            postgresql_where=text("is_superadmin = true"),
+            sqlite_where=text("is_superadmin = 1"),
+        ),
+    )
 
 
 class TeamInvitation(Base, TimestampMixin):

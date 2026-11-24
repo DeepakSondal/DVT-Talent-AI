@@ -168,6 +168,20 @@ def create_mfa_challenge_token(user_id: uuid.UUID, challenge_kind: str = "mfa_ch
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
+def set_mfa_challenge_cookie(response: Response, challenge_token: str) -> None:
+    """Attaches a short-lived HttpOnly MFA challenge cookie for OAuth login completion."""
+    response.set_cookie(
+        key="dvt_mfa_challenge",
+        value=challenge_token,
+        httponly=True,
+        path="/",
+        max_age=300,
+        expires=300,
+        samesite="lax",
+        secure=settings.is_production,
+    )
+
+
 def set_session_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     """Attaches HttpOnly access/refresh session cookies and clears temporary MFA challenge state."""
     response.delete_cookie(key="dvt_mfa_challenge", path="/", samesite="lax")
@@ -219,7 +233,11 @@ def _build_auth_session_response(user: User, status_code: int = 200) -> JSONResp
     return response
 
 
-async def build_mfa_gate_if_required(user: User, db: AsyncSession) -> Optional[dict]:
+async def build_mfa_gate_if_required(
+    user: User,
+    db: AsyncSession,
+    include_secret: bool = True,
+) -> Optional[dict]:
     """Returns MFA challenge or mandatory Superadmin first-login enrollment payload if required."""
     is_superadmin = bool(getattr(user, "is_superadmin", False))
     mfa_enabled = bool(getattr(user, "mfa_enabled", False))
@@ -239,15 +257,17 @@ async def build_mfa_gate_if_required(user: User, db: AsyncSession) -> Optional[d
         setattr(user, "mfa_enabled", False)
         setattr(user, "mfa_secret_encrypted", encrypt_mfa_secret(secret))
         await db.commit()
-        return {
+        payload: dict = {
             "mfa_required": True,
             "mfa_setup_required": True,
             "challenge_token": create_mfa_challenge_token(user.id, "mfa_setup"),
-            "secret": secret,
-            "otpauth_uri": build_otpauth_uri(user.email, secret),
             "role": user.role.value,
             "is_superadmin": True,
         }
+        if include_secret:
+            payload["secret"] = secret
+            payload["otpauth_uri"] = build_otpauth_uri(user.email, secret)
+        return payload
     if mfa_enabled and not decrypted_secret:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
