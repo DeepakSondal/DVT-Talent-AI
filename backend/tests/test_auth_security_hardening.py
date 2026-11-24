@@ -416,22 +416,55 @@ async def test_privilege_escalation_vectors_and_stale_token_invalidation():
             await session.commit()
 
         try:
+            # First-time un-enrolled Superadmin login via JSON MUST trigger inline 2FA setup gate
             login_super = await client.post(
                 "/api/v1/auth/login",
-                data={"username": admin_email, "password": admin_pw},
+                json={"email": admin_email, "password": admin_pw},
             )
             assert login_super.status_code == 200
-            stale_access = login_super.json()["access_token"]
-            stale_refresh = login_super.cookies.get("dvt_refresh_token")
+            gate = login_super.json()
+            assert gate["mfa_required"] is True
+            assert gate["mfa_setup_required"] is True
+            assert "access_token" not in gate
+            assert "dvt_token" not in login_super.cookies
+            setup_secret = gate["secret"]
+
+            setup_step = int(time.time() // 30) - 1
+            verify_res = await client.post(
+                "/api/v1/auth/mfa/verify-setup",
+                json={"challenge_token": gate["challenge_token"], "code": compute_totp_for_step(setup_secret, setup_step)},
+            )
+            assert verify_res.status_code == 200, verify_res.text
+            session_body = verify_res.json()
+            assert session_body["mfa_enabled"] is True
+            assert session_body["redirect_to"] == "/dashboard/monitoring"
+            stale_access = session_body["access_token"]
+            stale_refresh = verify_res.cookies.get("dvt_refresh_token")
             assert stale_refresh
             stale_headers = {"Authorization": f"Bearer {stale_access}"}
             assert (await client.get("/api/v1/monitoring/mediations", headers=stale_headers)).status_code == 200
+
+            # OAuth MFA gate check: cookie-backed challenge avoids leaking JWTs in query URLs
+            async with AsyncSessionLocal() as session:
+                u_obj = await session.get(User, admin_id)
+                assert u_obj is not None
+                oauth_gate = await auth_route.build_mfa_gate_if_required(u_obj, session)
+            assert oauth_gate and oauth_gate["mfa_setup_required"] is False
+            pending_res = await client.get(
+                "/api/v1/auth/mfa/pending",
+                cookies={"dvt_mfa_challenge": oauth_gate["challenge_token"]},
+            )
+            assert pending_res.status_code == 200
+            assert pending_res.json()["mode"] == "challenge"
+            assert pending_res.json()["email"] == admin_email
 
             # Revoke superadmin directly in DB (without relying on Redis cache clear)
             async with AsyncSessionLocal() as session:
                 target = await session.get(User, admin_id)
                 assert target is not None
                 setattr(target, "is_superadmin", False)
+                setattr(target, "mfa_enabled", False)
+                setattr(target, "mfa_secret_encrypted", None)
                 await session.commit()
 
             assert (await client.get("/api/v1/monitoring/mediations", headers=stale_headers)).status_code == 401
@@ -441,6 +474,12 @@ async def test_privilege_escalation_vectors_and_stale_token_invalidation():
                 cookies={"dvt_refresh_token": stale_refresh},
             )
             assert refresh_res.status_code == 401
+
+            # Verify canonical redirect_to across all 3 login roles
+            assert auth_route.resolve_post_login_redirect(User(role=UserRole.CANDIDATE, is_superadmin=False)) == "/portal"
+            assert auth_route.resolve_post_login_redirect(User(role=UserRole.RECRUITER, is_superadmin=False)) == "/dashboard"
+            assert auth_route.resolve_post_login_redirect(User(role=UserRole.ADMIN, is_superadmin=False)) == "/dashboard"
+            assert auth_route.resolve_post_login_redirect(User(role=UserRole.ADMIN, is_superadmin=True)) == "/dashboard/monitoring"
         finally:
             async with AsyncSessionLocal() as session:
                 target = await session.get(User, admin_id)

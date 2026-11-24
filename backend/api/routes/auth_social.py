@@ -18,7 +18,13 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.routes.auth import create_access_token, create_refresh_token
+from api.routes.auth import (
+    build_mfa_gate_if_required,
+    create_access_token,
+    create_refresh_token,
+    resolve_post_login_redirect,
+    set_session_cookies,
+)
 from config import settings
 from db.models import (
     Candidate,
@@ -391,44 +397,47 @@ async def social_callback(provider: str, request: Request, db: AsyncSession = De
             setattr(tenant_obj, "sender_verified", True)
             await db.commit()
 
+    # Enforce TOTP 2FA gate on OAuth logins whenever enabled or required for Superadmin
+    mfa_gate = await build_mfa_gate_if_required(user, db)
+    if mfa_gate:
+        mode = "setup" if mfa_gate.get("mfa_setup_required") else "challenge"
+        mfa_response = RedirectResponse(
+            url=f"{settings.frontend_url}/auth/login?mfa={mode}",
+            status_code=302,
+        )
+        mfa_response.set_cookie(
+            key="dvt_mfa_challenge",
+            value=mfa_gate["challenge_token"],
+            httponly=True,
+            path="/",
+            max_age=300,
+            expires=300,
+            samesite="lax",
+            secure=settings.is_production,
+        )
+        return mfa_response
+
     role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
+    is_superadmin = bool(getattr(user, "is_superadmin", False))
     token_data = {
         "sub": str(user.id),
         "role": role_str,
         "tenant_id": str(user.tenant_id) if user.tenant_id else "",
-        "is_superadmin": bool(getattr(user, "is_superadmin", False)),
+        "is_superadmin": is_superadmin,
     }
     access_token = create_access_token(data=token_data)
     refresh_token = create_refresh_token(data=token_data)
 
-    target_dest = "/portal" if role_str == "candidate" else "/dashboard"
+    target_dest = resolve_post_login_redirect(user)
     redirect_url = (
         f"{settings.frontend_url}/auth/callback"
         f"?redirect={target_dest}&role={role_str}&tenant_id={token_data['tenant_id']}"
+        f"&is_superadmin={'true' if is_superadmin else 'false'}"
     )
     response = RedirectResponse(url=redirect_url, status_code=302)
+    set_session_cookies(response, access_token, refresh_token)
 
-    response.set_cookie(
-        key="dvt_token",
-        value=f"Bearer {access_token}",
-        httponly=True,
-        path="/",
-        max_age=settings.access_token_expire_minutes * 60,
-        expires=settings.access_token_expire_minutes * 60,
-        samesite="lax",
-        secure=settings.is_production,
-    )
-    response.set_cookie(
-        key="dvt_refresh_token",
-        value=refresh_token,
-        httponly=True,
-        path="/",
-        max_age=30 * 24 * 60 * 60,
-        samesite="lax",
-        secure=settings.is_production,
-    )
-
-    log.info("social_login_success", email=email, provider=provider)
+    log.info("social_login_success", email=email, provider=provider, redirect_to=target_dest)
     return response
 
 

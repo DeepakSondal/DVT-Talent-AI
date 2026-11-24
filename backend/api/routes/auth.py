@@ -10,9 +10,9 @@ from typing import Optional
 
 import bcrypt
 import structlog
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt  # pyrefly: ignore[untyped-import]
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, select
@@ -147,20 +147,53 @@ def create_refresh_token(data: dict) -> str:
     return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 
-def create_mfa_challenge_token(user_id: uuid.UUID) -> str:
+def resolve_post_login_redirect(user: User) -> str:
+    """Computes the canonical post-authentication destination for Candidate, Recruiter, or Superadmin."""
+    if getattr(user, "is_superadmin", False):
+        return "/dashboard/monitoring"
+    if user.role == UserRole.CANDIDATE:
+        return "/portal"
+    return "/dashboard"
+
+
+def create_mfa_challenge_token(user_id: uuid.UUID, challenge_kind: str = "mfa_challenge") -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
         "jti": uuid.uuid4().hex,
         "iat": now.timestamp(),
         "exp": now + timedelta(seconds=300),
-        "type": "mfa_challenge",
+        "type": challenge_kind,
     }
     return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
+def set_session_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Attaches HttpOnly access/refresh session cookies and clears temporary MFA challenge state."""
+    response.delete_cookie(key="dvt_mfa_challenge", path="/", samesite="lax")
+    response.set_cookie(
+        key="dvt_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        path="/",
+        max_age=settings.access_token_expire_minutes * 60,
+        expires=settings.access_token_expire_minutes * 60,
+        samesite="lax",
+        secure=settings.is_production,
+    )
+    response.set_cookie(
+        key="dvt_refresh_token",
+        value=refresh_token,
+        httponly=True,
+        path="/",
+        max_age=30 * 24 * 60 * 60,
+        samesite="lax",
+        secure=settings.is_production,
+    )
+
+
 def _build_auth_session_response(user: User, status_code: int = 200) -> JSONResponse:
-    """Issues JWT access/refresh tokens with HttpOnly cookies for an authenticated user."""
+    """Issues JWT access/refresh tokens with HttpOnly cookies and canonical redirect_to."""
     is_superadmin = bool(getattr(user, "is_superadmin", False))
     token_data = {
         "sub": str(user.id),
@@ -179,27 +212,38 @@ def _build_auth_session_response(user: User, status_code: int = 200) -> JSONResp
         "role": user.role.value,
         "is_superadmin": is_superadmin,
         "mfa_enabled": bool(getattr(user, "mfa_enabled", False)),
+        "redirect_to": resolve_post_login_redirect(user),
     }
     response = JSONResponse(content=content, status_code=status_code)
-    response.set_cookie(
-        key="dvt_token",
-        value=f"Bearer {access_token}",
-        httponly=True,
-        path="/",
-        max_age=settings.access_token_expire_minutes * 60,
-        samesite="lax",
-        secure=settings.is_production,
-    )
-    response.set_cookie(
-        key="dvt_refresh_token",
-        value=refresh_token,
-        httponly=True,
-        path="/",
-        max_age=30 * 24 * 60 * 60,
-        samesite="lax",
-        secure=settings.is_production,
-    )
+    set_session_cookies(response, access_token, refresh_token)
     return response
+
+
+async def build_mfa_gate_if_required(user: User, db: AsyncSession) -> Optional[dict]:
+    """Returns MFA challenge or mandatory Superadmin first-login enrollment payload if required."""
+    is_superadmin = bool(getattr(user, "is_superadmin", False))
+    if getattr(user, "mfa_enabled", False) and getattr(user, "mfa_secret_encrypted", None):
+        return {
+            "mfa_required": True,
+            "mfa_setup_required": False,
+            "challenge_token": create_mfa_challenge_token(user.id, "mfa_challenge"),
+            "role": user.role.value,
+            "is_superadmin": is_superadmin,
+        }
+    if is_superadmin and not getattr(user, "mfa_enabled", False):
+        secret = generate_totp_secret()
+        setattr(user, "mfa_secret_encrypted", encrypt_mfa_secret(secret))
+        await db.commit()
+        return {
+            "mfa_required": True,
+            "mfa_setup_required": True,
+            "challenge_token": create_mfa_challenge_token(user.id, "mfa_setup"),
+            "secret": secret,
+            "otpauth_uri": build_otpauth_uri(user.email, secret),
+            "role": user.role.value,
+            "is_superadmin": True,
+        }
+    return None
 
 
 def _ensure_token_privileges_current(payload: dict, user: User) -> None:
@@ -478,14 +522,33 @@ async def register(
     return _build_auth_session_response(user, status_code=201)
 
 
+async def _extract_login_credentials(request: Request) -> tuple[str, str]:
+    """Parses email/username and password cleanly from JSON or OAuth2 form-urlencoded requests."""
+    content_type = (request.headers.get("content-type") or "").lower()
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        raw_email = body.get("email") or body.get("username") or ""
+        raw_password = body.get("password") or ""
+        return str(raw_email), str(raw_password)
+    form = await request.form()
+    raw_email = form.get("username") or form.get("email") or ""
+    raw_password = form.get("password") or ""
+    return str(raw_email), str(raw_password)
+
+
 @router.post("/login")
 async def login(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
+    raw_email, raw_password = await _extract_login_credentials(request)
     client_ip = get_real_client_ip(request)
-    normalized_email = (form_data.username or "").strip().lower()
+    normalized_email = raw_email.strip().lower()
     bypass = is_load_test_bypass_allowed(request)
 
     # 1. Per-IP login request rate limit (30 req / minute)
@@ -516,10 +579,10 @@ async def login(
 
     if not user or not user.hashed_password:
         # Constant-time dummy bcrypt check to prevent user/OAuth-only enumeration via timing
-        await verify_password(form_data.password or "", _DUMMY_BCRYPT_HASH)
+        await verify_password(raw_password or "", _DUMMY_BCRYPT_HASH)
         password_ok = False
     else:
-        password_ok = await verify_password(form_data.password, str(user.hashed_password))
+        password_ok = await verify_password(raw_password, str(user.hashed_password))
 
     if not user or not password_ok:
         if not bypass:
@@ -542,16 +605,10 @@ async def login(
     if not bypass:
         await reset_rate_limit(email_fail_key, window_seconds=900)
 
-    # Admin 2FA Gate: hold session cookies/JWT until valid TOTP step completes
-    if getattr(user, "mfa_enabled", False) and getattr(user, "mfa_secret_encrypted", None):
-        return JSONResponse(
-            content={
-                "mfa_required": True,
-                "challenge_token": create_mfa_challenge_token(user.id),
-                "role": user.role.value,
-            },
-            status_code=status.HTTP_200_OK,
-        )
+    # 2FA Gate (enrolled TOTP or mandatory first-login Superadmin enrollment)
+    mfa_gate = await build_mfa_gate_if_required(user, db)
+    if mfa_gate:
+        return JSONResponse(content=mfa_gate, status_code=status.HTTP_200_OK)
 
     setattr(user, "last_login", datetime.now(timezone.utc))
     await db.commit()
@@ -654,21 +711,77 @@ async def logout(
     response.delete_cookie(key="dvt_token", path="/", samesite="lax")
     response.delete_cookie(key="dvt_refresh_token", path="/", samesite="lax")
     response.delete_cookie(key="dvt_refresh_token", path="/api/v1/auth/refresh", samesite="lax")
+    response.delete_cookie(key="dvt_mfa_challenge", path="/", samesite="lax")
     return response
 
 
 class MfaCodeRequest(BaseModel):
     code: str
+    challenge_token: Optional[str] = None
 
 
 class MfaChallengeRequest(BaseModel):
-    challenge_token: str
+    challenge_token: Optional[str] = None
     code: str
 
 
 class MfaDisableRequest(BaseModel):
     current_password: str
     code: str
+
+
+async def _decode_mfa_token(raw_token: Optional[str], expected_types: tuple[str, ...]) -> tuple[uuid.UUID, dict, str]:
+    """Validates a short-lived MFA challenge or setup token and returns (user_uuid, claims, raw_token)."""
+    token = (raw_token or "").strip()
+    if not token or await is_token_revoked(token):
+        raise HTTPException(status_code=401, detail="2FA challenge expired or already used.")
+    try:
+        claims = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        user_id_val = claims.get("sub")
+        token_type = claims.get("type")
+        if not user_id_val or token_type not in expected_types:
+            raise HTTPException(status_code=401, detail="Invalid 2FA token.")
+        return uuid.UUID(str(user_id_val)), claims, token
+    except (JWTError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired 2FA token.") from exc
+
+
+async def _revoke_short_lived_token(token: str, claims: dict) -> None:
+    exp = claims.get("exp")
+    remaining = max(1, int(exp - datetime.now(timezone.utc).timestamp())) if exp else 300
+    await revoke_token(token, remaining)
+
+
+@router.get("/mfa/pending")
+async def get_pending_mfa_state(
+    request: Request,
+    dvt_mfa_challenge: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Inspects an HttpOnly OAuth/login MFA challenge cookie without exposing JWTs in URLs."""
+    raw_token = dvt_mfa_challenge or request.headers.get("X-MFA-Challenge")
+    user_uuid, claims, _ = await _decode_mfa_token(raw_token, ("mfa_challenge", "mfa_setup"))
+    user = (await db.execute(select(User).where(User.id == user_uuid))).scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Account unavailable.")
+    if claims.get("type") == "mfa_setup":
+        if getattr(user, "mfa_enabled", False):
+            return {"mode": "challenge", "email": user.email, "is_superadmin": bool(getattr(user, "is_superadmin", False))}
+        secret = decrypt_mfa_secret(getattr(user, "mfa_secret_encrypted", None))
+        if not secret:
+            raise HTTPException(status_code=401, detail="2FA setup expired. Please sign in again.")
+        return {
+            "mode": "setup",
+            "email": user.email,
+            "is_superadmin": bool(getattr(user, "is_superadmin", False)),
+            "secret": secret,
+            "otpauth_uri": build_otpauth_uri(user.email, secret),
+        }
+    return {
+        "mode": "challenge",
+        "email": user.email,
+        "is_superadmin": bool(getattr(user, "is_superadmin", False)),
+    }
 
 
 @router.post("/mfa/setup")
@@ -692,37 +805,56 @@ async def setup_admin_mfa(
 async def verify_admin_mfa_setup(
     payload: MfaCodeRequest,
     request: Request,
-    current_user: User = Depends(require_admin),
+    dvt_mfa_challenge: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Activates admin 2FA after verifying a valid single-use 6-digit authenticator code."""
+    """Activates admin 2FA via authenticated session OR scoped first-login setup token and returns full session."""
+    raw_setup_token = payload.challenge_token or dvt_mfa_challenge
+    setup_claims: Optional[dict] = None
+    used_setup_token: Optional[str] = None
+
+    if raw_setup_token:
+        user_uuid, setup_claims, used_setup_token = await _decode_mfa_token(raw_setup_token, ("mfa_setup",))
+        target_user = (await db.execute(select(User).where(User.id == user_uuid))).scalar_one_or_none()
+        if not target_user or not target_user.is_active or target_user.role != UserRole.ADMIN:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    else:
+        target_user = await require_admin(await get_current_user(request, db))
+
     await enforce_endpoint_rate_limit(
         request,
         scope="mfa_setup_verify",
-        identifier=str(current_user.id),
+        identifier=str(target_user.id),
         limit=10,
         window_seconds=300,
         detail="Too many 2FA verification attempts. Please wait a few minutes.",
     )
-    secret = decrypt_mfa_secret(getattr(current_user, "mfa_secret_encrypted", None))
+    secret = decrypt_mfa_secret(getattr(target_user, "mfa_secret_encrypted", None))
     if not secret:
         raise HTTPException(status_code=400, detail="2FA setup has not been initialized.")
     matched_step = verify_totp_code(secret, payload.code)
-    if matched_step is None or not await mark_totp_step_used(str(current_user.id), matched_step):
+    if matched_step is None or not await mark_totp_step_used(str(target_user.id), matched_step):
         raise HTTPException(status_code=400, detail="Invalid or already-used 6-digit authenticator code.")
 
-    setattr(current_user, "mfa_enabled", True)
+    setattr(target_user, "mfa_enabled", True)
+    setattr(target_user, "last_login", datetime.now(timezone.utc))
     await db.commit()
-    return {"status": "success", "mfa_enabled": True}
+
+    if used_setup_token and setup_claims:
+        await _revoke_short_lived_token(used_setup_token, setup_claims)
+        return _build_auth_session_response(target_user)
+
+    return {"status": "success", "mfa_enabled": True, "redirect_to": resolve_post_login_redirect(target_user)}
 
 
 @router.post("/mfa/challenge")
 async def verify_mfa_login_challenge(
     payload: MfaChallengeRequest,
     request: Request,
+    dvt_mfa_challenge: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Completes two-factor login using a short-lived challenge token and 6-digit TOTP code."""
+    """Completes two-factor login using a challenge token (JSON or HttpOnly cookie) and 6-digit TOTP code."""
     client_ip = get_real_client_ip(request)
     await enforce_endpoint_rate_limit(
         request,
@@ -732,16 +864,10 @@ async def verify_mfa_login_challenge(
         window_seconds=900,
         detail="Too many 2FA attempts. Please try again later.",
     )
-    if await is_token_revoked(payload.challenge_token):
-        raise HTTPException(status_code=401, detail="2FA challenge expired or already used.")
-    try:
-        claims = jwt.decode(payload.challenge_token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id_val = claims.get("sub")
-        if not user_id_val or claims.get("type") != "mfa_challenge":
-            raise HTTPException(status_code=401, detail="Invalid 2FA challenge.")
-        user_uuid = uuid.UUID(str(user_id_val))
-    except (JWTError, ValueError) as exc:
-        raise HTTPException(status_code=401, detail="Invalid or expired 2FA challenge.") from exc
+    user_uuid, claims, raw_token = await _decode_mfa_token(
+        payload.challenge_token or dvt_mfa_challenge,
+        ("mfa_challenge",),
+    )
 
     fail_key = f"rl:mfa_fail_user:{user_uuid}"
     bypass = is_load_test_bypass_allowed(request)
@@ -766,9 +892,7 @@ async def verify_mfa_login_challenge(
     if not bypass:
         await reset_rate_limit(fail_key, window_seconds=900)
 
-    exp = claims.get("exp")
-    remaining = max(1, int(exp - datetime.now(timezone.utc).timestamp())) if exp else 300
-    await revoke_token(payload.challenge_token, remaining)
+    await _revoke_short_lived_token(raw_token, claims)
 
     setattr(user, "last_login", datetime.now(timezone.utc))
     await db.commit()

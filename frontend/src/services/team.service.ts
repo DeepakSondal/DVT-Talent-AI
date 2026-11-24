@@ -24,9 +24,11 @@ export interface AcceptInvitationResponse {
     full_name: string;
     role: string;
     tenant_id: string;
+    is_superadmin?: boolean;
   };
   access_token: string;
   token_type: string;
+  redirect_to?: string;
 }
 
 export const teamService = {

@@ -40,7 +40,11 @@ export function proxy(request: NextRequest) {
       const fromParam = searchParams.get("from");
       const safeFrom =
         fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//") ? fromParam : null;
-      const defaultDest = payload?.role === "candidate" ? "/portal" : "/dashboard";
+      const defaultDest = payload?.is_superadmin
+        ? "/dashboard/monitoring"
+        : payload?.role === "candidate"
+          ? "/portal"
+          : "/dashboard";
       return NextResponse.redirect(new URL(safeFrom || defaultDest, request.url));
     }
     return NextResponse.next();

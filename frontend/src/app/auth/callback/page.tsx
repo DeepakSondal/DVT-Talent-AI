@@ -15,7 +15,11 @@ function AuthContent() {
     const role = searchParams.get("role");
     const redirectParam = searchParams.get("redirect");
 
-    const finishSignIn = (resolvedTenantId?: string | null, resolvedRole?: string | null) => {
+    const finishSignIn = (
+      resolvedTenantId?: string | null,
+      resolvedRole?: string | null,
+      resolvedRedirect?: string | null
+    ) => {
       // Backend sets HttpOnly dvt_token & dvt_refresh_token cookies; only keep non-sensitive tenant_id for UI display.
       localStorage.removeItem("dvt_token");
       if (resolvedTenantId) {
@@ -23,13 +27,15 @@ function AuthContent() {
       }
 
       toast.success("Successfully signed in!");
-      const dest =
-        redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
-          ? redirectParam
-          : resolvedRole === "candidate"
-            ? "/portal"
-            : "/dashboard";
-      router.push(dest);
+      const safeRedirect =
+        resolvedRedirect && resolvedRedirect.startsWith("/") && !resolvedRedirect.startsWith("//")
+          ? resolvedRedirect
+          : redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+            ? redirectParam
+            : resolvedRole === "candidate"
+              ? "/portal"
+              : "/dashboard";
+      router.push(safeRedirect);
     };
 
     if (token) {
@@ -41,7 +47,7 @@ function AuthContent() {
         document.title,
         cleanQuery ? `${window.location.pathname}?${cleanQuery}` : window.location.pathname
       );
-      finishSignIn(tenantId, role);
+      finishSignIn(tenantId, role, redirectParam);
       return;
     }
 
@@ -54,7 +60,7 @@ function AuthContent() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.access_token) {
-          finishSignIn(data.tenant_id || tenantId, data.role || role);
+          finishSignIn(data.tenant_id || tenantId, data.role || role, data.redirect_to || redirectParam);
         } else {
           toast.error("Authentication failed. Please try again.");
           router.push("/auth/login");

@@ -32,7 +32,19 @@ export interface AuthResponse {
   full_name?: string;
   role: string;
   is_superadmin?: boolean;
+  redirect_to?: string;
   mfa_required?: boolean;
+  mfa_setup_required?: boolean;
   challenge_token?: string;
+  secret?: string;
+  otpauth_uri?: string;
   mfa_enabled?: boolean;
+}
+
+export interface PendingMfaState {
+  mode: "challenge" | "setup";
+  email: string;
+  is_superadmin?: boolean;
+  secret?: string;
+  otpauth_uri?: string;
 }

@@ -121,9 +121,10 @@ function AcceptInvitationContent() {
         icon: <ShieldCheck className="w-4 h-4 text-emerald-600" />,
       });
 
-      // Smooth redirection to dashboard
+      // Smooth redirection to canonical portal/dashboard
+      const destination = res?.redirect_to || "/dashboard";
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push(destination);
       }, 1500);
     } catch (err: any) {
       const detail = err.response?.data?.detail;
