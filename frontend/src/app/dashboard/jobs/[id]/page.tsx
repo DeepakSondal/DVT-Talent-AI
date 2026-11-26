@@ -14,11 +14,8 @@ export default async function JobDetailPage({
 
   let initialMatches: Candidate[] | null = null;
   if (initialJob) {
-    const searchTerm = encodeURIComponent(
-      initialJob.skills_required?.[0] || initialJob.title || ""
-    );
     const matchesRes = await serverApiFetch<{ items?: Candidate[] }>(
-      `/candidates?search=${searchTerm}&min_score=80`
+      `/candidates?job_id=${safeId}`
     );
     initialMatches = matchesRes?.items || [];
   }

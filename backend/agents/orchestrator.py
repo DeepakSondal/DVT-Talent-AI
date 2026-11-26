@@ -845,6 +845,8 @@ class AgentOrchestrator:
                 AsyncSessionLocal,
                 Candidate,
                 CandidateStatus,
+                Job,
+                JobCandidate,
                 Resume,
             )
             from services.resume_parser import ResumeParserService
@@ -852,7 +854,7 @@ class AgentOrchestrator:
             job_uuid = None
             if self.job_id:
                 try:
-                    job_uuid = uuid.UUID(self.job_id)
+                    job_uuid = uuid.UUID(str(self.job_id))
                 except (ValueError, TypeError):
                     job_uuid = None
 
@@ -860,6 +862,14 @@ class AgentOrchestrator:
             audit_rec = (audit_data.get("recommendation") if isinstance(audit_data, dict) else None) or "PENDING_REVIEW"
 
             async with AsyncSessionLocal() as session:
+                if job_uuid is not None:
+                    valid_job = (
+                        await session.execute(
+                            select(Job.id).where(Job.id == job_uuid, Job.tenant_id == tenant_uuid)
+                        )
+                    ).scalar_one_or_none()
+                    if valid_job is None:
+                        job_uuid = None
                 for c in candidates:
                     c_dict = _serialize(c) if not isinstance(c, dict) else c
                     if not isinstance(c_dict, dict):
@@ -957,6 +967,29 @@ class AgentOrchestrator:
                             )
                         )
 
+                    if job_uuid is not None:
+                        existing_jc = (
+                            await session.execute(
+                                select(JobCandidate).where(
+                                    JobCandidate.job_id == job_uuid,
+                                    JobCandidate.candidate_id == cand_row.id,
+                                )
+                            )
+                        ).scalar_one_or_none()
+                        if existing_jc is None:
+                            session.add(
+                                JobCandidate(
+                                    tenant_id=tenant_uuid,
+                                    job_id=job_uuid,
+                                    candidate_id=cand_row.id,
+                                    match_score=score_val,
+                                    status=cand_row.status or CandidateStatus.SOURCED,
+                                    ai_reasoning=summary_str,
+                                )
+                            )
+                        elif existing_jc.match_score is None or score_val > float(existing_jc.match_score):
+                            setattr(existing_jc, "match_score", score_val)
+
                     input_hash = hashlib.sha256(f"{tenant_uuid}:{cand_row.email}:{role_title}".encode()).hexdigest()
                     ledger = AIDecisionLedger(
                         tenant_id=tenant_uuid,
@@ -1007,11 +1040,15 @@ class AgentOrchestrator:
                 AIDecisionLedger,
                 AsyncSessionLocal,
                 Candidate,
+                CandidateStatus,
                 EmailCampaign,
                 EmailSent,
                 EmailStatus,
+                Job,
+                JobCandidate,
                 User,
             )
+            from services.validation_service import validation_service
 
             job_uuid = None
             raw_job_id = job.get("id") or self.job_id
@@ -1023,6 +1060,14 @@ class AgentOrchestrator:
 
             job_title = job.get("title") or job.get("role") or "Target Role"
             async with AsyncSessionLocal() as session:
+                if job_uuid is not None:
+                    valid_job = (
+                        await session.execute(
+                            select(Job.id).where(Job.id == job_uuid, Job.tenant_id == tenant_uuid)
+                        )
+                    ).scalar_one_or_none()
+                    if valid_job is None:
+                        job_uuid = None
                 user_res = await session.execute(
                     select(User).where(User.tenant_id == tenant_uuid).limit(1)
                 )
@@ -1040,7 +1085,7 @@ class AgentOrchestrator:
                 for item in results:
                     to_email = item.get("email")
                     cand_name = item.get("candidate") or "Candidate"
-                    if not to_email or "@" not in str(to_email):
+                    if not to_email or "@" not in str(to_email) or validation_service.is_placeholder_email(str(to_email)):
                         continue
                     out_payload = item.get("outreach") or {}
                     subject = f"Opportunity: {job_title}"
@@ -1063,6 +1108,25 @@ class AgentOrchestrator:
                         )
                     )
                     cand_obj = cand_res.scalar_one_or_none()
+                    if job_uuid is not None and cand_obj is not None:
+                        existing_jc = (
+                            await session.execute(
+                                select(JobCandidate).where(
+                                    JobCandidate.job_id == job_uuid,
+                                    JobCandidate.candidate_id == cand_obj.id,
+                                )
+                            )
+                        ).scalar_one_or_none()
+                        if existing_jc is None:
+                            session.add(
+                                JobCandidate(
+                                    tenant_id=tenant_uuid,
+                                    job_id=job_uuid,
+                                    candidate_id=cand_obj.id,
+                                    match_score=cand_obj.score or 85.0,
+                                    status=cand_obj.status or CandidateStatus.SOURCED,
+                                )
+                            )
 
                     email_row = EmailSent(
                         tenant_id=tenant_uuid,

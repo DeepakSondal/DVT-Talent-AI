@@ -123,7 +123,7 @@ class S3StorageDriver(BaseStorageDriver):
 
     def _get_client(self):
         if self._s3_client is None:
-            import boto3
+            import boto3  # pyrefly: ignore[missing-import]
             self._s3_client = boto3.client(
                 "s3",
                 endpoint_url=self.endpoint_url,

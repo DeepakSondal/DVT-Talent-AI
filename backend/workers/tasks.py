@@ -221,6 +221,7 @@ def run_full_autonomous_pipeline(
     require_uploaded_resume: bool = False,
     task_id: Optional[str] = None,
     resume_from_stages: Optional[Dict[str, Any]] = None,
+    job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the checkpointed end-to-end 5/6-agent pipeline"""
     safe_tenant_id = _require_tenant_uuid(tenant_id)
@@ -228,7 +229,7 @@ def run_full_autonomous_pipeline(
     safe_location, _ = sanitizer_service.sanitize(location or "")
     log.info("celery_task_started", task="full_pipeline", industry=safe_industry, tenant_id=safe_tenant_id, task_id=task_id)
     try:
-        orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id)
+        orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id, job_id=job_id)
         broadcast_signal(f"Initiating full swarm for {safe_industry} in {safe_location}...", "swarm_start", tenant_id=safe_tenant_id)
         result = asyncio.run(orchestrator.run_full_pipeline(
             industry=safe_industry,
@@ -452,7 +453,12 @@ def source_candidates_for_job(self, job_id: str, skills: list, location: Optiona
                 safe_location, _ = sanitizer_service.sanitize(location or "Remote")
                 prompt = f"Source qualified talent for Job ID {job_id}. Required skills: {safe_skills}. Location: {safe_location}."
                 res = await sourcing_agent.run(prompt, deps=deps)
-                return res.output.model_dump()
+                dumped = res.output.model_dump()
+                sourced_list = dumped.get("candidates") or []
+                if sourced_list:
+                    orchestrator = AgentOrchestrator(tenant_id=safe_tenant_id, job_id=job_id)
+                    await orchestrator._persist_sourcing_and_ledger(sourced_list, {}, role_title=f"Requisition {job_id}")
+                return dumped
 
         result = asyncio.run(_run())
         log.info("sourcing_candidates_completed", job_id=job_id)

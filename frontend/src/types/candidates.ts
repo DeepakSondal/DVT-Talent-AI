@@ -29,5 +29,9 @@ export interface Candidate {
     verdict: string;
   };
   created_at: string;
+  has_verified_email?: boolean;
+  job_id?: string | null;
+  job_match_score?: number | null;
+  job_stage?: string | null;
   meta_data?: any;
 }

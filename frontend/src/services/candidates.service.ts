@@ -9,6 +9,7 @@ export interface CandidateListParams {
   search?: string;
   status?: string;
   min_score?: number;
+  job_id?: string;
 }
 
 export const candidatesService = {

@@ -31,9 +31,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.rate_limit import enforce_endpoint_rate_limit
 from api.routes.auth import User, get_current_user
-from db.models import Candidate, CandidateStatus, Resume, Tenant, UserRole, get_db
+from db.models import (
+    Candidate,
+    CandidateStatus,
+    Job,
+    JobCandidate,
+    Resume,
+    Tenant,
+    UserRole,
+    get_db,
+)
 from services.privacy_service import is_candidate_visible_to_recruiter
 from services.resume_parser import ResumeParserService
+from services.validation_service import validation_service
 
 log = structlog.get_logger(__name__)
 router = APIRouter()
@@ -79,6 +89,10 @@ class CandidateOut(BaseModel):
     score: float
     ai_summary: Optional[str]
     meta_data: Optional[Dict[str, Any]] = None
+    has_verified_email: bool = True
+    job_id: Optional[UUID] = None
+    job_match_score: Optional[float] = None
+    job_stage: Optional[CandidateStatus] = None
     created_at: datetime
 
     class Config:
@@ -124,6 +138,7 @@ async def list_candidates(
     min_score: Optional[float] = None,
     skill: Optional[str] = None,
     source: Optional[str] = None,
+    job_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -132,6 +147,15 @@ async def list_candidates(
             status_code=403,
             detail="Recruiter or administrative permissions required to access candidate management."
         )
+
+    if job_id is not None:
+        job_row = (
+            await db.execute(
+                select(Job.id).where(Job.id == job_id, Job.tenant_id == current_user.tenant_id)
+            )
+        ).scalar_one_or_none()
+        if job_row is None:
+            return CandidateList(items=[], total=0, page=page, page_size=page_size)
 
     tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
 
@@ -189,12 +213,45 @@ async def list_candidates(
         if blocked_ids:
             effective_filters.append(Candidate.id.not_in(blocked_ids))
 
-    # Compute total count via database SQL aggregate
+    # Compute total count and fetch requested page slice
+    start_idx = (page - 1) * page_size
+    if job_id is not None:
+        jc_filters = [
+            *effective_filters,
+            JobCandidate.job_id == job_id,
+            (JobCandidate.tenant_id == current_user.tenant_id) | (JobCandidate.tenant_id.is_(None)),
+        ]
+        count_query = (
+            select(func.count(Candidate.id))
+            .join(JobCandidate, JobCandidate.candidate_id == Candidate.id)
+            .where(*jc_filters)
+        )
+        total = (await db.execute(count_query)).scalar() or 0
+        rows = (
+            await db.execute(
+                select(Candidate, JobCandidate)
+                .join(JobCandidate, JobCandidate.candidate_id == Candidate.id)
+                .where(*jc_filters)
+                .order_by(desc(func.coalesce(JobCandidate.match_score, Candidate.score)))
+                .offset(start_idx)
+                .limit(page_size)
+            )
+        ).all()
+        serialized_items: List[CandidateOut] = []
+        for cand_obj, jc_obj in rows:
+            dto = CandidateOut.model_validate(cand_obj)
+            dto.has_verified_email = not validation_service.is_placeholder_email(cand_obj.email)
+            dto.job_id = job_id
+            dto.job_match_score = jc_obj.match_score if jc_obj.match_score is not None else cand_obj.score
+            dto.job_stage = jc_obj.status or cand_obj.status
+            if dto.job_match_score is not None:
+                dto.score = float(dto.job_match_score)
+            serialized_items.append(dto)
+        return CandidateList(items=serialized_items, total=total, page=page, page_size=page_size)
+
     count_query = select(func.count(Candidate.id)).where(*effective_filters)
     total = (await db.execute(count_query)).scalar() or 0
 
-    # Bounded SQL pagination — fetch only the requested page slice
-    start_idx = (page - 1) * page_size
     query = (
         select(Candidate)
         .where(*effective_filters)
@@ -203,8 +260,13 @@ async def list_candidates(
         .limit(page_size)
     )
     paged_items = (await db.execute(query)).scalars().all()
+    serialized_all: List[CandidateOut] = []
+    for cand_obj in paged_items:
+        dto = CandidateOut.model_validate(cand_obj)
+        dto.has_verified_email = not validation_service.is_placeholder_email(cand_obj.email)
+        serialized_all.append(dto)
 
-    return CandidateList(items=list(cast(Any, paged_items)), total=total, page=page, page_size=page_size)
+    return CandidateList(items=serialized_all, total=total, page=page, page_size=page_size)
 
 
 def _require_recruiter_workspace_access(current_user: User) -> None:

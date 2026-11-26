@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { 
     Zap, Rocket, Target, Mail, ShieldCheck, 
     ChevronRight, Loader2, Search, Briefcase, 
@@ -16,7 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { agentsApi } from "@/lib/api";
+import { agentsApi, jobsApi, type Job } from "@/lib/api";
 import { useWebSocket } from "@/providers/websocket-provider";
 
 type AgentStatus = "idle" | "thinking" | "researching" | "success" | "error";
@@ -38,7 +40,11 @@ const PRESET_TEMPLATES = [
     { title: "Cybersecurity Operations Director", location: "Washington, DC", role: "Director of Cyber Defense" }
 ];
 
-export default function SwarmCommandCenter() {
+function SwarmCommandCenterContent() {
+    const searchParams = useSearchParams();
+    const initialJobId = searchParams.get("job_id") || "";
+    const [selectedJobId, setSelectedJobId] = useState<string>(initialJobId);
+    const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
     const [status, setStatus] = useState<"idle" | "running" | "complete">("idle");
     const [progress, setProgress] = useState(0);
     const [requireApproval, setRequireApproval] = useState(true);
@@ -83,6 +89,38 @@ export default function SwarmCommandCenter() {
     useEffect(() => {
         return subscribe(handleSignal);
     }, [subscribe, handleSignal]);
+
+    useEffect(() => {
+        let active = true;
+        jobsApi
+            .list()
+            .then((res: any) => {
+                if (!active) return;
+                const list: Job[] = res?.items || (Array.isArray(res) ? res : []);
+                setAvailableJobs(list);
+                if (initialJobId) {
+                    const matched = list.find((j) => String(j.id) === initialJobId);
+                    if (matched) {
+                        setTargetRole(matched.title);
+                        setTargetLocation(matched.location || (matched.remote ? "Remote" : "United States"));
+                    }
+                }
+            })
+            .catch(() => {});
+        return () => {
+            active = false;
+        };
+    }, [initialJobId]);
+
+    const handleSelectJob = (nextJobId: string) => {
+        setSelectedJobId(nextJobId);
+        const matched = availableJobs.find((j) => String(j.id) === nextJobId);
+        if (matched) {
+            setTargetRole(matched.title);
+            setTargetLocation(matched.location || (matched.remote ? "Remote" : "United States"));
+            toast.info(`Bound Swarm to '${matched.title}'`);
+        }
+    };
 
     const toggleSourcingChannel = (channelId: string) => {
         setSourcingChannels(prev =>
@@ -174,6 +212,7 @@ export default function SwarmCommandCenter() {
             return agentsApi.runSwarm({
                 industry: targetRole,
                 location: targetLocation,
+                job_id: selectedJobId || undefined,
                 mock_mode: false,
                 require_approval: requireApproval,
                 sources: sourcingChannels,
@@ -302,6 +341,39 @@ export default function SwarmCommandCenter() {
                 </div>
             </div>
 
+            {status === "complete" && (
+                <Card className="p-5 rounded-2xl bg-emerald-500/10 border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                        <p className="text-sm font-bold text-foreground flex items-center gap-2">
+                            <Check className="w-4 h-4 text-emerald-500" />
+                            Swarm Execution Complete for &ldquo;{targetRole}&rdquo;
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Candidates and compliance ledger evaluations are ready for triage and outreach approval.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                        {selectedJobId && (
+                            <Link href={`/dashboard/jobs/${encodeURIComponent(selectedJobId)}`}>
+                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl">
+                                    Review Job Pipeline
+                                </Button>
+                            </Link>
+                        )}
+                        <Link href={`/dashboard/outreach${selectedJobId ? `?job_id=${encodeURIComponent(selectedJobId)}` : ""}`}>
+                            <Button variant="outline" size="sm" className="text-xs font-bold rounded-xl">
+                                Launch Outreach
+                            </Button>
+                        </Link>
+                        <Link href={`/dashboard/approvals${selectedJobId ? `?job_id=${encodeURIComponent(selectedJobId)}` : ""}`}>
+                            <Button variant="outline" size="sm" className="text-xs font-bold rounded-xl">
+                                Review Approvals
+                            </Button>
+                        </Link>
+                    </div>
+                </Card>
+            )}
+
             {/* Agent Swarm Node Status Fabric with Toggle Controls */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -398,6 +470,23 @@ export default function SwarmCommandCenter() {
                         </div>
 
                         <div className="pt-4 border-t border-border space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black font-semibold text-muted-foreground">Target Job Requisition (Optional)</label>
+                                <select
+                                    aria-label="Target Job Requisition"
+                                    value={selectedJobId}
+                                    onChange={(e) => handleSelectJob(e.target.value)}
+                                    className="w-full bg-muted/40 border border-border rounded-2xl px-4 py-3 text-xs font-bold text-foreground outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                                >
+                                    <option value="">Workspace-Wide Discovery (No Specific Requisition)</option>
+                                    {availableJobs.map((j) => (
+                                        <option key={j.id} value={j.id}>
+                                            {j.title} {j.location ? `(${j.location})` : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black font-semibold text-muted-foreground">Target Role / Search Term</label>
@@ -581,5 +670,13 @@ export default function SwarmCommandCenter() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function SwarmCommandCenter() {
+    return (
+        <Suspense fallback={<div className="p-8 text-xs text-muted-foreground">Loading Swarm Command Center...</div>}>
+            <SwarmCommandCenterContent />
+        </Suspense>
     );
 }

@@ -94,12 +94,12 @@ export default function CreateJobPage() {
 
     try {
       setLoading(true);
-      await jobsApi.create(formData as JobCreate);
+      const created = await jobsApi.create(formData as JobCreate);
       toast.success("Job Requisition Created!", {
-        description: "Requisition published. Automated AI candidate sourcing is now active.",
+        description: "Requisition published. Opening role pipeline and AI sourcing controls.",
         icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />
       });
-      router.push("/dashboard/jobs");
+      router.push(created?.id ? `/dashboard/jobs/${created.id}` : "/dashboard/jobs");
     } catch (err: any) {
       console.error(err);
       toast.error(err?.response?.data?.detail || "Failed to create job requisition.");

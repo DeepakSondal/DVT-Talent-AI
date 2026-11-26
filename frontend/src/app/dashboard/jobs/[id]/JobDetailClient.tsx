@@ -54,8 +54,7 @@ export function JobDetailClient({
         setJob(jobData);
         
         const matchData = await candidatesApi.list({ 
-          search: jobData.skills_required?.[0] || jobData.title,
-          min_score: 80 
+          job_id: jobData.id
         });
         setMatches(matchData.items || []);
       } catch (err) {
@@ -128,11 +127,25 @@ export function JobDetailClient({
           <span>Back to All Requisitions</span>
         </Link>
 
-        <div className="flex items-center gap-2.5">
-          <Link href={`/dashboard/sourcing?title=${encodeURIComponent(job.title)}`}>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Link href={`/dashboard/sourcing?job_id=${encodeURIComponent(job.id)}&title=${encodeURIComponent(job.title)}&skills=${encodeURIComponent((job.skills_required || []).join(", "))}&location=${encodeURIComponent(job.location || "")}`}>
             <Button size="sm" className="h-9 px-4 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold gap-1.5 shadow-sm whitespace-nowrap">
               <Target className="w-3.5 h-3.5" />
               Source Candidates
+            </Button>
+          </Link>
+
+          <Link href={`/dashboard/swarm?job_id=${encodeURIComponent(job.id)}`}>
+            <Button variant="outline" size="sm" className="h-9 px-3.5 rounded-xl border-border text-xs font-semibold gap-1.5 whitespace-nowrap">
+              <Zap className="w-3.5 h-3.5 text-blue-500" />
+              Run Swarm
+            </Button>
+          </Link>
+
+          <Link href={`/dashboard/outreach?job_id=${encodeURIComponent(job.id)}`}>
+            <Button variant="outline" size="sm" className="h-9 px-3.5 rounded-xl border-border text-xs font-semibold gap-1.5 whitespace-nowrap">
+              <Mail className="w-3.5 h-3.5 text-emerald-500" />
+              Outreach ({matches.length})
             </Button>
           </Link>
 
@@ -299,9 +312,9 @@ export function JobDetailClient({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
-              Candidates identified by the AI matching engine based on required skills for {job.title}.
+              Candidates strictly linked to the {job.title} requisition pipeline.
             </p>
-            <Link href={`/dashboard/sourcing?title=${encodeURIComponent(job.title)}`}>
+            <Link href={`/dashboard/sourcing?job_id=${encodeURIComponent(job.id)}&title=${encodeURIComponent(job.title)}`}>
               <Button variant="outline" size="sm" className="text-xs font-semibold gap-1.5 rounded-xl">
                 <Target className="w-3.5 h-3.5 text-primary" />
                 Source More Candidates
@@ -317,14 +330,19 @@ export function JobDetailClient({
           ) : matches.length === 0 ? (
             <Card className="p-8 text-center bg-card border-border rounded-2xl space-y-2">
               <Users className="w-8 h-8 text-muted-foreground mx-auto" />
-              <h3 className="text-sm font-bold text-foreground break-words">No candidate matches found yet</h3>
+              <h3 className="text-sm font-bold text-foreground break-words">No candidates linked to this role yet</h3>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Run an automated talent search to discover candidates matching this role.
+                Launch Sourcing Lab or the Autonomous Swarm to discover and bind candidates directly to this requisition.
               </p>
-              <div className="pt-2">
-                <Link href={`/dashboard/sourcing?title=${encodeURIComponent(job.title)}`}>
+              <div className="pt-2 flex items-center justify-center gap-2.5 flex-wrap">
+                <Link href={`/dashboard/sourcing?job_id=${encodeURIComponent(job.id)}&title=${encodeURIComponent(job.title)}`}>
                   <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold">
                     Launch Sourcing Lab
+                  </Button>
+                </Link>
+                <Link href={`/dashboard/swarm?job_id=${encodeURIComponent(job.id)}`}>
+                  <Button variant="outline" size="sm" className="text-xs font-semibold">
+                    Run Autonomous Swarm
                   </Button>
                 </Link>
               </div>
@@ -339,14 +357,21 @@ export function JobDetailClient({
                         {cand.first_name} {cand.last_name}
                       </h4>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {cand.title} • {cand.current_company || "Verified Talent"}
+                        {cand.title || "Candidate"} {cand.current_company ? `• ${cand.current_company}` : ""}
                       </p>
                     </div>
-                    {cand.score && (
-                      <Badge className="bg-primary/10 text-primary border-primary/20 text-xs font-bold">
-                        {cand.score}% Match
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {cand.has_verified_email === false && (
+                        <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600 dark:text-amber-400">
+                          Unverified Email
+                        </Badge>
+                      )}
+                      {cand.score ? (
+                        <Badge className="bg-primary/10 text-primary border-primary/20 text-xs font-bold">
+                          {Math.round(cand.job_match_score ?? cand.score)}% Match
+                        </Badge>
+                      ) : null}
+                    </div>
                   </div>
 
                   {cand.skills && cand.skills.length > 0 && (
@@ -360,7 +385,7 @@ export function JobDetailClient({
                   )}
 
                   <div className="pt-2 border-t border-border flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground capitalize">Stage: {cand.status || "Sourced"}</span>
+                    <span className="text-muted-foreground capitalize">Stage: {cand.job_stage || cand.status || "Sourced"}</span>
                     <Link href={`/dashboard/candidates/${cand.id}`}>
                       <Button variant="ghost" size="sm" className="h-7 text-xs font-semibold text-primary hover:underline p-0 whitespace-nowrap">
                         View Profile <ExternalLink className="w-3 h-3 ml-1" />

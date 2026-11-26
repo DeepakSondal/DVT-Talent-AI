@@ -9,8 +9,8 @@ export const complianceService = {
       ? http.post("/compliance/adverse-impact/report", payload).then((r) => r.data)
       : http.get("/compliance/adverse-impact").then((r) => r.data),
 
-  getLedger: (limit = 50): Promise<any[]> =>
-    http.get("/compliance/ledgers", { params: { limit } }).then((r) => r.data),
+  getLedger: (limit = 50, jobId?: string): Promise<any[]> =>
+    http.get("/compliance/ledgers", { params: jobId ? { limit, job_id: jobId } : { limit } }).then((r) => r.data),
 
   overrideDecision: (ledgerId: string, status: "APPROVED" | "REJECTED", notes?: string): Promise<any> =>
     http.post(`/compliance/ledgers/${ledgerId}/override`, { reviewer_override: status, notes }).then((r) => r.data),
