@@ -5,6 +5,7 @@ export const agentsService = {
   runSwarm: (config: {
     industry: string;
     location: string;
+    job_id?: string;
     mock_mode?: boolean;
     require_approval?: boolean;
     sources?: string[];

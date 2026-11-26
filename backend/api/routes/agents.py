@@ -12,9 +12,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.middleware.rate_limit import enforce_endpoint_rate_limit, is_load_test_bypass_allowed
 from api.routes.auth import User, get_current_user
-from db.models import AgentTask, AgentTaskStatus, UserRole, get_db
+from db.models import (
+    AgentTask,
+    AgentTaskStatus,
+    Candidate,
+    CandidateStatus,
+    Job,
+    JobCandidate,
+    UserRole,
+    get_db,
+)
 from services.llm_guardrail_service import guardrail_service
 from services.sanitizer_service import sanitizer_service
+from services.validation_service import validation_service
 
 router = APIRouter()
 _BACKGROUND_SWARM_TASKS: set[Any] = set()
@@ -70,12 +80,32 @@ class AgentTrigger(BaseModel):
 class PipelineTrigger(BaseModel):
     industry: str = "technology"
     location: str = "United States"
+    job_id: Optional[uuid.UUID] = None
     send_emails: bool = False
     mock_mode: bool = False
     sources: Optional[List[str]] = None
     require_uploaded_resume: bool = False
     enable_screening: bool = False
     enabled_stages: Optional[List[str]] = None
+
+
+async def _resolve_tenant_job_id(
+    db: AsyncSession,
+    tenant_uuid: uuid.UUID,
+    raw_job_id: Any,
+) -> Optional[str]:
+    """Resolves a job_id strictly scoped to tenant_uuid, returning None if absent or unauthorized."""
+    if not raw_job_id:
+        return None
+    try:
+        job_uuid = uuid.UUID(str(raw_job_id))
+    except (ValueError, TypeError):
+        return None
+    from sqlalchemy import select
+    job_row = (
+        await db.execute(select(Job.id).where(Job.id == job_uuid, Job.tenant_id == tenant_uuid))
+    ).scalar_one_or_none()
+    return str(job_row) if job_row else None
 
 
 class FastSourcingRequest(BaseModel):
@@ -168,9 +198,11 @@ async def run_swarm_pipeline(
     from agents.orchestrator import AgentOrchestrator
     from db.models import AsyncSessionLocal
 
-    safe_input_data = config.model_dump()
+    safe_job_id = await _resolve_tenant_job_id(db, tenant_uuid, config.job_id)
+    safe_input_data = config.model_dump(mode="json")
     safe_input_data["industry"] = safe_industry
     safe_input_data["location"] = safe_location
+    safe_input_data["job_id"] = safe_job_id
 
     agent_task = AgentTask(
         tenant_id=tenant_uuid,
@@ -187,7 +219,7 @@ async def run_swarm_pipeline(
     task_id = agent_task.id
 
     async def _run_and_persist():
-        orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
+        orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid), job_id=safe_job_id)
         res = await orchestrator.run_full_swarm(
             industry=safe_industry,
             location=safe_location,
@@ -229,6 +261,7 @@ async def run_swarm_pipeline(
             sources=config.sources,
             require_uploaded_resume=config.require_uploaded_resume,
             task_id=str(task_id),
+            job_id=safe_job_id,
         )
         if dispatched:
             agent_task.celery_task_id = dispatched.id
@@ -296,6 +329,7 @@ async def resume_swarm_pipeline(
         safe_dispatch_task,
     )
 
+    resumed_job_id = await _resolve_tenant_job_id(db, tenant_uuid, input_data.get("job_id"))
     if is_celery_broker_available():
         dispatched = safe_dispatch_task(
             run_full_autonomous_pipeline,
@@ -310,6 +344,7 @@ async def resume_swarm_pipeline(
             require_uploaded_resume=require_uploaded_resume,
             task_id=str(task_id),
             resume_from_stages=saved_stages,
+            job_id=resumed_job_id,
         )
         if dispatched:
             task.celery_task_id = dispatched.id
@@ -322,7 +357,7 @@ async def resume_swarm_pipeline(
             }
 
     async def _resume_and_persist():
-        orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
+        orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid), job_id=resumed_job_id)
         res = await orchestrator.run_full_swarm(
             industry=safe_industry,
             location=safe_location,
@@ -412,9 +447,14 @@ async def run_swarm_phase(
         raise HTTPException(status_code=400, detail="Invalid phase")
 
     safe_params = _sanitize_input(params or {})
+    safe_job_id = await _resolve_tenant_job_id(db, tenant_uuid, safe_params.get("job_id"))
+    if safe_job_id:
+        safe_params["job_id"] = safe_job_id
+    else:
+        safe_params.pop("job_id", None)
 
     from agents.orchestrator import AgentOrchestrator
-    orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid))
+    orchestrator = AgentOrchestrator(tenant_id=str(tenant_uuid), job_id=safe_job_id)
     
     import asyncio
     task = asyncio.create_task(orchestrator.run_swarm_phase(phase, mode=mode, **safe_params))
@@ -423,9 +463,49 @@ async def run_swarm_phase(
 
     fast_candidates: List[Dict[str, Any]] = []
     if phase == "sourcing":
+        from sqlalchemy import select
+
         from agents.sourcing_pydantic import fast_hybrid_candidate_search
         query_str = safe_params.get("job_description") or safe_params.get("approved_jd") or ""
         fast_candidates = await fast_hybrid_candidate_search(str(tenant_uuid), query_str, limit=5)
+        for fc in fast_candidates:
+            fc["has_verified_email"] = not validation_service.is_placeholder_email(str(fc.get("email") or ""))
+        if safe_job_id and fast_candidates:
+            job_uuid_obj = uuid.UUID(safe_job_id)
+            for fc in fast_candidates:
+                raw_cid = fc.get("id")
+                try:
+                    cand_uuid = uuid.UUID(str(raw_cid))
+                except (ValueError, TypeError):
+                    continue
+                cand_exists = (
+                    await db.execute(
+                        select(Candidate.id).where(Candidate.id == cand_uuid, Candidate.tenant_id == tenant_uuid)
+                    )
+                ).scalar_one_or_none()
+                if not cand_exists:
+                    continue
+                existing_jc = (
+                    await db.execute(
+                        select(JobCandidate).where(
+                            JobCandidate.job_id == job_uuid_obj,
+                            JobCandidate.candidate_id == cand_uuid,
+                        )
+                    )
+                ).scalar_one_or_none()
+                score_num = float(fc.get("score") or fc.get("match_score") or 85.0)
+                if existing_jc is None:
+                    db.add(
+                        JobCandidate(
+                            tenant_id=tenant_uuid,
+                            job_id=job_uuid_obj,
+                            candidate_id=cand_uuid,
+                            match_score=score_num,
+                            status=CandidateStatus.SOURCED,
+                            ai_reasoning=str(fc.get("ai_summary") or fc.get("reasoning") or f"Matched for {query_str[:120]}"),
+                        )
+                    )
+            await db.commit()
     
     return {
         "status": "initiated",

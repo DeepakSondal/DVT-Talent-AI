@@ -327,50 +327,138 @@ async def check_candidate_aedt_eligibility(
 @router.get("/ledgers")
 async def get_decision_ledger(
     limit: int = Query(20, ge=1, le=100),
+    job_id: Optional[UUID] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Retrieve immutable AI Decision Ledger entries for this tenant."""
-    _require_compliance_access(current_user, write=False)
+    tenant_id = _require_compliance_access(current_user, write=False)
+    from db.models import EmailSent
+    from services.validation_service import validation_service
+
+    filters: List[Any] = [AIDecisionLedger.tenant_id == tenant_id]
+    if job_id is not None:
+        filters.append(AIDecisionLedger.job_id == job_id)
+
     stmt = (
         select(AIDecisionLedger)
-        .where(AIDecisionLedger.tenant_id == current_user.tenant_id)
+        .where(*filters)
         .order_by(desc(AIDecisionLedger.created_at))
         .limit(limit)
     )
     res = await db.execute(stmt)
     records = res.scalars().all()
-    
-    return [
-        {
-            "id": str(r.id),
-            "job_id": str(r.job_id) if r.job_id else None,
-            "candidate_id": str(r.candidate_id) if r.candidate_id else None,
-            "decision_type": r.decision_type,
-            "action_type": r.decision_type,
-            "model_provider": r.model_provider,
-            "model_name": r.model_name,
-            "qualification_score": r.qualification_score,
-            "confidence_score": round(float(cast(Any, r.qualification_score)) / 100.0, 2) if r.qualification_score is not None else None,
-            "confidence_level": r.confidence_level,
-            "evidence_signals": {
-                k: v for k, v in (r.evidence_signals.items() if isinstance(r.evidence_signals, dict) else [])
-                if k not in ("candidate_name", "candidate_email")
-            },
-            "evidence_hash": r.input_data_hash,
-            "reasoning_summary": r.reasoning_summary,
-            "reasoning": r.reasoning_summary,
-            "human_action": r.human_action,
-            "reviewer_override": "PENDING" if r.human_action == "PENDING_REVIEW" else r.human_action,
-            "is_override": r.is_override,
-            "sanitized": (
-                bool(r.evidence_signals.get("pii_erased"))
-                or not any(k in r.evidence_signals for k in ("candidate_name", "candidate_email"))
-            ) if isinstance(r.evidence_signals, dict) else True,
-            "created_at": r.created_at.isoformat() if r.created_at else None
-        }
-        for r in records
-    ]
+
+    cand_ids = {r.candidate_id for r in records if r.candidate_id}
+    job_ids = {r.job_id for r in records if r.job_id}
+    email_ids: set[UUID] = set()
+    for r in records:
+        if isinstance(r.evidence_signals, dict) and r.evidence_signals.get("email_sent_id"):
+            try:
+                email_ids.add(UUID(str(r.evidence_signals["email_sent_id"])))
+            except (ValueError, TypeError):
+                pass
+
+    cand_map: Dict[UUID, Candidate] = {}
+    if cand_ids:
+        c_rows = (
+            await db.execute(
+                select(Candidate).where(Candidate.id.in_(cand_ids), Candidate.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        cand_map = {c.id: c for c in c_rows}
+
+    job_map: Dict[UUID, Job] = {}
+    if job_ids:
+        j_rows = (
+            await db.execute(
+                select(Job).where(Job.id.in_(job_ids), Job.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        job_map = {j.id: j for j in j_rows}
+
+    email_map: Dict[UUID, EmailSent] = {}
+    if email_ids:
+        e_rows = (
+            await db.execute(
+                select(EmailSent).where(EmailSent.id.in_(email_ids), EmailSent.tenant_id == tenant_id)
+            )
+        ).scalars().all()
+        email_map = {e.id: e for e in e_rows}
+
+    output: List[Dict[str, Any]] = []
+    for r in records:
+        raw_signals = r.evidence_signals if isinstance(r.evidence_signals, dict) else {}
+        cand_obj = cand_map.get(r.candidate_id) if r.candidate_id else None
+        job_obj = job_map.get(r.job_id) if r.job_id else None
+        email_obj = None
+        if raw_signals.get("email_sent_id"):
+            try:
+                email_obj = email_map.get(UUID(str(raw_signals["email_sent_id"])))
+            except (ValueError, TypeError):
+                email_obj = None
+
+        is_erased = bool(raw_signals.get("pii_erased")) or bool(cand_obj and cand_obj.pii_erased)
+        resolved_name: Optional[str] = None
+        resolved_email: Optional[str] = None
+        resolved_cand_title: Optional[str] = None
+        if not is_erased:
+            if cand_obj:
+                resolved_name = f"{cand_obj.first_name or ''} {cand_obj.last_name or ''}".strip() or None
+                resolved_email = cand_obj.email
+                resolved_cand_title = cand_obj.title
+            else:
+                resolved_name = raw_signals.get("candidate_name")
+                resolved_email = raw_signals.get("candidate_email")
+            if email_obj and email_obj.to_email and not resolved_email:
+                resolved_email = email_obj.to_email
+
+        has_verified_email = bool(
+            resolved_email and not validation_service.is_placeholder_email(str(resolved_email))
+        )
+        resolved_job_title = (job_obj.title if job_obj else raw_signals.get("role_title")) or None
+
+        output.append(
+            {
+                "id": str(r.id),
+                "job_id": str(r.job_id) if r.job_id else None,
+                "job_title": resolved_job_title,
+                "candidate_id": str(r.candidate_id) if r.candidate_id else None,
+                "candidate_name": resolved_name,
+                "candidate_email": resolved_email if has_verified_email else None,
+                "candidate_title": resolved_cand_title,
+                "has_verified_email": has_verified_email,
+                "pii_erased": is_erased,
+                "decision_type": r.decision_type,
+                "action_type": r.decision_type,
+                "model_provider": r.model_provider,
+                "model_name": r.model_name,
+                "qualification_score": r.qualification_score,
+                "confidence_score": round(float(cast(Any, r.qualification_score)) / 100.0, 2) if r.qualification_score is not None else None,
+                "confidence_level": r.confidence_level,
+                "draft_subject": (email_obj.subject if email_obj and not is_erased else raw_signals.get("subject")) or None,
+                "draft_body": (email_obj.body if email_obj and not is_erased else None),
+                "email_dispatch_status": (
+                    getattr(email_obj.status, "value", str(email_obj.status)) if email_obj else None
+                ),
+                "evidence_signals": {
+                    k: v for k, v in raw_signals.items()
+                    if k not in ("candidate_name", "candidate_email")
+                },
+                "evidence_hash": r.input_data_hash,
+                "reasoning_summary": r.reasoning_summary,
+                "reasoning": r.reasoning_summary,
+                "human_action": r.human_action,
+                "reviewer_override": "PENDING" if r.human_action == "PENDING_REVIEW" else r.human_action,
+                "is_override": r.is_override,
+                "sanitized": (
+                    bool(raw_signals.get("pii_erased"))
+                    or not any(k in raw_signals for k in ("candidate_name", "candidate_email"))
+                ),
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+        )
+    return output
 
 
 @router.post("/decision-ledger/{ledger_id}/override")
