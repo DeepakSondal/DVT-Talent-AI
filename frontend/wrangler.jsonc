@@ -21,5 +21,11 @@
   "vars": {
     "NEXT_PUBLIC_API_URL": "/api/v1",
     "BACKEND_API_URL": "https://api.dvttalent.com"
+  },
+  "previews": {
+    "vars": {
+      "NEXT_PUBLIC_API_URL": "/api/v1",
+      "BACKEND_API_URL": "https://api.dvttalent.com"
+    }
   }
 }
