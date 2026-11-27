@@ -8,7 +8,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import {
     Bot, CheckCircle2, AlertTriangle,
     UserCheck, ThumbsUp, ThumbsDown, MessageSquare, ExternalLink, RefreshCw,
-    ShieldAlert, Brain, Mail, Briefcase
+    ShieldAlert, Brain, Mail, Briefcase, Pencil
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -46,6 +46,8 @@ function ApprovalsWorkspaceContent() {
     const queryClient = useQueryClient();
     const [calibratingId, setCalibratingId] = useState<string | null>(null);
     const [calibrationNote, setCalibrationNote] = useState("");
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [draftEdits, setDraftEdits] = useState<Record<string, { subject: string; body: string }>>({});
 
     const queryKey = ["compliance", "ledger", jobIdFilter];
 
@@ -99,30 +101,59 @@ function ApprovalsWorkspaceContent() {
     });
 
     const overrideMutation = useMutation({
-        mutationFn: ({ id, overrideStatus, notes }: { id: string; overrideStatus: "APPROVED" | "REJECTED"; notes?: string }) =>
-            complianceApi.overrideDecision(id, overrideStatus, notes || "Recruiter manual sign-off."),
+        mutationFn: ({
+            id,
+            overrideStatus,
+            notes,
+            draftSubject,
+            draftBody,
+        }: {
+            id: string;
+            overrideStatus: "APPROVED" | "REJECTED";
+            notes?: string;
+            draftSubject?: string;
+            draftBody?: string;
+        }) =>
+            complianceApi.overrideDecision(
+                id,
+                overrideStatus,
+                notes || "Recruiter manual sign-off.",
+                draftSubject !== undefined || draftBody !== undefined
+                    ? { draft_subject: draftSubject, draft_body: draftBody }
+                    : undefined,
+            ),
         onSuccess: (resData, variables) => {
             const dispatchState = resData?.outreach_dispatch_status;
+            const effectiveStatus =
+                variables.overrideStatus === "APPROVED" && dispatchState === "failed"
+                    ? "PENDING"
+                    : variables.overrideStatus;
+
             if (variables.overrideStatus === "APPROVED") {
                 if (dispatchState === "sent") {
                     toast.success("Approved & dispatched outreach email!");
                 } else if (dispatchState === "already_sent") {
                     toast.info("Approved — outreach email was already sent.");
                 } else if (dispatchState === "failed") {
-                    toast.warning("Decision approved, but email delivery failed (check SMTP/sender settings).");
+                    toast.warning("Email delivery failed — draft remains pending so you can retry.");
                 } else {
                     toast.success("Decision approved and candidate stage updated!");
                 }
             } else {
                 toast.success("Decision rejected and recorded in audit ledger.");
             }
+            if (editingId === variables.id && dispatchState !== "failed") {
+                setEditingId(null);
+            }
             queryClient.setQueryData<PendingApprovalItem[]>(queryKey, (prev = []) =>
                 prev.map(item =>
                     item.id === variables.id
                         ? {
                               ...item,
-                              status: variables.overrideStatus,
+                              status: effectiveStatus,
                               email_dispatch_status: dispatchState || item.email_dispatch_status,
+                              draft_subject: variables.draftSubject ?? item.draft_subject,
+                              draft_body: variables.draftBody ?? item.draft_body,
                           }
                         : item
                 )
@@ -133,8 +164,30 @@ function ApprovalsWorkspaceContent() {
         },
     });
 
-    const handleOverride = (id: string, overrideStatus: "APPROVED" | "REJECTED", notes?: string) => {
-        overrideMutation.mutate({ id, overrideStatus, notes });
+    const handleOverride = (item: PendingApprovalItem, overrideStatus: "APPROVED" | "REJECTED", notes?: string) => {
+        const edits = draftEdits[item.id];
+        overrideMutation.mutate({
+            id: item.id,
+            overrideStatus,
+            notes,
+            draftSubject: overrideStatus === "APPROVED" && edits ? edits.subject : undefined,
+            draftBody: overrideStatus === "APPROVED" && edits ? edits.body : undefined,
+        });
+    };
+
+    const startEditingDraft = (item: PendingApprovalItem) => {
+        if (editingId === item.id) {
+            setEditingId(null);
+            return;
+        }
+        setDraftEdits(prev => ({
+            ...prev,
+            [item.id]: prev[item.id] || {
+                subject: item.draft_subject || "",
+                body: item.draft_body || "",
+            },
+        }));
+        setEditingId(item.id);
     };
 
     const submitCalibration = async (id: string) => {
@@ -312,7 +365,7 @@ function ApprovalsWorkspaceContent() {
                                                     </div>
                                                 </div>
 
-                                                {item.status !== "PENDING" ? (
+                                                {item.status !== "PENDING" && !(isOutreach && item.email_dispatch_status === "failed") ? (
                                                     <div className="flex items-center gap-2.5 shrink-0">
                                                         <Badge variant={item.status === "APPROVED" ? "success" : "destructive"} className="px-4 py-2 font-black text-xs rounded-xl">
                                                             {item.status === "APPROVED"
@@ -323,16 +376,34 @@ function ApprovalsWorkspaceContent() {
                                                 ) : (
                                                     <div className="flex flex-wrap items-center gap-3 shrink-0 w-full lg:w-auto">
                                                         <Button
-                                                            onClick={() => handleOverride(item.id, "APPROVED")}
+                                                            onClick={() => handleOverride(item, "APPROVED")}
                                                             disabled={approveBlocked || overrideMutation.isPending}
                                                             title={approveBlocked ? "Verified non-erased email required to approve outreach" : undefined}
                                                             className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-6 h-12 rounded-xl shadow-lg shadow-emerald-500/20"
                                                         >
-                                                            <ThumbsUp className="w-4 h-4 mr-2" />
-                                                            {isOutreach ? "Approve & Send Email" : "Approve Candidate"}
+                                                            {isOutreach && item.email_dispatch_status === "failed" ? (
+                                                                <RefreshCw className="w-4 h-4 mr-2" />
+                                                            ) : (
+                                                                <ThumbsUp className="w-4 h-4 mr-2" />
+                                                            )}
+                                                            {isOutreach
+                                                                ? item.email_dispatch_status === "failed"
+                                                                    ? "Retry Send Email"
+                                                                    : "Approve & Send Email"
+                                                                : "Approve Candidate"}
                                                         </Button>
+                                                        {isOutreach && !item.pii_erased && (
+                                                            <Button
+                                                                onClick={() => startEditingDraft(item)}
+                                                                variant="outline"
+                                                                className="text-xs font-black h-12 px-4 rounded-xl"
+                                                            >
+                                                                <Pencil className="w-3.5 h-3.5 mr-2" />
+                                                                {editingId === item.id ? "Done Editing" : "Edit Draft"}
+                                                            </Button>
+                                                        )}
                                                         <Button
-                                                            onClick={() => handleOverride(item.id, "REJECTED")}
+                                                            onClick={() => handleOverride(item, "REJECTED")}
                                                             disabled={overrideMutation.isPending}
                                                             variant="outline"
                                                             className="border-rose-500/30 text-rose-500 hover:bg-rose-500/10 font-black text-xs px-5 h-12 rounded-xl"
@@ -350,8 +421,8 @@ function ApprovalsWorkspaceContent() {
                                                 )}
                                             </div>
 
-                                            {(item.draft_subject || item.draft_body) && (
-                                                <div className="p-5 rounded-2xl bg-emerald-500/[0.04] border border-emerald-500/25 space-y-2">
+                                            {(item.draft_subject || item.draft_body || editingId === item.id) && (
+                                                <div className="p-5 rounded-2xl bg-emerald-500/[0.04] border border-emerald-500/25 space-y-2.5">
                                                     <div className="flex items-center justify-between gap-2">
                                                         <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                                                             <Mail className="w-3.5 h-3.5" /> Queued Outreach Email Preview
@@ -362,15 +433,54 @@ function ApprovalsWorkspaceContent() {
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    {item.draft_subject && (
-                                                        <p className="text-xs font-bold text-foreground">
-                                                            Subject: {item.draft_subject}
-                                                        </p>
-                                                    )}
-                                                    {item.draft_body && (
-                                                        <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed border-t border-border/60 pt-2">
-                                                            {item.draft_body}
-                                                        </p>
+                                                    {editingId === item.id ? (
+                                                        <div className="space-y-2.5 pt-1">
+                                                            <input
+                                                                type="text"
+                                                                aria-label="Edit outreach subject"
+                                                                value={draftEdits[item.id]?.subject ?? item.draft_subject ?? ""}
+                                                                onChange={(e) =>
+                                                                    setDraftEdits(prev => ({
+                                                                        ...prev,
+                                                                        [item.id]: {
+                                                                            subject: e.target.value,
+                                                                            body: prev[item.id]?.body ?? item.draft_body ?? "",
+                                                                        },
+                                                                    }))
+                                                                }
+                                                                placeholder="Email subject..."
+                                                                className="w-full bg-background border border-border rounded-xl px-3.5 py-2 text-xs font-semibold text-foreground focus:ring-2 focus:ring-emerald-500 outline-none"
+                                                            />
+                                                            <textarea
+                                                                aria-label="Edit outreach body"
+                                                                rows={5}
+                                                                value={draftEdits[item.id]?.body ?? item.draft_body ?? ""}
+                                                                onChange={(e) =>
+                                                                    setDraftEdits(prev => ({
+                                                                        ...prev,
+                                                                        [item.id]: {
+                                                                            subject: prev[item.id]?.subject ?? item.draft_subject ?? "",
+                                                                            body: e.target.value,
+                                                                        },
+                                                                    }))
+                                                                }
+                                                                placeholder="Email body..."
+                                                                className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground leading-relaxed focus:ring-2 focus:ring-emerald-500 outline-none"
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {(draftEdits[item.id]?.subject ?? item.draft_subject) && (
+                                                                <p className="text-xs font-bold text-foreground">
+                                                                    Subject: {draftEdits[item.id]?.subject ?? item.draft_subject}
+                                                                </p>
+                                                            )}
+                                                            {(draftEdits[item.id]?.body ?? item.draft_body) && (
+                                                                <p className="text-xs text-muted-foreground whitespace-pre-line leading-relaxed border-t border-border/60 pt-2">
+                                                                    {draftEdits[item.id]?.body ?? item.draft_body}
+                                                                </p>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             )}
