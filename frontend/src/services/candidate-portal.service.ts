@@ -66,6 +66,13 @@ export interface CandidateApplication {
   match_score: number;
   career_ops_scoring?: any;
   notes?: string;
+  aedt_notice?: {
+    aedt_notice_sent_at?: string;
+    screening_eligible_after?: string;
+    required_business_days?: number;
+    bias_audit_summary_url?: string;
+    alternative_process_notice?: string;
+  } | null;
 }
 
 export interface InterviewStarCard {
@@ -113,7 +120,7 @@ export const candidatePortalService = {
       })
       .then((r) => r.data),
 
-  listJobs: (params?: { search?: string }): Promise<MatchedJob[]> =>
+  listJobs: (params?: { search?: string; remote_only?: boolean; min_score?: number }): Promise<MatchedJob[]> =>
     http.get("/candidate-portal/jobs", { params }).then((r) => r.data),
 
   applyToJob: (jobId: string): Promise<any> =>
@@ -121,6 +128,12 @@ export const candidatePortalService = {
 
   listApplications: (): Promise<CandidateApplication[]> =>
     http.get("/candidate-portal/applications").then((r) => r.data),
+
+  withdrawApplication: (applicationId: string): Promise<{ status: string; application_id: string; message?: string }> =>
+    http.delete(`/candidate-portal/applications/${applicationId}`).then((r) => r.data),
+
+  erasePersonalData: (): Promise<{ status?: string; session_revoked?: boolean }> =>
+    http.delete("/candidate-portal/profile/erasure").then((r) => r.data),
 
   getInterviewPrep: (jobId: string): Promise<InterviewPrepData> =>
     http.post(`/candidate-portal/interview-prep/${jobId}`).then((r) => r.data),
