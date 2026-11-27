@@ -517,11 +517,17 @@ async def erase_candidate_personal_data(
         setattr(target_cleanup_task, "input_data", cur_input)
         await db.commit()
 
-    # 7. File System Deletion
+    # 7. File System & Cloudflare R2 Deletion
     deleted_files_count = 0
     file_errors = []
     for raw_url in file_urls_to_delete:
         try:
+            if str(raw_url).startswith("r2://"):
+                if ResumeParserService.delete_resume_file(raw_url):
+                    deleted_files_count += 1
+                else:
+                    file_errors.append("r2_delete_failed")
+                continue
             safe_path = ResumeParserService.get_resume_file_path(raw_url)
             if safe_path and safe_path.exists() and safe_path.is_file():
                 safe_path.unlink(missing_ok=True)
@@ -888,6 +894,10 @@ async def sweep_and_process_gdpr_cleanups(db: AsyncSession) -> Dict[str, Any]:
             file_errors = []
             for raw_url in file_urls:
                 try:
+                    if str(raw_url).startswith("r2://"):
+                        if not ResumeParserService.delete_resume_file(raw_url):
+                            file_errors.append("r2_delete_failed")
+                        continue
                     safe_path = ResumeParserService.get_resume_file_path(raw_url)
                     if safe_path and safe_path.exists() and safe_path.is_file():
                         safe_path.unlink(missing_ok=True)

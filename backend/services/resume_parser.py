@@ -156,7 +156,25 @@ class ResumeParserService:
         base_stem = clean_filename.rsplit(".", 1)[0] if "." in clean_filename else clean_filename
         sanitized_stem = re.sub(r"[^a-zA-Z0-9_-]", "_", base_stem)[:80].strip("_") or "resume"
         safe_filename = f"{candidate_id}_{resume_id}_{sanitized_stem}{ext}"
-        
+
+        from services.r2_storage import is_r2_configured, put_r2_object
+
+        if is_r2_configured():
+            media_types = {
+                ".pdf": "application/pdf",
+                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".doc": "application/msword",
+                ".txt": "text/plain",
+                ".rtf": "application/rtf",
+            }
+            r2_uri = put_r2_object(
+                object_key=f"resumes/{safe_filename}",
+                content=content_bytes,
+                content_type=media_types.get(ext, "application/octet-stream"),
+            )
+            logger.info("resume_file_saved_r2", filename=safe_filename, bytes=len(content_bytes))
+            return r2_uri
+
         target_path = (upload_path / safe_filename).resolve()
         if not target_path.is_relative_to(upload_path.resolve()):
             raise ValueError("Invalid resume file destination")
@@ -164,6 +182,35 @@ class ResumeParserService:
         logger.info("resume_file_saved", filename=safe_filename, bytes=len(content_bytes))
         
         return str(target_path)
+
+    @classmethod
+    def read_resume_bytes(cls, file_url: Optional[str]) -> Optional[bytes]:
+        """Read resume bytes transparently from Cloudflare R2 (`r2://...`) or validated local disk."""
+        if not file_url:
+            return None
+        from services.r2_storage import R2_URI_PREFIX, get_r2_object
+
+        if file_url.startswith(R2_URI_PREFIX):
+            return get_r2_object(file_url)
+        safe_path = cls.get_resume_file_path(file_url)
+        if safe_path and safe_path.exists() and safe_path.is_file():
+            return safe_path.read_bytes()
+        return None
+
+    @classmethod
+    def delete_resume_file(cls, file_url: Optional[str]) -> bool:
+        """Delete a resume file transparently from Cloudflare R2 or validated local disk."""
+        if not file_url:
+            return False
+        from services.r2_storage import R2_URI_PREFIX, delete_r2_object
+
+        if file_url.startswith(R2_URI_PREFIX):
+            return delete_r2_object(file_url)
+        safe_path = cls.get_resume_file_path(file_url)
+        if safe_path and safe_path.exists() and safe_path.is_file():
+            safe_path.unlink(missing_ok=True)
+            return not safe_path.exists()
+        return False
 
     @classmethod
     def get_resume_file_path(cls, file_url: Optional[str], base_dir: Optional[Path] = None) -> Optional[Path]:

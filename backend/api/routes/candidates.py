@@ -839,11 +839,9 @@ async def download_candidate_resume(
     if not res:
         raise HTTPException(status_code=404, detail="No resume on file for this candidate.")
 
-    file_path = ResumeParserService.get_resume_file_path(cast(Optional[str], res.file_url))
-    if not file_path or not file_path.exists():
-        raise HTTPException(status_code=404, detail="Original resume file not found on disk.")
-
-    ext = file_path.suffix.lower()
+    raw_file_url = cast(Optional[str], res.file_url)
+    safe_download_name = _sanitize_upload_filename(str(res.file_name) if res.file_name else "resume.pdf")
+    ext = ("." + safe_download_name.rsplit(".", 1)[-1].lower()) if "." in safe_download_name else ".pdf"
     media_types = {
         ".pdf": "application/pdf",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -852,10 +850,24 @@ async def download_candidate_resume(
     }
     media_type = media_types.get(ext, "application/octet-stream")
 
+    if raw_file_url and raw_file_url.startswith("r2://"):
+        content_bytes = ResumeParserService.read_resume_bytes(raw_file_url)
+        if content_bytes is None:
+            raise HTTPException(status_code=404, detail="Original resume object not found in R2 storage.")
+        return StreamingResponse(
+            io.BytesIO(content_bytes),
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{safe_download_name}"'},
+        )
+
+    file_path = ResumeParserService.get_resume_file_path(raw_file_url)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail="Original resume file not found on disk.")
+
     return FileResponse(
         path=str(file_path),
         filename=_sanitize_upload_filename(str(res.file_name) if res.file_name else file_path.name),
-        media_type=media_type,
+        media_type=media_types.get(file_path.suffix.lower(), media_type),
     )
 
 

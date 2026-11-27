@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dvt-talent-ai-frontend",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-28",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    {
+      "pattern": "dvttalent.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.dvttalent.com",
+      "custom_domain": true
+    }
+  ],
+  "vars": {
+    "NEXT_PUBLIC_API_URL": "/api/v1",
+    "BACKEND_API_URL": "https://api.dvttalent.com"
+  }
+}

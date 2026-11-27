@@ -1,0 +1,50 @@
+# Render Blueprint — DVT Talent AI FastAPI Backend (Free Tier)
+# Connect this repo in https://dashboard.render.com/blueprints to deploy api.dvttalent.com
+services:
+  - type: web
+    name: dvt-talent-ai-api
+    runtime: python
+    plan: free
+    region: virginia
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: IS_PRODUCTION
+        value: "true"
+      - key: APP_BASE_URL
+        value: https://dvttalent.com
+      - key: FRONTEND_URL
+        value: https://dvttalent.com
+      - key: ALLOWED_ORIGINS
+        value: https://dvttalent.com,https://www.dvttalent.com
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SYNC_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: dvt-talent-resumes
+      - key: R2_ENDPOINT_URL
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false

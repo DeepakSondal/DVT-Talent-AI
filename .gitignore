@@ -38,6 +38,8 @@ frontend/.env
 # Next.js & Playwright
 dodo-agent-plugin/
 frontend/.next/
+frontend/.open-next/
+frontend/.wrangler/
 frontend/out/
 frontend/node_modules/
 frontend/.env*.local
