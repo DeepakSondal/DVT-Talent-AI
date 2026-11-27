@@ -10,9 +10,14 @@ Endpoints:
   POST   /email-sender/test                     — send a test email using the connected OAuth mailbox
   DELETE /email-sender                          — disconnect OAuth mailbox
 """
+import base64
+import hashlib
+import hmac
 import ipaddress
+import json
 import os
 import secrets
+import time
 import urllib.parse
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -21,7 +26,7 @@ from typing import Any, Optional, cast
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from jose import jwt  # pyrefly: ignore[untyped-import]
 from pydantic import BaseModel, EmailStr
@@ -31,8 +36,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.middleware.rate_limit import enforce_endpoint_rate_limit, get_real_client_ip
 from api.routes.auth import User, get_current_user
 from config import settings
-from db.models import Tenant, get_db
-from services.email_service import OAuthSenderConfig, _deliver_oauth_message
+from db.models import EmailCampaign, EmailSent, EmailStatus, Tenant, get_db
+from services.email_service import (
+    OAuthSenderConfig,
+    _deliver_oauth_message,
+    decode_unsubscribe_token,
+    record_email_unsubscribe,
+)
 from services.security_service import decrypt_pii, encrypt_pii
 
 log = structlog.get_logger(__name__)
@@ -593,3 +603,150 @@ async def delete_email_sender(
     await db.commit()
     log.info("email_sender_removed", tenant_id=str(tenant.id))
     return {"status": "removed"}
+
+
+class UnsubscribeRequest(BaseModel):
+    token: str
+
+
+def _verify_svix_signature(
+    raw_body: bytes,
+    svix_id: str,
+    svix_timestamp: str,
+    svix_signature: str,
+    secret: str,
+) -> bool:
+    """Verify Resend/Svix HMAC-SHA256 webhook signature and 5-minute replay window."""
+    if not svix_id or not svix_timestamp or not svix_signature or not secret:
+        return False
+    try:
+        ts_int = int(svix_timestamp)
+    except ValueError:
+        return False
+    if abs(int(time.time()) - ts_int) > 300:
+        return False
+
+    secret_part = secret[6:] if secret.startswith("whsec_") else secret
+    try:
+        key_bytes = base64.b64decode(secret_part)
+    except Exception:
+        key_bytes = secret.encode("utf-8")
+
+    signed_content = f"{svix_id}.{svix_timestamp}.".encode("utf-8") + raw_body
+    expected_sig = base64.b64encode(hmac.new(key_bytes, signed_content, hashlib.sha256).digest()).decode("utf-8")
+
+    for candidate in svix_signature.split(" "):
+        parts = candidate.strip().split(",", 1)
+        if len(parts) == 2 and parts[0] == "v1" and hmac.compare_digest(parts[1], expected_sig):
+            return True
+    return False
+
+
+async def _process_unsubscribe_token(token: str, request: Request) -> dict[str, Any]:
+    client_ip = get_real_client_ip(request)
+    await enforce_endpoint_rate_limit(
+        request,
+        scope="email_unsubscribe_ip",
+        identifier=client_ip,
+        limit=30,
+        window_seconds=60,
+        detail="Too many unsubscribe requests. Please wait a minute.",
+    )
+    try:
+        claims = decode_unsubscribe_token(token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    email = str(claims.get("email") or "").strip().lower()
+    raw_tid = str(claims.get("tenant_id") or "").strip()
+    if raw_tid:
+        try:
+            tenant_uuid = uuid.UUID(raw_tid)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid tenant scope in unsubscribe token") from exc
+        await record_email_unsubscribe(tenant_uuid, email, reason="one_click_unsubscribe")
+
+    log.info("email_recipient_unsubscribed", tenant_id=raw_tid or None, email=email)
+    return {
+        "status": "unsubscribed",
+        "email": email,
+        "message": "You have been unsubscribed from future recruiting outreach from this organization.",
+    }
+
+
+@router.get("/unsubscribe", summary="One-click CAN-SPAM / GDPR email opt-out (GET)")
+async def unsubscribe_email_get(
+    request: Request,
+    token: str = Query(..., min_length=10),
+):
+    return await _process_unsubscribe_token(token, request)
+
+
+@router.post("/unsubscribe", summary="One-click CAN-SPAM / GDPR email opt-out (POST / RFC 8058)")
+async def unsubscribe_email_post(
+    request: Request,
+    token: Optional[str] = Query(None),
+    payload: Optional[UnsubscribeRequest] = Body(None),
+):
+    resolved_token = (token or (payload.token if payload else "") or "").strip()
+    if not resolved_token:
+        raise HTTPException(status_code=400, detail="Unsubscribe token is required.")
+    return await _process_unsubscribe_token(resolved_token, request)
+
+
+@router.post("/webhooks/resend", summary="Signature-verified Resend delivery/open/click/bounce webhook")
+async def resend_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Process Resend delivery events to populate Analytics (opened_at, clicks_count, bounced + auto-suppress)."""
+    webhook_secret = getattr(settings, "resend_webhook_secret", "") or os.getenv("RESEND_WEBHOOK_SECRET", "")
+    if not webhook_secret:
+        raise HTTPException(status_code=503, detail="Resend webhook secret is not configured.")
+
+    raw_body = await request.body()
+    svix_id = request.headers.get("svix-id", "")
+    svix_ts = request.headers.get("svix-timestamp", "")
+    svix_sig = request.headers.get("svix-signature", "")
+
+    if not _verify_svix_signature(raw_body, svix_id, svix_ts, svix_sig, webhook_secret):
+        raise HTTPException(status_code=401, detail="Invalid Resend webhook signature.")
+
+    try:
+        event = json.loads(raw_body.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Malformed webhook JSON payload.") from exc
+
+    event_type = str(event.get("type") or "").strip().lower()
+    data = event.get("data") if isinstance(event.get("data"), dict) else {}
+    provider_email_id = str(data.get("email_id") or "").strip()
+    if not provider_email_id:
+        return {"status": "ignored", "reason": "missing_email_id"}
+
+    email_row = (
+        await db.execute(select(EmailSent).where(EmailSent.gmail_message_id == provider_email_id).limit(1))
+    ).scalar_one_or_none()
+    if not email_row:
+        return {"status": "ignored", "reason": "email_not_found"}
+
+    now = datetime.now(timezone.utc)
+    if event_type == "email.opened":
+        if not email_row.opened_at:
+            setattr(email_row, "opened_at", now)
+            if email_row.campaign_id:
+                camp = await db.get(EmailCampaign, email_row.campaign_id)
+                if camp:
+                    setattr(camp, "total_opened", int(camp.total_opened or 0) + 1)
+    elif event_type == "email.clicked":
+        setattr(email_row, "clicks_count", int(email_row.clicks_count or 0) + 1)
+    elif event_type in ("email.bounced", "email.complained"):
+        setattr(email_row, "status", EmailStatus.BOUNCED)
+        if email_row.tenant_id and email_row.to_email:
+            await record_email_unsubscribe(
+                cast(uuid.UUID, email_row.tenant_id),
+                str(email_row.to_email),
+                reason=event_type,
+            )
+
+    await db.commit()
+    return {"status": "processed", "event_type": event_type, "email_id": str(email_row.id)}

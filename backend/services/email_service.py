@@ -7,20 +7,113 @@ or transactional Resend REST API fallback. Zero SMTP dependency.
 import base64
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formataddr
 from typing import Any, Dict, Optional, cast
 
 import httpx
 import structlog
+from jose import jwt  # pyrefly: ignore[untyped-import]
 from sqlalchemy import select
 
 from config import settings
 from db.models import AsyncSessionLocal, EmailSent, EmailStatus, Tenant, User
-from services.security_service import decrypt_pii
+from services.security_service import decrypt_pii, encrypt_pii
 
 log = structlog.get_logger()
+
+
+def create_unsubscribe_token(
+    tenant_id: Optional[uuid.UUID],
+    email: str,
+    email_id: Optional[str] = None,
+) -> str:
+    """Create a tamper-proof signed token for one-click CAN-SPAM / GDPR unsubscribe links."""
+    payload = {
+        "type": "email_unsubscribe",
+        "tenant_id": str(tenant_id) if tenant_id else "",
+        "email": (email or "").strip().lower(),
+        "email_id": str(email_id or ""),
+        "exp": datetime.now(timezone.utc) + timedelta(days=180),
+    }
+    return str(jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm))
+
+
+def decode_unsubscribe_token(token: str) -> Dict[str, Any]:
+    """Decode and validate a signed unsubscribe token; raises ValueError on invalid/expired tokens."""
+    try:
+        claims = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+    except Exception as exc:
+        raise ValueError("Invalid or expired unsubscribe token") from exc
+    if claims.get("type") != "email_unsubscribe" or not claims.get("email"):
+        raise ValueError("Invalid unsubscribe token payload")
+    return dict(claims)
+
+
+async def is_email_unsubscribed(tenant_id: uuid.UUID, email: str) -> bool:
+    """Check whether a recipient email has opted out of outreach for this tenant workspace."""
+    norm = (email or "").strip().lower()
+    if not norm:
+        return False
+    async with AsyncSessionLocal() as session:
+        tenant = (await session.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one_or_none()
+    if not tenant or not isinstance(tenant.settings, dict):
+        return False
+    unsub = tenant.settings.get("unsubscribed_emails") or []
+    return norm in {str(e).strip().lower() for e in unsub if e}
+
+
+async def record_email_unsubscribe(
+    tenant_id: uuid.UUID,
+    email: str,
+    reason: str = "recipient_unsubscribe",
+) -> bool:
+    """Persist a tenant-scoped email opt-out inside Tenant.settings without mutating other tenants."""
+    norm = (email or "").strip().lower()
+    if not norm:
+        return False
+    async with AsyncSessionLocal() as session:
+        tenant = (await session.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one_or_none()
+        if not tenant:
+            return False
+        t_settings = dict(tenant.settings) if isinstance(tenant.settings, dict) else {}
+        existing = [str(e).strip().lower() for e in (t_settings.get("unsubscribed_emails") or []) if e]
+        if norm not in existing:
+            existing.append(norm)
+            t_settings["unsubscribed_emails"] = existing
+        reasons = dict(t_settings.get("unsubscribe_reasons") or {})
+        reasons[norm] = {"reason": reason, "at": datetime.now(timezone.utc).isoformat()}
+        t_settings["unsubscribe_reasons"] = reasons
+        setattr(tenant, "settings", t_settings)
+        await session.commit()
+    return True
+
+
+async def _persist_refreshed_oauth_token(
+    tenant_id: Optional[uuid.UUID],
+    provider: str,
+    new_access_token: str,
+) -> None:
+    """Persist a refreshed OAuth 2.0 access token back to Tenant.settings so subsequent sends avoid redundant 401s."""
+    if not tenant_id or not new_access_token:
+        return
+    try:
+        async with AsyncSessionLocal() as session:
+            tenant = (await session.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one_or_none()
+            if not tenant or not isinstance(tenant.settings, dict):
+                return
+            t_settings = dict(tenant.settings)
+            oauth_cfg = dict(t_settings.get("email_oauth") or {})
+            if oauth_cfg.get("provider") != provider:
+                return
+            oauth_cfg["access_token_encrypted"] = encrypt_pii(new_access_token)
+            oauth_cfg["refreshed_at"] = datetime.now(timezone.utc).isoformat()
+            t_settings["email_oauth"] = oauth_cfg
+            setattr(tenant, "settings", t_settings)
+            await session.commit()
+    except Exception as exc:
+        log.warning("oauth_token_persist_failed", tenant_id=str(tenant_id), provider=provider, error=str(exc))
 
 
 class OAuthSenderConfig:
@@ -43,6 +136,7 @@ class OAuthSenderConfig:
         self.refresh_token = refresh_token
         self.tenant_id = tenant_id
         self.reply_to_email = reply_to_email or sender_email
+        self.last_provider_message_id: Optional[str] = None
 
     @property
     def from_header(self) -> str:
@@ -224,16 +318,25 @@ async def _deliver_oauth_message(
             if resp.status_code == 401 and sender_cfg.refresh_token:
                 new_token = await _refresh_google_access_token(sender_cfg.refresh_token)
                 if new_token:
+                    await _persist_refreshed_oauth_token(sender_cfg.tenant_id, "google", new_token)
                     resp = await client.post(
                         "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
                         headers={"Authorization": f"Bearer {new_token}"},
                         json={"raw": raw_b64},
                     )
-            return resp.status_code in (200, 202)
+            if resp.status_code in (200, 202):
+                try:
+                    sender_cfg.last_provider_message_id = resp.json().get("id")
+                except Exception as exc:
+                    log.debug("provider_message_id_parse_skipped", provider=sender_cfg.provider, error=str(exc))
+                return True
+            return False
 
     if sender_cfg.provider == "microsoft":
         if not token and sender_cfg.refresh_token:
             token = await _refresh_microsoft_access_token(sender_cfg.refresh_token)
+            if token:
+                await _persist_refreshed_oauth_token(sender_cfg.tenant_id, "microsoft", token)
         if not token:
             log.warning("microsoft_oauth_token_missing", sender=sender_cfg.sender_email)
             return False
@@ -264,6 +367,15 @@ async def _deliver_oauth_message(
                 headers={"Authorization": f"Bearer {token}"},
                 json=payload,
             )
+            if resp.status_code == 401 and sender_cfg.refresh_token:
+                new_token = await _refresh_microsoft_access_token(sender_cfg.refresh_token)
+                if new_token:
+                    await _persist_refreshed_oauth_token(sender_cfg.tenant_id, "microsoft", new_token)
+                    resp = await client.post(
+                        "https://graph.microsoft.com/v1.0/me/sendMail",
+                        headers={"Authorization": f"Bearer {new_token}"},
+                        json=payload,
+                    )
             return resp.status_code in (200, 202)
 
     if sender_cfg.provider == "resend" and token:
@@ -286,9 +398,19 @@ async def _deliver_oauth_message(
                     "reply_to": sender_cfg.reply_to_email,
                     "subject": subject,
                     "text": body,
+                    "headers": {
+                        "List-Unsubscribe": msg["List-Unsubscribe"] or "",
+                        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                    },
                 },
             )
-            return resp.status_code in (200, 201, 202)
+            if resp.status_code in (200, 201, 202):
+                try:
+                    sender_cfg.last_provider_message_id = resp.json().get("id")
+                except Exception as exc:
+                    log.debug("provider_message_id_parse_skipped", provider=sender_cfg.provider, error=str(exc))
+                return True
+            return False
 
     return False
 
@@ -308,6 +430,15 @@ class EmailService:
         2. Zero-Setup Reply-To Relay fallback (sends via system relay with From: '<Recruiter> via DVT Talent AI'
            and Reply-To set to the recruiter's actual work email so replies land in their inbox).
         """
+        if tenant_id and await is_email_unsubscribed(tenant_id, to_address):
+            log.info(
+                "email_suppressed_unsubscribed",
+                email_id=email_id,
+                tenant_id=str(tenant_id),
+                to=to_address,
+            )
+            return False
+
         sender_cfg: Optional[OAuthSenderConfig] = None
         if tenant_id:
             sender_cfg = await _get_tenant_oauth_sender(tenant_id)
@@ -352,7 +483,9 @@ class EmailService:
         msg["Message-ID"] = f"<{email_id}@dvt-talent-ai.com>"
         msg["In-Reply-To"] = msg["Message-ID"]
         msg["References"] = msg["Message-ID"]
-        msg["List-Unsubscribe"] = f"<{settings.app_base_url}/unsubscribe?email_id={email_id}>"
+        unsub_token = create_unsubscribe_token(tenant_id, to_address, email_id=email_id)
+        msg["List-Unsubscribe"] = f"<{settings.frontend_url}/unsubscribe?token={unsub_token}>"
+        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
         try:
             ok = await _deliver_oauth_message(sender_cfg, msg, to_address, subject, body)
@@ -371,7 +504,11 @@ class EmailService:
                     if email_obj:
                         setattr(email_obj, "status", EmailStatus.SENT)
                         setattr(email_obj, "sent_at", datetime.now(timezone.utc))
-                        setattr(email_obj, "gmail_message_id", msg["Message-ID"])
+                        setattr(
+                            email_obj,
+                            "gmail_message_id",
+                            sender_cfg.last_provider_message_id or msg["Message-ID"],
+                        )
                         await session.commit()
 
             log.info(

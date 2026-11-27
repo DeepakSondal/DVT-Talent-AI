@@ -34,6 +34,8 @@ router = APIRouter(prefix="/compliance", tags=["Compliance & AI Governance"])
 class OverridePayload(BaseModel):
     reviewer_override: Optional[str] = None
     notes: Optional[str] = None
+    draft_subject: Optional[str] = None
+    draft_body: Optional[str] = None
 
 
 class AEDTNoticePayload(BaseModel):
@@ -367,6 +369,21 @@ async def get_decision_ledger(
             )
         ).scalars().all()
         cand_map = {c.id: c for c in c_rows}
+        missing_cids = cand_ids - set(cand_map.keys())
+        if missing_cids:
+            b2c_rows = (
+                await db.execute(
+                    select(Candidate)
+                    .join(JobCandidate, JobCandidate.candidate_id == Candidate.id)
+                    .where(
+                        Candidate.id.in_(missing_cids),
+                        Candidate.tenant_id.is_(None),
+                        JobCandidate.tenant_id == tenant_id,
+                    )
+                )
+            ).scalars().all()
+            for c in b2c_rows:
+                cand_map[c.id] = c
 
     job_map: Dict[UUID, Job] = {}
     if job_ids:
@@ -505,6 +522,7 @@ async def record_human_override(
     outreach_dispatch_status = None
 
     cand = None
+    is_b2c_candidate = False
     if entry.candidate_id:
         cand_res = await db.execute(
             select(Candidate).where(
@@ -513,6 +531,20 @@ async def record_human_override(
             )
         )
         cand = cand_res.scalar_one_or_none()
+        if cand is None:
+            b2c_res = await db.execute(
+                select(Candidate)
+                .join(JobCandidate, JobCandidate.candidate_id == Candidate.id)
+                .where(
+                    Candidate.id == entry.candidate_id,
+                    Candidate.tenant_id.is_(None),
+                    JobCandidate.tenant_id == tenant_id,
+                )
+                .limit(1)
+            )
+            cand = b2c_res.scalar_one_or_none()
+            if cand is not None:
+                is_b2c_candidate = True
 
     if entry.decision_type == "outreach_approval":
         from datetime import datetime, timezone
@@ -520,7 +552,7 @@ async def record_human_override(
         from sqlalchemy import func
 
         from db.models import EmailSent, EmailStatus
-        from services.email_service import EmailService
+        from services.email_service import EmailService, is_email_unsubscribed
         from services.validation_service import validation_service
 
         signals = entry.evidence_signals if isinstance(entry.evidence_signals, dict) else {}
@@ -579,6 +611,17 @@ async def record_human_override(
                     detail=f"Outreach blocked: recipient email is invalid, disposable, or a placeholder ({reason}).",
                 )
 
+            if await is_email_unsubscribed(tenant_id, str(recipient_email)):
+                setattr(entry, "human_action", "REJECTED")
+                setattr(entry, "override_reason", "Blocked at approval: recipient unsubscribed from workspace outreach.")
+                if email_row is not None:
+                    setattr(email_row, "status", EmailStatus.FAILED)
+                await db.commit()
+                raise HTTPException(
+                    status_code=400,
+                    detail="Outreach blocked: recipient has unsubscribed from outreach for this workspace.",
+                )
+
             if email_row is not None:
                 if email_row.status == EmailStatus.SENT:
                     outreach_dispatch_status = "already_sent"
@@ -588,6 +631,11 @@ async def record_human_override(
                         detail="Outreach dispatch is already in progress for this draft.",
                     )
                 else:
+                    if payload and payload.draft_subject is not None and payload.draft_subject.strip():
+                        setattr(email_row, "subject", payload.draft_subject.strip())
+                    if payload and payload.draft_body is not None and payload.draft_body.strip():
+                        setattr(email_row, "body", payload.draft_body.strip())
+
                     # Claim draft before provider delivery so concurrent retries cannot double-send
                     setattr(email_row, "status", EmailStatus.SCHEDULED)
                     await db.commit()
@@ -605,6 +653,8 @@ async def record_human_override(
                         target_status = CandidateStatus.CONTACTED
                     else:
                         setattr(email_row, "status", EmailStatus.FAILED)
+                        # Keep entry retryable in Approvals instead of locking as APPROVED when delivery fails
+                        setattr(entry, "human_action", "PENDING_REVIEW")
                         outreach_dispatch_status = "failed"
         else:
             if email_row is not None and email_row.status == EmailStatus.DRAFT:
@@ -621,7 +671,7 @@ async def record_human_override(
                 cand,
                 enforce=False,
             )
-        if should_update_candidate_status:
+        if should_update_candidate_status and not is_b2c_candidate:
             setattr(cand, "status", target_status)
             updated_candidate_status = target_status.value
 
@@ -653,10 +703,15 @@ async def record_human_override(
         except Exception as exc:
             log.warning("swarm_memory_override_sync_failed", error=str(exc), ledger_id=ledger_id)
 
+    effective_human_action = str(entry.human_action or resolved_action)
     return {
         "status": "SUCCESS",
-        "message": f"Human decision recorded as {resolved_action}",
-        "human_action": resolved_action,
+        "message": (
+            "Outreach delivery failed; draft remains pending for retry."
+            if outreach_dispatch_status == "failed"
+            else f"Human decision recorded as {effective_human_action}"
+        ),
+        "human_action": effective_human_action,
         "candidate_status": updated_candidate_status,
         "job_candidate_status": updated_job_candidate_status,
         "aedt_notice_eligibility": aedt_notice_eligibility,

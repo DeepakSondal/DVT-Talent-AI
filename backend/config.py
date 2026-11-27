@@ -109,6 +109,7 @@ class Settings(BaseSettings):
     microsoft_client_id: str = ""
     microsoft_client_secret: str = ""
     resend_api_key: str = ""
+    resend_webhook_secret: str = ""
     github_client_id: str = ""
     github_client_secret: str = ""
     linkedin_client_id: str = ""
