@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dvt-talent-ai-frontend",
+  "name": "dvt-talent-ai",
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-11-28",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
