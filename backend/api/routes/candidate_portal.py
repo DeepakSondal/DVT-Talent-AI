@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,12 +29,14 @@ from db.models import (
     Job,
     JobCandidate,
     Resume,
+    Tenant,
     User,
     get_db,
 )
 from services.compliance_service import compliance_service
 from services.email_service import email_service
 from services.privacy_service import is_domain_or_company_blocked
+from services.redis_service import revoke_token, revoke_user_tokens
 from services.resume_parser import ResumeParserService
 
 log = structlog.get_logger(__name__)
@@ -126,6 +128,7 @@ class ApplicationOut(BaseModel):
     match_score: float
     career_ops_scoring: Dict[str, Any] = {}
     notes: Optional[str] = None
+    aedt_notice: Optional[Dict[str, Any]] = None
 
 
 class InterviewStarCard(BaseModel):
@@ -575,19 +578,22 @@ async def get_candidate_resume_details(
 @router.get("/jobs", response_model=List[JobMatchOut])
 async def list_matched_jobs(
     search: Optional[str] = None,
+    remote_only: bool = Query(False),
+    min_score: Optional[float] = Query(None, ge=0.0, le=5.0),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Returns published jobs with Career-Ops 5-Dimension Match Scoring & Ghost Job Detection.
-    Respects candidate's privacy shield (hides blocked companies).
+    Respects candidate's privacy shield (hides blocked companies and blocked workspace tenants).
     """
     cand = await get_or_create_candidate_for_user(current_user, db)
 
-    # Fetch active, published jobs
+    # Fetch active, published jobs joined with both Company and Tenant for accurate Privacy Shield evaluation
     stmt = (
-        select(Job, Company.name, Company.domain)
+        select(Job, Company.name, Company.domain, Tenant.name, Tenant.domain)
         .outerjoin(Company, Job.company_id == Company.id)
+        .outerjoin(Tenant, Job.tenant_id == Tenant.id)
         .where(Job.is_active.is_(True))
         .where(Job.is_published.is_(True))
         .order_by(desc(Job.posted_at))
@@ -601,28 +607,45 @@ async def list_matched_jobs(
     )
     applied_job_ids = set(app_query.scalars().all())
 
+    blocked_list = list(cast(Any, cand.hide_from_companies) or [])
     matched_jobs: List[JobMatchOut] = []
 
-    for job, company_name, company_domain in results:
-        comp_name = company_name or "Confidential Client"
-        comp_dom = company_domain or ""
+    for job, company_name, company_domain, tenant_name, tenant_domain in results:
+        comp_name = company_name or tenant_name or "Confidential Client"
+        comp_dom = company_domain or tenant_domain or ""
 
-        # Check Privacy Shield: Hide from candidate's blocked companies
+        # Check Privacy Shield against both Company and Workspace Tenant identity
         if is_domain_or_company_blocked(
-            hide_from_companies=list(cast(Any, cand.hide_from_companies) or []),
-            employer_domain=comp_dom,
-            employer_name=comp_name,
+            hide_from_companies=blocked_list,
+            employer_domain=company_domain or "",
+            employer_name=company_name or "",
+        ) or is_domain_or_company_blocked(
+            hide_from_companies=blocked_list,
+            employer_domain=tenant_domain or "",
+            employer_name=tenant_name or "",
         ):
             continue
 
-        # Optional text filter
+        if remote_only and not bool(job.remote):
+            continue
+
+        # Optional text filter across title, company, location, and required skills
         if search:
-            s_low = search.lower()
-            if s_low not in job.title.lower() and s_low not in comp_name.lower():
+            s_low = search.strip().lower()
+            skills_match = any(s_low in str(sk).lower() for sk in (job.skills_required or []))
+            loc_match = s_low in str(job.location or "").lower()
+            if (
+                s_low not in str(job.title or "").lower()
+                and s_low not in comp_name.lower()
+                and not skills_match
+                and not loc_match
+            ):
                 continue
 
         # Career-Ops 5-Dimension Scoring
         dimensions = compute_career_ops_score(cand, job, comp_name)
+        if min_score is not None and dimensions.global_score < min_score:
+            continue
 
         matched_jobs.append(
             JobMatchOut(
@@ -752,37 +775,93 @@ async def list_candidate_applications(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Application Tracker — lists all applications submitted by candidate.
+    Application Tracker — lists all applications submitted by candidate with NYC LL 144 AEDT notice details.
     """
     cand = await get_or_create_candidate_for_user(current_user, db)
+    meta = cand.meta_data if isinstance(cand.meta_data, dict) else {}
+    aedt_by_job = meta.get("aedt_notices_by_job") if isinstance(meta.get("aedt_notices_by_job"), dict) else {}
 
     stmt = (
-        select(JobCandidate, Job.title, Company.name)
+        select(JobCandidate, Job.title, Company.name, Tenant.name)
         .join(Job, JobCandidate.job_id == Job.id)
         .outerjoin(Company, Job.company_id == Company.id)
+        .outerjoin(Tenant, Job.tenant_id == Tenant.id)
         .where(JobCandidate.candidate_id == cand.id)
         .order_by(desc(JobCandidate.created_at))
     )
     results = (await db.execute(stmt)).all()
 
     apps: List[ApplicationOut] = []
-    for app, job_title, comp_name in results:
+    for app, job_title, comp_name, tenant_name in results:
         if app.job_id is None:
             continue
+        job_key = str(app.job_id)
+        notice_obj: Optional[Dict[str, Any]] = None
+        if isinstance(aedt_by_job.get(job_key), dict):
+            notice_obj = dict(aedt_by_job[job_key])
+        elif meta.get("aedt_notice_sent_at"):
+            notice_obj = {
+                "aedt_notice_sent_at": meta.get("aedt_notice_sent_at"),
+                "screening_eligible_after": meta.get("screening_eligible_after"),
+                "required_business_days": meta.get("aedt_notice_business_days", 10),
+                "bias_audit_summary_url": "/api/v1/compliance/bias-audit-summary",
+            }
+        if notice_obj is not None:
+            notice_obj.setdefault("bias_audit_summary_url", "/api/v1/compliance/bias-audit-summary")
+            notice_obj.setdefault(
+                "alternative_process_notice",
+                "An Automated Employment Decision Tool (AEDT) may be used to evaluate your application. "
+                "You may request an alternative selection process or reasonable accommodation.",
+            )
+
         apps.append(
             ApplicationOut(
                 id=app.id,
                 job_id=app.job_id,
                 job_title=job_title,
-                company_name=comp_name or "Confidential Client",
+                company_name=comp_name or tenant_name or "Confidential Client",
                 status=app.status.value if app.status is not None and hasattr(app.status, "value") else str(app.status),
                 applied_at=app.created_at,
                 match_score=float(app.match_score or 0.0),
                 career_ops_scoring=app.career_ops_scoring or {},
                 notes=app.notes,
+                aedt_notice=notice_obj,
             )
         )
     return apps
+
+
+@router.delete("/applications/{application_id}")
+async def withdraw_candidate_application(
+    application_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Withdraws a candidate's application by hard-deleting the JobCandidate row.
+    Immediately revokes that employer's B2C access and allows re-applying later.
+    """
+    cand = await get_or_create_candidate_for_user(current_user, db)
+    app_row = (
+        await db.execute(
+            select(JobCandidate).where(
+                JobCandidate.id == application_id,
+                JobCandidate.candidate_id == cand.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if app_row is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    job_id_str = str(app_row.job_id) if app_row.job_id else None
+    await db.delete(app_row)
+    await db.commit()
+    return {
+        "status": "withdrawn",
+        "application_id": str(application_id),
+        "job_id": job_id_str,
+        "message": "Application withdrawn and employer access revoked.",
+    }
 
 
 _INTERVIEW_PREP_CACHE: Dict[str, Tuple[float, InterviewPrepResponse]] = {}
@@ -989,17 +1068,31 @@ async def generate_tailored_resume_advice(
 @router.delete("/profile/erasure", summary="GDPR Right to Erasure — candidate self-service")
 @router.delete("/profile/pii", summary="GDPR Right to Erasure alias")
 async def candidate_self_erasure(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Self-service personal data erasure for authenticated candidate.
-    Permanently erases profile, resume records, physical files, and embeddings under GDPR Article 17.
+    Permanently erases profile, resume records, physical files, and embeddings under GDPR Article 17,
+    revokes active tokens, and clears session cookies.
     """
     cand = await get_or_create_candidate_for_user(current_user, db)
     from services.privacy_service import erase_candidate_personal_data
-    return await erase_candidate_personal_data(
+    erasure_result = await erase_candidate_personal_data(
         candidate_id=cast(uuid.UUID, cand.id),
         db=db,
         requesting_user=current_user,
     )
+
+    await revoke_user_tokens(str(current_user.id))
+    refresh_cookie = request.cookies.get("dvt_refresh_token")
+    if refresh_cookie:
+        await revoke_token(refresh_cookie, expire_seconds=30 * 86400)
+
+    response = JSONResponse(content={**erasure_result, "session_revoked": True})
+    response.delete_cookie(key="dvt_token", path="/", samesite="lax")
+    response.delete_cookie(key="dvt_refresh_token", path="/", samesite="lax")
+    response.delete_cookie(key="dvt_refresh_token", path="/api/v1/auth/refresh", samesite="lax")
+    response.delete_cookie(key="dvt_mfa_challenge", path="/", samesite="lax")
+    return response

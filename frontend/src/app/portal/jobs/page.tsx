@@ -23,6 +23,8 @@ import { toast } from "sonner";
 export default function CandidateJobsPage() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
+  const [remoteOnly, setRemoteOnly] = useState(false);
+  const [minScore, setMinScore] = useState<number>(0);
   const [selectedJobForModal, setSelectedJobForModal] = useState<MatchedJob | null>(null);
   const [tailorModalJob, setTailorModalJob] = useState<MatchedJob | null>(null);
   const [tailorAdvice, setTailorAdvice] = useState<TailoredResumeAdvice | null>(null);
@@ -31,8 +33,13 @@ export default function CandidateJobsPage() {
 
   // Fetch jobs with resilient error tracking
   const { data: jobs = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ["candidate-jobs", searchTerm],
-    queryFn: () => candidatePortalApi.listJobs({ search: searchTerm || undefined }),
+    queryKey: ["candidate-jobs", searchTerm, remoteOnly, minScore],
+    queryFn: () =>
+      candidatePortalApi.listJobs({
+        search: searchTerm || undefined,
+        remote_only: remoteOnly || undefined,
+        min_score: minScore > 0 ? minScore : undefined,
+      }),
     retry: 2,
   });
 
@@ -93,14 +100,39 @@ export default function CandidateJobsPage() {
           </p>
         </div>
 
-        <div className="w-full md:w-80 relative">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <Input
-            placeholder="Search role, skills, or company..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 text-xs h-10 rounded-xl"
-          />
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          <div className="w-full sm:w-64 relative">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search role, skills, or company..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 text-xs h-10 rounded-xl"
+            />
+          </div>
+
+          <Button
+            type="button"
+            variant={remoteOnly ? "primary" : "outline"}
+            size="sm"
+            aria-pressed={remoteOnly}
+            onClick={() => setRemoteOnly((prev) => !prev)}
+            className="h-10 px-3.5 rounded-xl text-xs font-semibold whitespace-nowrap"
+          >
+            Remote Only
+          </Button>
+
+          <select
+            aria-label="Minimum Fit Score"
+            value={minScore}
+            onChange={(e) => setMinScore(parseFloat(e.target.value) || 0)}
+            className="h-10 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+          >
+            <option value={0}>Any Match Score</option>
+            <option value={3.0}>3.0+ / 5.0 Match</option>
+            <option value={3.5}>3.5+ / 5.0 Match</option>
+            <option value={4.0}>4.0+ / 5.0 Match</option>
+          </select>
         </div>
       </div>
 

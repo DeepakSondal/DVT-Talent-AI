@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   User, Shield, Upload, CheckCircle2,
   AlertCircle, Plus, X, Building2, Lock,
-  Save, Sparkles, FileText, Check, Download
+  Save, Sparkles, FileText, Check, Download, Trash2
 } from "lucide-react";
 import { candidatePortalApi, type CandidateProfile } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
@@ -37,7 +38,10 @@ export default function CandidateProfilePage() {
 }
 
 function CandidateProfileForm({ profile }: { profile?: CandidateProfile }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
+  const [erasureInput, setErasureInput] = useState("");
+  const [showErasureConfirm, setShowErasureConfirm] = useState(false);
 
   const [formData, setFormData] = useState({
     first_name: profile?.first_name || "",
@@ -77,6 +81,27 @@ function CandidateProfileForm({ profile }: { profile?: CandidateProfile }) {
     onError: (err: any) => {
       toast.error("Update Failed", {
         description: err.response?.data?.detail || "Could not save profile updates.",
+      });
+    },
+  });
+
+  // GDPR Article 17 Self-Service Erasure Mutation
+  const erasureMutation = useMutation({
+    mutationFn: () => candidatePortalApi.erasePersonalData(),
+    onSuccess: () => {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("dvt_token");
+        localStorage.removeItem("tenant_id");
+      }
+      queryClient.clear();
+      toast.success("Personal Data Erased", {
+        description: "Your profile, resume files, and embeddings have been purged under GDPR Article 17.",
+      });
+      router.push("/auth/login");
+    },
+    onError: (err: any) => {
+      toast.error("Erasure Failed", {
+        description: err?.response?.data?.detail || "Could not complete GDPR personal data erasure.",
       });
     },
   });
@@ -504,6 +529,69 @@ function CandidateProfileForm({ profile }: { profile?: CandidateProfile }) {
           {updateMutation.isPending ? "Saving..." : "Save All Changes"}
         </Button>
       </div>
+
+      {/* GDPR Article 17 Right to Erasure — Self-Service Danger Zone */}
+      <Card className="p-6 bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60 shadow-sm rounded-3xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-rose-800 dark:text-rose-300 flex items-center gap-2">
+              <Trash2 className="w-4 h-4" />
+              GDPR Article 17 — Right to Erasure
+            </h3>
+            <p className="text-xs text-rose-700/90 dark:text-rose-300/80 max-w-2xl leading-relaxed">
+              Permanently scrub your personal data, delete uploaded resume files from storage, purge vector embeddings, revoke active sessions, and sign out. This action cannot be undone.
+            </p>
+          </div>
+          {!showErasureConfirm && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowErasureConfirm(true)}
+              className="border-rose-300 text-rose-700 hover:bg-rose-100 text-xs font-bold rounded-xl whitespace-nowrap"
+            >
+              Delete My Personal Data
+            </Button>
+          )}
+        </div>
+
+        {showErasureConfirm && (
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 space-y-3">
+            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+              Type <code className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-mono font-bold">ERASE</code> below to permanently purge all personal data and end your session.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <Input
+                aria-label="Type ERASE to confirm GDPR deletion"
+                placeholder="Type ERASE to confirm"
+                value={erasureInput}
+                onChange={(e) => setErasureInput(e.target.value)}
+                className="bg-slate-50 dark:bg-slate-800 border-rose-200 text-xs h-10 rounded-xl max-w-xs"
+              />
+              <Button
+                type="button"
+                disabled={erasureInput.trim() !== "ERASE" || erasureMutation.isPending}
+                onClick={() => erasureMutation.mutate()}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold h-10 px-5 rounded-xl whitespace-nowrap"
+              >
+                {erasureMutation.isPending ? "Purging Data..." : "Permanently Erase My Personal Data"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowErasureConfirm(false);
+                  setErasureInput("");
+                }}
+                className="text-xs h-10"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
     </form>
   );
 }

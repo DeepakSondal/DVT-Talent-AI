@@ -34,6 +34,8 @@ from api.routes.auth import User, get_current_user
 from db.models import (
     Candidate,
     CandidateStatus,
+    Interview,
+    InterviewStatus,
     Job,
     JobCandidate,
     Resume,
@@ -41,7 +43,10 @@ from db.models import (
     UserRole,
     get_db,
 )
-from services.privacy_service import is_candidate_visible_to_recruiter
+from services.privacy_service import (
+    is_candidate_visible_to_recruiter,
+    is_domain_or_company_blocked,
+)
 from services.resume_parser import ResumeParserService
 from services.validation_service import validation_service
 
@@ -101,11 +106,13 @@ class CandidateOut(BaseModel):
 
 class CandidateNoteIn(BaseModel):
     note: str
+    job_id: Optional[UUID] = None
 
 
 class CandidateInterviewIn(BaseModel):
     scheduled_date: str
     scheduled_time: Optional[str] = "10:00 AM"
+    job_id: Optional[UUID] = None
 
 
 class CandidateList(BaseModel):
@@ -159,12 +166,17 @@ async def list_candidates(
 
     tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
 
-    # Base filter conditions
+    # Base filter conditions (when job_id is given, also include B2C portal applicants linked to this tenant's job)
     base_filters: List[Any] = [
-        Candidate.tenant_id == current_user.tenant_id,
-        Candidate.is_searchable.isnot(False),
         Candidate.pii_erased.isnot(True),
     ]
+    if job_id is not None:
+        base_filters.append(
+            (Candidate.tenant_id == current_user.tenant_id) | (Candidate.tenant_id.is_(None))
+        )
+    else:
+        base_filters.append(Candidate.tenant_id == current_user.tenant_id)
+        base_filters.append(Candidate.is_searchable.isnot(False))
 
     if search:
         await enforce_endpoint_rate_limit(
@@ -220,6 +232,7 @@ async def list_candidates(
             *effective_filters,
             JobCandidate.job_id == job_id,
             (JobCandidate.tenant_id == current_user.tenant_id) | (JobCandidate.tenant_id.is_(None)),
+            (Candidate.is_searchable.isnot(False)) | (JobCandidate.applied_by_candidate.is_(True)),
         ]
         count_query = (
             select(func.count(Candidate.id))
@@ -244,8 +257,13 @@ async def list_candidates(
             dto.job_id = job_id
             dto.job_match_score = jc_obj.match_score if jc_obj.match_score is not None else cand_obj.score
             dto.job_stage = jc_obj.status or cand_obj.status
+            if dto.job_stage is not None:
+                dto.status = dto.job_stage
             if dto.job_match_score is not None:
                 dto.score = float(dto.job_match_score)
+            if cand_obj.tenant_id is None:
+                # Isolate B2C metadata so one employer's notes/meta never leak across tenants
+                dto.meta_data = _extract_job_candidate_notes_meta(jc_obj)
             serialized_items.append(dto)
         return CandidateList(items=serialized_items, total=total, page=page, page_size=page_size)
 
@@ -383,53 +401,178 @@ async def export_candidates(
     )
 
 
+def _extract_job_candidate_notes_meta(jc_obj: Optional[JobCandidate]) -> Dict[str, Any]:
+    """Parses tenant-isolated recruiter notes stored on a JobCandidate row without exposing shared B2C metadata."""
+    if not jc_obj or not jc_obj.notes:
+        return {"notes": []}
+    lines = [ln.strip() for ln in str(jc_obj.notes).splitlines() if ln.strip()]
+    return {"notes": lines}
+
+
+async def _load_tenant_scheduled_interviews(
+    db: AsyncSession,
+    candidate_id: UUID,
+    tenant_id: UUID,
+    job_id: Optional[UUID] = None,
+) -> List[Dict[str, str]]:
+    """Loads scheduled interviews for a candidate strictly scoped to the caller's tenant via Job.tenant_id."""
+    stmt = (
+        select(Interview)
+        .join(Job, Interview.job_id == Job.id)
+        .where(
+            Interview.candidate_id == candidate_id,
+            Job.tenant_id == tenant_id,
+        )
+        .order_by(desc(Interview.created_at))
+    )
+    if job_id is not None:
+        stmt = stmt.where(Interview.job_id == job_id)
+    rows = (await db.execute(stmt)).scalars().all()
+    entries: List[Dict[str, str]] = []
+    for iv in rows:
+        fb = cast(Dict[str, Any], iv.feedback or {})
+        s_date = str(fb.get("scheduled_date") or "").strip()
+        s_time = str(fb.get("scheduled_time") or "10:00 AM").strip()
+        if s_date:
+            entries.append({"scheduled_date": s_date, "scheduled_time": s_time})
+    return entries
+
+
+async def _resolve_accessible_candidate(
+    db: AsyncSession,
+    candidate_id: UUID,
+    current_user: User,
+    job_id: Optional[UUID] = None,
+    enforce_privacy: bool = True,
+) -> tuple[Candidate, Optional[JobCandidate], bool]:
+    """
+    Resolves a candidate strictly within the recruiter's tenant boundary:
+    - Tenant-owned Candidate (Candidate.tenant_id == current_user.tenant_id), OR
+    - B2C Candidate (Candidate.tenant_id IS NULL) explicitly linked via JobCandidate.tenant_id == current_user.tenant_id.
+    Returns (candidate, matching_job_candidate, is_b2c).
+    """
+    own_res = await db.execute(
+        select(Candidate).where(
+            Candidate.id == candidate_id,
+            Candidate.tenant_id == current_user.tenant_id,
+            Candidate.pii_erased.isnot(True),
+        )
+    )
+    own_cand = own_res.scalar_one_or_none()
+    if own_cand is not None:
+        jc_obj: Optional[JobCandidate] = None
+        if job_id is not None:
+            jc_obj = (
+                await db.execute(
+                    select(JobCandidate).where(
+                        JobCandidate.candidate_id == candidate_id,
+                        JobCandidate.job_id == job_id,
+                        JobCandidate.tenant_id == current_user.tenant_id,
+                    )
+                )
+            ).scalar_one_or_none()
+        if enforce_privacy:
+            tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
+            if not is_candidate_visible_to_recruiter(
+                candidate=own_cand,
+                recruiter_tenant_domain=tenant_domain,
+                recruiter_tenant_name=tenant_name,
+                recruiter_email=cast(Optional[str], current_user.email),
+            ):
+                raise HTTPException(status_code=404, detail="Candidate not found")
+        return own_cand, jc_obj, False
+
+    # Check B2C applicant linked strictly to one of this tenant's jobs
+    jc_stmt = (
+        select(Candidate, JobCandidate)
+        .join(JobCandidate, JobCandidate.candidate_id == Candidate.id)
+        .where(
+            Candidate.id == candidate_id,
+            Candidate.tenant_id.is_(None),
+            Candidate.pii_erased.isnot(True),
+            JobCandidate.tenant_id == current_user.tenant_id,
+        )
+        .order_by(desc(JobCandidate.created_at))
+    )
+    if job_id is not None:
+        jc_stmt = jc_stmt.where(JobCandidate.job_id == job_id)
+    b2c_row = (await db.execute(jc_stmt)).first()
+    if not b2c_row:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    b2c_cand, b2c_jc = b2c_row[0], b2c_row[1]
+    if enforce_privacy:
+        tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
+        if is_domain_or_company_blocked(
+            hide_from_companies=list(cast(Any, b2c_cand.hide_from_companies) or []),
+            employer_domain=tenant_domain,
+            employer_name=tenant_name,
+        ):
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        if not b2c_jc.applied_by_candidate and not is_candidate_visible_to_recruiter(
+            candidate=b2c_cand,
+            recruiter_tenant_domain=tenant_domain,
+            recruiter_tenant_name=tenant_name,
+            recruiter_email=cast(Optional[str], current_user.email),
+        ):
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
+    return b2c_cand, b2c_jc, True
+
+
 @router.get("/{candidate_id}", response_model=CandidateOut)
 async def get_candidate(
     candidate_id: UUID,
+    job_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_recruiter_workspace_access(current_user)
-
-    result = await db.execute(
-        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    candidate, jc_obj, is_b2c = await _resolve_accessible_candidate(
+        db, candidate_id, current_user, job_id=job_id, enforce_privacy=True
     )
-    candidate = result.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-
-    tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
-
-    if not is_candidate_visible_to_recruiter(
-        candidate=candidate,
-        recruiter_tenant_domain=tenant_domain,
-        recruiter_tenant_name=tenant_name,
-        recruiter_email=cast(Optional[str], current_user.email),
-    ):
-        raise HTTPException(status_code=404, detail="Candidate not found")
-
-    return candidate
+    dto = CandidateOut.model_validate(candidate)
+    dto.has_verified_email = not validation_service.is_placeholder_email(candidate.email)
+    if jc_obj is not None:
+        dto.job_id = jc_obj.job_id
+        dto.job_match_score = jc_obj.match_score if jc_obj.match_score is not None else candidate.score
+        dto.job_stage = jc_obj.status or candidate.status
+        if is_b2c:
+            if dto.job_stage is not None:
+                dto.status = dto.job_stage
+            if dto.job_match_score is not None:
+                dto.score = float(dto.job_match_score)
+            b2c_meta = _extract_job_candidate_notes_meta(jc_obj)
+            if current_user.tenant_id is not None:
+                b2c_meta["scheduled_interviews"] = await _load_tenant_scheduled_interviews(
+                    db, candidate.id, current_user.tenant_id, job_id=jc_obj.job_id
+                )
+            dto.meta_data = b2c_meta
+    return dto
 
 
 @router.patch("/{candidate_id}/status")
 async def update_candidate_status(
     candidate_id: UUID,
     status: CandidateStatus,
+    job_id: Optional[UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_recruiter_workspace_access(current_user)
-
-    result = await db.execute(
-        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    candidate, jc_obj, is_b2c = await _resolve_accessible_candidate(
+        db, candidate_id, current_user, job_id=job_id, enforce_privacy=False
     )
-    candidate = result.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
 
-    setattr(candidate, "status", status)
+    if is_b2c and jc_obj is not None:
+        # Never mutate shared B2C Candidate.status across employers; isolate strictly to tenant JobCandidate
+        setattr(jc_obj, "status", status)
+    else:
+        setattr(candidate, "status", status)
+        if jc_obj is not None:
+            setattr(jc_obj, "status", status)
     await db.commit()
-    return {"status": "updated", "new_status": status.value}
+    return {"status": "updated", "new_status": status.value, "scoped_to_job_id": str(jc_obj.job_id) if jc_obj else None}
 
 
 @router.post("/{candidate_id}/notes")
@@ -439,18 +582,22 @@ async def add_candidate_note(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Persist a recruiter note onto the candidate's metadata record."""
+    """Persist a recruiter note strictly within the caller's tenant boundary."""
     _require_recruiter_workspace_access(current_user)
     clean_note = (payload.note or "").strip()
     if not clean_note:
         raise HTTPException(status_code=400, detail="Note cannot be empty")
 
-    result = await db.execute(
-        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    candidate, jc_obj, is_b2c = await _resolve_accessible_candidate(
+        db, candidate_id, current_user, job_id=payload.job_id, enforce_privacy=False
     )
-    candidate = result.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    if is_b2c and jc_obj is not None:
+        existing_notes = _extract_job_candidate_notes_meta(jc_obj)["notes"]
+        updated_notes = [clean_note, *existing_notes]
+        setattr(jc_obj, "notes", "\n".join(updated_notes))
+        await db.commit()
+        return {"notes": updated_notes}
 
     meta = dict(cast(Any, candidate.meta_data) or {})
     notes = list(meta.get("notes") or [])
@@ -468,18 +615,41 @@ async def schedule_candidate_interview(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Persist an interview schedule entry and move candidate to INTERVIEWING."""
+    """Persist an interview schedule entry and move candidate to INTERVIEWING within tenant isolation."""
     _require_recruiter_workspace_access(current_user)
     clean_date = (payload.scheduled_date or "").strip()
     if not clean_date:
         raise HTTPException(status_code=400, detail="scheduled_date is required")
+    clean_time = (payload.scheduled_time or "10:00 AM").strip()
 
-    result = await db.execute(
-        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    candidate, jc_obj, is_b2c = await _resolve_accessible_candidate(
+        db, candidate_id, current_user, job_id=payload.job_id, enforce_privacy=False
     )
-    candidate = result.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    if is_b2c and jc_obj is not None:
+        # Isolate B2C interview scheduling strictly to tenant-owned Job via Interview table + JobCandidate.status
+        interview_row = Interview(
+            candidate_id=candidate.id,
+            job_id=jc_obj.job_id,
+            interviewer_email=current_user.email,
+            status=InterviewStatus.SCHEDULED,
+            feedback={"scheduled_date": clean_date, "scheduled_time": clean_time},
+        )
+        db.add(interview_row)
+        setattr(jc_obj, "status", CandidateStatus.INTERVIEWING)
+        await db.commit()
+        interviews = (
+            await _load_tenant_scheduled_interviews(
+                db, candidate.id, current_user.tenant_id, job_id=jc_obj.job_id
+            )
+            if current_user.tenant_id is not None
+            else [{"scheduled_date": clean_date, "scheduled_time": clean_time}]
+        )
+        return {
+            "scheduled_interviews": interviews,
+            "status": CandidateStatus.INTERVIEWING.value,
+            "scoped_to_job_id": str(jc_obj.job_id),
+        }
 
     meta = dict(cast(Any, candidate.meta_data) or {})
     interviews = list(meta.get("scheduled_interviews") or [])
@@ -487,12 +657,14 @@ async def schedule_candidate_interview(
         0,
         {
             "scheduled_date": clean_date,
-            "scheduled_time": (payload.scheduled_time or "10:00 AM").strip(),
+            "scheduled_time": clean_time,
         },
     )
     meta["scheduled_interviews"] = interviews
-    candidate.meta_data = meta
-    candidate.status = CandidateStatus.INTERVIEWING
+    setattr(candidate, "meta_data", meta)
+    setattr(candidate, "status", CandidateStatus.INTERVIEWING)
+    if jc_obj is not None:
+        setattr(jc_obj, "status", CandidateStatus.INTERVIEWING)
     await db.commit()
     return {"scheduled_interviews": interviews, "status": CandidateStatus.INTERVIEWING.value}
 
@@ -538,12 +710,14 @@ async def upload_resume(
             detail="File size exceeds maximum permitted limit of 10 MB."
         )
 
-    result = await db.execute(
-        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    candidate, _, is_b2c = await _resolve_accessible_candidate(
+        db, candidate_id, current_user, enforce_privacy=False
     )
-    candidate = result.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+    if is_b2c:
+        raise HTTPException(
+            status_code=403,
+            detail="Portal-managed candidate resumes can only be updated by the candidate.",
+        )
 
     # 1. Multi-format text extraction (PDF / DOCX / TXT)
     raw_text = ResumeParserService.extract_text(content, filename)
@@ -651,27 +825,10 @@ async def download_candidate_resume(
     current_user: User = Depends(get_current_user),
 ):
     """Download candidate's original resume document in PDF or Word format."""
-    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Recruiter or administrative permissions required to download candidate resumes."
-        )
-
-    result = await db.execute(
-        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    _require_recruiter_workspace_access(current_user)
+    candidate, _, _ = await _resolve_accessible_candidate(
+        db, candidate_id, current_user, enforce_privacy=True
     )
-    candidate = result.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-
-    tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
-    if not is_candidate_visible_to_recruiter(
-        candidate=candidate,
-        recruiter_tenant_domain=tenant_domain,
-        recruiter_tenant_name=tenant_name,
-        recruiter_email=cast(Optional[str], current_user.email),
-    ):
-        raise HTTPException(status_code=404, detail="Candidate not found")
 
     res = (await db.execute(
         select(Resume)
@@ -709,27 +866,10 @@ async def get_candidate_resume_details(
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve full extracted text and structured parsed data (experience, education, skills)."""
-    if current_user.role not in (UserRole.RECRUITER, UserRole.ADMIN, UserRole.MANAGER):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Recruiter or administrative permissions required to view candidate resume details."
-        )
-
-    result = await db.execute(
-        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    _require_recruiter_workspace_access(current_user)
+    candidate, _, _ = await _resolve_accessible_candidate(
+        db, candidate_id, current_user, enforce_privacy=True
     )
-    candidate = result.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-
-    tenant_domain, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
-    if not is_candidate_visible_to_recruiter(
-        candidate=candidate,
-        recruiter_tenant_domain=tenant_domain,
-        recruiter_tenant_name=tenant_name,
-        recruiter_email=cast(Optional[str], current_user.email),
-    ):
-        raise HTTPException(status_code=404, detail="Candidate not found")
 
     res = (await db.execute(
         select(Resume)
@@ -955,15 +1095,44 @@ async def score_candidate(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Trigger AI scoring for a candidate"""
+    """Trigger AI scoring for a candidate within the caller's tenant boundary."""
     _require_recruiter_workspace_access(current_user)
 
-    result = await db.execute(
-        select(Candidate).where(Candidate.id == candidate_id, Candidate.tenant_id == current_user.tenant_id)
+    candidate, jc_obj, is_b2c = await _resolve_accessible_candidate(
+        db, candidate_id, current_user, job_id=job_id, enforce_privacy=False
     )
-    candidate = result.scalar_one_or_none()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+    if is_b2c and jc_obj is not None:
+        from api.routes.candidate_portal import compute_career_ops_score
+
+        job_obj = (
+            await db.execute(
+                select(Job).where(Job.id == jc_obj.job_id, Job.tenant_id == current_user.tenant_id)
+            )
+        ).scalar_one_or_none()
+        if not job_obj:
+            raise HTTPException(status_code=404, detail="Job not found")
+        _, tenant_name = await _resolve_recruiter_tenant_info(db, current_user)
+        dims = compute_career_ops_score(candidate, job_obj, tenant_name or "Hiring Organization")
+        existing_scoring = dict(cast(Any, jc_obj.career_ops_scoring) or {})
+        updated_scoring = dims.model_dump()
+        for aedt_key in (
+            "aedt_notice_sent_at",
+            "aedt_tool_name",
+            "aedt_dimensions_evaluated",
+            "aedt_alternative_process",
+        ):
+            if aedt_key in existing_scoring:
+                updated_scoring[aedt_key] = existing_scoring[aedt_key]
+        match_score = round(dims.global_score * 20.0, 1)
+        setattr(jc_obj, "match_score", match_score)
+        setattr(jc_obj, "career_ops_scoring", updated_scoring)
+        await db.commit()
+        return {
+            "message": "Scoring completed",
+            "candidate_id": str(candidate_id),
+            "score": match_score,
+            "scoped_to_job_id": str(jc_obj.job_id),
+        }
 
     background_tasks.add_task(score_candidate_background, str(candidate_id), str(job_id) if job_id else None)
     return {"message": "Scoring started", "candidate_id": str(candidate_id)}
