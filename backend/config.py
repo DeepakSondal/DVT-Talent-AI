@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Storage & Uploads
     storage_dir: str = str(BASE_DIR / "storage")
     upload_dir: str = str(BASE_DIR / "uploads")
+    r2_bucket_name: str = ""
+    r2_endpoint_url: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
 
     # Database (Connection Pooling)
     database_url: str = ""
