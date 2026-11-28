@@ -5,11 +5,8 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
     Briefcase, Target, Search, Mail, ShieldCheck,
     Sparkles, ArrowRight, CheckCircle2, Bot, Check,
-    Clock, TrendingUp, Users, Zap, FileText, ChevronRight,
-    Building2, MapPin, DollarSign, AlertTriangle, RefreshCw,
-    Sliders, Lock, Shield, Cpu, Gauge, Terminal,
-    HelpCircle, ChevronDown, Award, Star, Eye, Send,
-    ExternalLink, Filter, Layers, BarChart3, Database
+    Users, Zap, FileText, Lock, Shield, Gauge,
+    Terminal, ChevronDown, Send, Menu, X
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -21,28 +18,6 @@ import { cn } from "@/lib/utils";
 const springPresets = {
     snappy: { type: "spring" as const, stiffness: 400, damping: 30 },
     smooth: { type: "spring" as const, stiffness: 300, damping: 28 },
-    gentle: { type: "spring" as const, stiffness: 200, damping: 24 },
-    pageEase: { duration: 0.25, ease: [0.16, 1, 0.3, 1] as const }
-};
-
-const staggerContainer = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.08,
-            delayChildren: 0.05
-        }
-    }
-};
-
-const fadeInUp = {
-    hidden: { opacity: 0, y: 16 },
-    visible: {
-        opacity: 1,
-        y: 0,
-        transition: springPresets.smooth
-    }
 };
 
 // --- Candidate Mock Data for Live Interactive Simulator ---
@@ -51,10 +26,14 @@ const MOCK_CANDIDATES = [
         id: "alex",
         name: "Alex Chen",
         role: "Staff Distributed Systems Engineer",
-        experience: "10 yrs exp , ex-CloudScale, ex-Fintech",
+        experience: "10 yrs exp • ex-CloudScale, ex-Fintech",
         matchScore: 96,
+        careerOpsScore: "4.8",
+        liveness: "2h ago",
+        targetLevel: "Staff / Lead",
         sourceType: "ATS Rediscovery (Saved $450 Fee)",
-        reqMatched: "#REQ-402 , Lead Distributed Storage",
+        reqMatched: "#REQ-402 — Lead Distributed Storage",
+        reqTitle: "Lead Distributed Storage",
         skills: ["Raft Consensus", "Go / Golang", "Distributed Storage", "LSM Trees", "gRPC", "High-Throughput Partitioning"],
         radar: { cv: 4.9, role: 4.8, comp: 4.7, culture: 4.6, flags: 0 },
         starStory: {
@@ -64,17 +43,21 @@ const MOCK_CANDIDATES = [
             r: "99.999% data consistency confirmed with zero unrecoverable records under high load."
         },
         salary: "$185,000 – $225,000 + equity",
-        outreachSnippet: "Noticed your open-source work optimizing Raft consensus clustering. We're scaling CloudScale's storage tier to 50M ops/sec and your consensus background is an exact match.",
+        outreachSnippet: "noticed your open-source work optimizing Raft consensus clustering. We're scaling our distributed storage tier to 50M ops/sec and your consensus background is an exact match.",
         impactRatio: "0.94 (Pass, Safe Buffer +14%)"
     },
     {
         id: "maya",
         name: "Maya Lin",
         role: "Principal AI Platform Architect",
-        experience: "8 yrs exp , ex-HyperScale AI, Core Contributor",
+        experience: "8 yrs exp • ex-HyperScale AI, Core Contributor",
         matchScore: 94,
+        careerOpsScore: "4.9",
+        liveness: "45m ago",
+        targetLevel: "Principal",
         sourceType: "GitHub Open Source Sourced",
-        reqMatched: "#REQ-408 , Principal ML Systems",
+        reqMatched: "#REQ-408 — Principal ML Systems",
+        reqTitle: "Principal ML Systems",
         skills: ["vLLM Serving", "CUDA Kernels", "PyTorch", "Kubernetes Operator", "KV-Cache Paging", "TensorRT"],
         radar: { cv: 4.8, role: 4.9, comp: 4.8, culture: 4.5, flags: 0 },
         starStory: {
@@ -84,17 +67,21 @@ const MOCK_CANDIDATES = [
             r: "Cut GPU tail latency by 42% while doubling serving concurrency on 8x H100 pods."
         },
         salary: "$210,000 – $260,000 + equity",
-        outreachSnippet: "Followed your recent vLLM continuous batching performance PRs. Our ML infra team is deploying self-hosted reasoning models and would love to share architectural context.",
+        outreachSnippet: "followed your recent vLLM continuous batching performance PRs. Our ML infra team is deploying self-hosted reasoning models and would love to share architectural context.",
         impactRatio: "0.96 (Pass, Safe Buffer +16%)"
     },
     {
         id: "marcus",
         name: "Marcus Vance",
         role: "Lead Fullstack & Systems Engineer",
-        experience: "9 yrs exp , ex-Enterprise SaaS, Tech Lead",
+        experience: "9 yrs exp • ex-Enterprise SaaS, Tech Lead",
         matchScore: 92,
+        careerOpsScore: "4.7",
+        liveness: "3h ago",
+        targetLevel: "Lead / Staff",
         sourceType: "Direct Verified Network",
-        reqMatched: "#REQ-395 , Lead Platform Engineer",
+        reqMatched: "#REQ-395 — Lead Platform Engineer",
+        reqTitle: "Lead Platform Engineer",
         skills: ["Next.js App Router", "TypeScript", "PostgreSQL", "Temporal.io", "Kafka", "Row-Level Security"],
         radar: { cv: 4.7, role: 4.7, comp: 4.6, culture: 4.8, flags: 0 },
         starStory: {
@@ -104,62 +91,61 @@ const MOCK_CANDIDATES = [
             r: "Reduced job failure rates from 4.2% to 0.001% across 12M monthly transactions."
         },
         salary: "$175,000 – $205,000 + equity",
-        outreachSnippet: "Your work on resilient event-driven pipelines and high-assurance workflows aligns directly with our enterprise platform expansion. Would you be open to a casual sync?",
+        outreachSnippet: "your work on resilient event-driven pipelines and high-assurance workflows aligns directly with our enterprise platform expansion.",
         impactRatio: "0.92 (Pass, Safe Buffer +12%)"
     }
 ];
 
 // --- Navigation Header ---
 function Navigation() {
+    const shouldReduceMotion = useReducedMotion();
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
     return (
-        <header className="fixed top-0 w-full z-50 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl transition-colors duration-150">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-                <Link href="/" id="nav-brand-link" className="flex items-center gap-3 group">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black shadow-lg shadow-blue-600/30 group-hover:scale-105 transition-transform">
-                        <Bot className="w-6 h-6" />
+        <header className="fixed top-0 w-full z-50 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl transition-colors duration-150">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-3">
+                <Link href="/" id="nav-brand-link" className="flex items-center gap-2.5 sm:gap-3 group shrink-0">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-black shadow-lg shadow-emerald-600/30 group-hover:scale-105 transition-transform shrink-0">
+                        <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
                     <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold text-lg tracking-tight text-white">
-                                DVT <span className="text-emerald-400 text-emerald-400">Talent AI</span>
-                            </span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-medium">AI Talent &amp; Career Platform</span>
+                        <span className="font-bold text-base sm:text-lg tracking-tight text-white whitespace-nowrap">
+                            DVT <span className="text-emerald-400">Talent AI</span>
+                        </span>
+                        <span className="hidden sm:block text-[10px] text-slate-400 font-medium whitespace-nowrap">
+                            AI Talent &amp; Career Platform
+                        </span>
                     </div>
                 </Link>
 
-                <nav aria-label="Main Navigation" className="hidden lg:flex items-center gap-8 text-xs font-semibold text-slate-300">
-                    <a href="#simulator" id="nav-link-demo" className="hover:text-white transition-colors flex items-center gap-1.5">
-                        <Gauge className="w-3.5 h-3.5 text-blue-400" />
+                <nav aria-label="Main Navigation" className="hidden lg:flex items-center gap-6 xl:gap-8 text-xs font-semibold text-slate-300">
+                    <a href="#simulator" id="nav-link-demo" className="hover:text-white transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                        <Gauge className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                         Live Simulator
                     </a>
-                    <a href="#recruiter-pillars" id="nav-link-recruiters" className="hover:text-blue-400 transition-colors flex items-center gap-1.5">
-                        <Briefcase className="w-3.5 h-3.5 text-blue-400" />
+                    <a href="#recruiter-pillars" id="nav-link-recruiters" className="hover:text-blue-400 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                        <Briefcase className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                         For Recruiters
                     </a>
-                    <a href="#candidate-pillars" id="nav-link-candidates" className="hover:text-emerald-400 transition-colors flex items-center gap-1.5">
-                        <Target className="w-3.5 h-3.5 text-emerald-400" />
+                    <a href="#candidate-pillars" id="nav-link-candidates" className="hover:text-emerald-400 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                        <Target className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         For Candidates
                     </a>
-                    <a href="#compliance" id="nav-link-compliance" className="hover:text-white transition-colors flex items-center gap-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <a href="#compliance" id="nav-link-compliance" className="hover:text-white transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         EEOC &amp; NYC LL144
                     </a>
-                    <a href="#calculator" id="nav-link-roi" className="hover:text-indigo-400 transition-colors flex items-center gap-1.5">
-                        <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
-                        ROI Calculator
-                    </a>
-                    <a href="#faq" id="nav-link-faq" className="hover:text-white transition-colors">
+                    <a href="#faq" id="nav-link-faq" className="hover:text-white transition-colors whitespace-nowrap">
                         FAQ
                     </a>
                 </nav>
 
-                <div className="flex items-center gap-3">
-                    <Link href="/auth/login?portal=candidate" id="nav-candidate-portal-btn">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <Link href="/auth/login?portal=candidate" id="nav-candidate-portal-btn" className="hidden sm:inline-flex">
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="text-emerald-400 hover:text-emerald-300 text-xs font-semibold border border-emerald-500/30 hover:bg-emerald-500/10 px-3.5 py-2 rounded-xl transition-colors duration-150"
+                            className="h-9 sm:h-10 text-emerald-400 hover:text-emerald-300 text-xs font-semibold border border-emerald-500/30 hover:bg-emerald-500/10 px-3.5 rounded-xl transition-colors duration-150 whitespace-nowrap"
                         >
                             Candidate Portal
                         </Button>
@@ -167,13 +153,65 @@ function Navigation() {
                     <Link href="/auth/login?portal=recruiter" id="nav-recruiter-login-btn">
                         <Button
                             size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold h-10 px-4 rounded-xl shadow-md shadow-blue-600/30 transition-colors duration-150 hover:scale-105 whitespace-nowrap"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold h-9 sm:h-10 px-3 sm:px-4 rounded-xl shadow-md shadow-emerald-600/30 transition-colors duration-150 whitespace-nowrap"
                         >
                             Recruiter Sign In
                         </Button>
                     </Link>
+                    <button
+                        id="nav-mobile-menu-btn"
+                        type="button"
+                        onClick={() => setMobileMenuOpen((prev) => !prev)}
+                        aria-expanded={mobileMenuOpen}
+                        aria-label="Toggle navigation menu"
+                        className="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-300 hover:text-white hover:border-slate-700 transition-colors"
+                    >
+                        {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+                    </button>
                 </div>
             </div>
+
+            <AnimatePresence>
+                {mobileMenuOpen && (
+                    <motion.div
+                        key="mobile-nav-drawer"
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={shouldReduceMotion ? { duration: 0 } : springPresets.snappy}
+                        className="lg:hidden border-t border-slate-800/80 bg-slate-950/95 backdrop-blur-xl px-4 py-4 space-y-2"
+                    >
+                        <nav aria-label="Mobile Navigation" className="flex flex-col space-y-1 text-sm font-semibold text-slate-300">
+                            <a href="#simulator" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-xl hover:bg-slate-900 hover:text-white transition-colors">
+                                Live Simulator
+                            </a>
+                            <a href="#recruiter-pillars" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-xl hover:bg-slate-900 hover:text-blue-400 transition-colors">
+                                For Recruiters
+                            </a>
+                            <a href="#candidate-pillars" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-xl hover:bg-slate-900 hover:text-emerald-400 transition-colors">
+                                For Candidates
+                            </a>
+                            <a href="#compliance" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-xl hover:bg-slate-900 hover:text-white transition-colors">
+                                EEOC &amp; NYC LL144
+                            </a>
+                            <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="px-3 py-2 rounded-xl hover:bg-slate-900 hover:text-white transition-colors">
+                                FAQ
+                            </a>
+                        </nav>
+                        <div className="pt-2 border-t border-slate-800/80 sm:hidden">
+                            <Link href="/auth/login?portal=candidate" onClick={() => setMobileMenuOpen(false)} className="block">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full h-10 text-emerald-400 hover:text-emerald-300 text-xs font-semibold border border-emerald-500/30 hover:bg-emerald-500/10 rounded-xl"
+                                >
+                                    Candidate Portal
+                                </Button>
+                            </Link>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </header>
     );
 }
@@ -201,19 +239,19 @@ function LiveInteractiveSimulator({
             className="w-full max-w-5xl mx-auto bg-slate-900/90 border border-slate-800/90 rounded-3xl shadow-2xl backdrop-blur-xl p-6 sm:p-8 text-left relative overflow-hidden"
         >
             {/* Top Lens & Simulator Control Bar */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
-                <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-xs font-mono font-bold font-semibold text-slate-400 flex items-center gap-1.5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 min-w-0">
+                    <span className="text-xs font-mono font-bold text-slate-400 flex items-center gap-1.5 shrink-0">
                         <Gauge className="w-4 h-4 text-blue-400" />
                         Live Lens:
                     </span>
-                    <div className="relative inline-flex p-1 bg-slate-950 rounded-2xl border border-slate-800">
+                    <div className="relative flex flex-col sm:inline-flex sm:flex-row w-full sm:w-auto max-w-full p-1 bg-slate-950 rounded-2xl border border-slate-800">
                         <button
                             id="demo-lens-recruiter-btn"
                             type="button"
                             onClick={() => onPersonaChange("recruiter")}
                             className={cn(
-                                "relative px-4 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 z-10",
+                                "relative px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 z-10",
                                 persona === "recruiter" ? "text-white" : "text-slate-400 hover:text-white"
                             )}
                         >
@@ -224,15 +262,15 @@ function LiveInteractiveSimulator({
                                     transition={springPresets.snappy}
                                 />
                             )}
-                            <Briefcase className="w-3.5 h-3.5" />
-                            Recruiter Command View
+                            <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                            <span>Recruiter Command View</span>
                         </button>
                         <button
                             id="demo-lens-candidate-btn"
                             type="button"
                             onClick={() => onPersonaChange("candidate")}
                             className={cn(
-                                "relative px-4 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-2 z-10",
+                                "relative px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 z-10",
                                 persona === "candidate" ? "text-white" : "text-slate-400 hover:text-white"
                             )}
                         >
@@ -243,8 +281,8 @@ function LiveInteractiveSimulator({
                                     transition={springPresets.snappy}
                                 />
                             )}
-                            <Target className="w-3.5 h-3.5" />
-                            Candidate Career-Ops View
+                            <Target className="w-3.5 h-3.5 shrink-0" />
+                            <span>Candidate Career-Ops View</span>
                         </button>
                     </div>
                 </div>
@@ -349,7 +387,7 @@ function LiveInteractiveSimulator({
                         {/* AI Sourced Skills Matrix */}
                         <div>
                             <span className="text-xs font-bold text-slate-300 block mb-2">
-                                Verified Technical Competencies (Synthesized from Git &amp; Repertoire):
+                                Verified Technical Competencies (Synthesized from Git &amp; Repositories):
                             </span>
                             <div className="flex flex-wrap gap-2">
                                 {activeCandidate.skills.map((skill, i) => (
@@ -394,7 +432,7 @@ function LiveInteractiveSimulator({
                                         "text-xs font-bold px-6 py-2.5 rounded-xl transition-colors duration-150 shadow-lg",
                                         isApproved
                                             ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30"
-                                            : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-blue-600/30"
+                                            : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
                                     )}
                                 >
                                     {isApproved ? (
@@ -432,10 +470,10 @@ function LiveInteractiveSimulator({
                                     </Badge>
                                 </div>
                                 <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight break-words">
-                                    {activeCandidate.reqMatched.split(" , ")[1]}
+                                    {activeCandidate.reqTitle}
                                 </h3>
                                 <p className="text-xs text-slate-400 mt-1">
-                                    Target Band: {activeCandidate.salary} &bull; Liveness Confirmed 2h ago
+                                    Target Band: {activeCandidate.salary} &bull; Liveness Confirmed {activeCandidate.liveness}
                                 </p>
                             </div>
 
@@ -444,7 +482,7 @@ function LiveInteractiveSimulator({
                                     Career-Ops Score
                                 </span>
                                 <span className="text-3xl font-extrabold text-emerald-300 break-words">
-                                    4.8 <span className="text-sm font-normal text-emerald-400/70">/ 5.0</span>
+                                    {activeCandidate.careerOpsScore} <span className="text-sm font-normal text-emerald-400/70">/ 5.0</span>
                                 </span>
                                 <span className="text-[9px] text-emerald-400/80 block font-mono">
                                     Highest Tier Fit
@@ -462,7 +500,7 @@ function LiveInteractiveSimulator({
                             <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800/50">
                                 <span className="text-[10px] text-slate-400 block font-medium">Target Role</span>
                                 <span className="font-extrabold text-white text-base">{activeCandidate.radar.role}</span>
-                                <span className="text-[9px] text-emerald-400 block font-medium">Staff / Lead</span>
+                                <span className="text-[9px] text-emerald-400 block font-medium">{activeCandidate.targetLevel}</span>
                             </div>
                             <div className="p-2 rounded-xl bg-slate-900/60 border border-slate-800/50">
                                 <span className="text-[10px] text-slate-400 block font-medium">Comp Realism</span>
@@ -527,7 +565,7 @@ function LiveInteractiveSimulator({
                                         "text-xs font-bold px-6 py-2.5 rounded-xl transition-colors duration-150 shadow-lg",
                                         isApplied
                                             ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30"
-                                            : "bg-emerald-600 hover: hover: text-white shadow-emerald-600/30"
+                                            : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30"
                                     )}
                                 >
                                     {isApplied ? (
@@ -546,138 +584,6 @@ function LiveInteractiveSimulator({
                 )}
             </AnimatePresence>
         </Card>
-    );
-}
-
-// --- Interactive ROI & Time Savings Calculator ---
-function InteractiveRoiCalculator() {
-    const [openRequisitions, setOpenRequisitions] = useState(12);
-    const [atsCandidates, setAtsCandidates] = useState(450);
-
-    // Calculated metrics
-    const hoursSavedPerMonth = Math.round(openRequisitions * 14.5);
-    const rediscoverySavingsDollars = Math.round((atsCandidates * 0.08) * 450);
-    const placementVelocityWeeks = Math.max(1.5, (4.2 - (openRequisitions * 0.05))).toFixed(1);
-
-    return (
-        <section id="calculator" className="py-20 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto border-t border-slate-800/80">
-            <div className="text-center max-w-3xl mx-auto space-y-3 mb-12">
-                <Badge variant="outline" className="border-indigo-500/30 text-indigo-400 bg-indigo-500/10 text-xs font-semibold">
-                    <BarChart3 className="w-3.5 h-3.5 mr-1.5 inline text-indigo-400" />
-                    Interactive Value Estimator
-                </Badge>
-                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-white break-words">
-                    Calculate Your Autonomous Hiring ROI
-                </h2>
-                <p className="text-sm text-slate-400">
-                    Adjust your team&apos;s requisition load and ATS depth to see automated time recovery and fee savings.
-                </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-slate-900/60 border border-slate-800 rounded-3xl p-6 sm:p-10 backdrop-blur-xl">
-                {/* Sliders Column */}
-                <div className="lg:col-span-7 space-y-8">
-                    {/* Slider 1: Open Requisitions */}
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center text-sm font-semibold">
-                            <label htmlFor="roi-req-slider" className="text-slate-300 flex items-center gap-2">
-                                <Briefcase className="w-4 h-4 text-blue-400" />
-                                Active Open Requisitions
-                            </label>
-                            <span className="text-base font-extrabold text-blue-400 font-mono">
-                                {openRequisitions} Roles
-                            </span>
-                        </div>
-                        <input
-                            id="roi-req-slider"
-                            type="range"
-                            min="2"
-                            max="50"
-                            step="1"
-                            value={openRequisitions}
-                            onChange={(e) => setOpenRequisitions(Number(e.target.value))}
-                            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                        />
-                        <div className="flex justify-between text-[11px] text-slate-500 font-mono">
-                            <span>2 roles</span>
-                            <span>25 roles</span>
-                            <span>50 roles</span>
-                        </div>
-                    </div>
-
-                    {/* Slider 2: Dormant ATS Candidates */}
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center text-sm font-semibold">
-                            <label htmlFor="roi-cand-slider" className="text-slate-300 flex items-center gap-2">
-                                <Database className="w-4 h-4 text-emerald-400" />
-                                Archived / Dormant ATS Resumes
-                            </label>
-                            <span className="text-base font-extrabold text-emerald-400 font-mono">
-                                {atsCandidates.toLocaleString()} Candidates
-                            </span>
-                        </div>
-                        <input
-                            id="roi-cand-slider"
-                            type="range"
-                            min="100"
-                            max="5000"
-                            step="50"
-                            value={atsCandidates}
-                            onChange={(e) => setAtsCandidates(Number(e.target.value))}
-                            className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                        />
-                        <div className="flex justify-between text-[11px] text-slate-500 font-mono">
-                            <span>100</span>
-                            <span>2,500</span>
-                            <span>5,000+</span>
-                        </div>
-                    </div>
-
-                    <p className="text-xs text-slate-400 leading-relaxed bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80">
-                        *Estimates modeled on 14.5 hours saved per requisition per month across sourcing, outreach drafting, and qualification, plus $450 saved per internal ATS rediscovery vs. external fee.
-                    </p>
-                </div>
-
-                {/* Live Calculated Stats Cards */}
-                <div className="lg:col-span-5 grid grid-cols-1 gap-4">
-                    <div className="p-5 rounded-2xl bg-emerald-600 border border-blue-800/40 text-left shadow-lg">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-blue-400">Time Recovered</span>
-                            <Clock className="w-4 h-4 text-blue-400" />
-                        </div>
-                        <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-4xl font-extrabold text-white tracking-tight break-words">{hoursSavedPerMonth}</span>
-                            <span className="text-xs text-slate-400 font-medium">Hours / Month</span>
-                        </div>
-                        <span className="text-[11px] text-blue-300/80 mt-1 block">Equivalent to {Math.round(hoursSavedPerMonth / 160 * 10) / 10} full-time sourcers</span>
-                    </div>
-
-                    <div className="p-5 rounded-2xl bg-emerald-600 border border-emerald-800/40 text-left shadow-lg">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-emerald-400">Agency Fees Saved</span>
-                            <DollarSign className="w-4 h-4 text-emerald-400" />
-                        </div>
-                        <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-4xl font-extrabold text-white tracking-tight break-words">${rediscoverySavingsDollars.toLocaleString()}</span>
-                            <span className="text-xs text-slate-400 font-medium">Per Quarter</span>
-                        </div>
-                        <span className="text-[11px] text-emerald-300/80 mt-1 block">From internal pipeline revival without agency commission</span>
-                    </div>
-
-                    <div className="p-5 rounded-2xl bg-emerald-600 border border-purple-800/40 text-left shadow-lg">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-purple-400">Average Time-to-Slate</span>
-                            <TrendingUp className="w-4 h-4 text-purple-400" />
-                        </div>
-                        <div className="mt-2 flex items-baseline gap-2">
-                            <span className="text-4xl font-extrabold text-white tracking-tight break-words">{placementVelocityWeeks}</span>
-                            <span className="text-xs text-slate-400 font-medium">Weeks (Down from 6.8w)</span>
-                        </div>
-                        <span className="text-[11px] text-purple-300/80 mt-1 block">68% acceleration in first qualified candidate introduction</span>
-                    </div>
-                </div>
-            </div>
-        </section>
     );
 }
 
@@ -769,7 +675,7 @@ export default function LandingPage() {
             <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
                 <div
                     className={cn(
-                        "absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full blur-[140px] opacity-25 transition-colors duration-150 duration-700",
+                        "absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full blur-[140px] opacity-25 transition-colors duration-700",
                         persona === "recruiter" ? "bg-blue-600/30" : "bg-emerald-600/30"
                     )}
                 />
@@ -786,24 +692,24 @@ export default function LandingPage() {
                     className="relative pt-32 sm:pt-36 pb-20 px-4 sm:px-6 lg:px-8 text-center max-w-6xl mx-auto space-y-8"
                 >
                     {/* Persona Switcher Pill */}
-                    <div className="inline-flex p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-2xl backdrop-blur-md">
+                    <div className="flex flex-col sm:inline-flex sm:flex-row w-full sm:w-auto max-w-full p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-2xl backdrop-blur-md">
                         <button
                             id="persona-recruiter-tab"
                             type="button"
                             onClick={() => setPersona("recruiter")}
                             className={cn(
-                                "relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors flex items-center gap-2 z-10",
+                                "relative px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-2 z-10",
                                 persona === "recruiter" ? "text-white" : "text-slate-400 hover:text-white"
                             )}
                         >
                             {persona === "recruiter" && (
                                 <motion.div
                                     layoutId="active-landing-pill"
-                                    className="absolute inset-0 bg-emerald-600 rounded-xl shadow-lg shadow-blue-600/30 -z-10"
+                                    className="absolute inset-0 bg-emerald-600 rounded-xl shadow-lg shadow-emerald-600/30 -z-10"
                                     transition={springPresets.snappy}
                                 />
                             )}
-                            <Briefcase className="w-4 h-4" />
+                            <Briefcase className="w-4 h-4 shrink-0" />
                             <span>I&apos;m Hiring Talent (Recruiter)</span>
                         </button>
 
@@ -812,7 +718,7 @@ export default function LandingPage() {
                             type="button"
                             onClick={() => setPersona("candidate")}
                             className={cn(
-                                "relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors flex items-center gap-2 z-10",
+                                "relative px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-colors flex items-center justify-center gap-2 z-10",
                                 persona === "candidate" ? "text-white" : "text-slate-400 hover:text-white"
                             )}
                         >
@@ -823,7 +729,7 @@ export default function LandingPage() {
                                     transition={springPresets.snappy}
                                 />
                             )}
-                            <Target className="w-4 h-4" />
+                            <Target className="w-4 h-4 shrink-0" />
                             <span>I&apos;m a Job Seeker (Candidate)</span>
                         </button>
                     </div>
@@ -882,7 +788,7 @@ export default function LandingPage() {
                                     </Link>
                                 </div>
                                 <p className="text-xs text-slate-500">
-                                    Zero setup friction, Unlimited requisitions, Instant sandbox access
+                                    Zero setup friction &bull; Unlimited requisitions &bull; Instant sandbox access
                                 </p>
                             </motion.div>
                         ) : (
@@ -1021,8 +927,8 @@ export default function LandingPage() {
                                         Convert raw hiring manager criteria into structured, inclusive job descriptions with automated taxonomy mapping and unconscious bias avoidance.
                                     </p>
                                 </div>
-                                <span className="text-[11px] font-semibold text-blue-400 flex items-center gap-1">
-                                    Taxonomy Engine <ChevronRight className="w-3.5 h-3.5" />
+                                <span className="text-[11px] font-semibold text-blue-400">
+                                    Taxonomy Engine
                                 </span>
                             </Card>
                         </motion.div>
@@ -1038,8 +944,8 @@ export default function LandingPage() {
                                         Deploy 5 specialized recruitment agents to discover candidates across GitHub, LinkedIn, and rediscover high-fit candidates dormant in your existing ATS.
                                     </p>
                                 </div>
-                                <span className="text-[11px] font-semibold text-blue-400 flex items-center gap-1">
-                                    5-Agent Swarm <ChevronRight className="w-3.5 h-3.5" />
+                                <span className="text-[11px] font-semibold text-blue-400">
+                                    5-Agent Swarm
                                 </span>
                             </Card>
                         </motion.div>
@@ -1055,8 +961,8 @@ export default function LandingPage() {
                                         Compose hyper-personalized multi-stage email drafts with mandatory recruiter checkpoints before any candidate message is dispatched.
                                     </p>
                                 </div>
-                                <span className="text-[11px] font-semibold text-blue-400 flex items-center gap-1">
-                                    Human-in-the-Loop <ChevronRight className="w-3.5 h-3.5" />
+                                <span className="text-[11px] font-semibold text-blue-400">
+                                    Human-in-the-Loop
                                 </span>
                             </Card>
                         </motion.div>
@@ -1072,8 +978,8 @@ export default function LandingPage() {
                                         Continuous 4/5ths Rule selection ratio monitoring, prompt-injection defense, and cryptographically hashed decision audit logs for full NYC LL144 compliance.
                                     </p>
                                 </div>
-                                <span className="text-[11px] font-semibold text-blue-400 flex items-center gap-1">
-                                    Immutable Ledger <ChevronRight className="w-3.5 h-3.5" />
+                                <span className="text-[11px] font-semibold text-blue-400">
+                                    Immutable Ledger
                                 </span>
                             </Card>
                         </motion.div>
@@ -1106,8 +1012,8 @@ export default function LandingPage() {
                                         Rate any job from 1 to 5 on CV Match, Target Role, Comp Realism, Cultural Signals, and Red Flags with transparent evidence citations.
                                     </p>
                                 </div>
-                                <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
-                                    Multi-Factor Radar <ChevronRight className="w-3.5 h-3.5" />
+                                <span className="text-[11px] font-semibold text-emerald-400">
+                                    Multi-Factor Radar
                                 </span>
                             </Card>
                         </motion.div>
@@ -1123,8 +1029,8 @@ export default function LandingPage() {
                                         Liveness verification checks whether hiring managers are active, identifying repost loops and phantom requisitions before you apply.
                                     </p>
                                 </div>
-                                <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
-                                    Phantom Scanner <ChevronRight className="w-3.5 h-3.5" />
+                                <span className="text-[11px] font-semibold text-emerald-400">
+                                    Phantom Scanner
                                 </span>
                             </Card>
                         </motion.div>
@@ -1140,8 +1046,8 @@ export default function LandingPage() {
                                         Highlight your verified achievements to match target ATS keywords without ever hallucinating fake credentials or skills.
                                     </p>
                                 </div>
-                                <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
-                                    Truthful Alignment <ChevronRight className="w-3.5 h-3.5" />
+                                <span className="text-[11px] font-semibold text-emerald-400">
+                                    Truthful Alignment
                                 </span>
                             </Card>
                         </motion.div>
@@ -1157,16 +1063,13 @@ export default function LandingPage() {
                                         Rehearse Situation, Task, Action, and Result responses mapped directly from your real project history to behavioral interview questions.
                                     </p>
                                 </div>
-                                <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1">
-                                    Verified Rehearsal <ChevronRight className="w-3.5 h-3.5" />
+                                <span className="text-[11px] font-semibold text-emerald-400">
+                                    Verified Rehearsal
                                 </span>
                             </Card>
                         </motion.div>
                     </div>
                 </section>
-
-                {/* --- Interactive ROI Calculator Section --- */}
-                <InteractiveRoiCalculator />
 
                 {/* --- Enterprise Compliance & Governance Live Telemetry Section --- */}
                 <section id="compliance" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-t border-slate-800/80">
@@ -1204,34 +1107,34 @@ export default function LandingPage() {
                         {/* Telemetry Terminal Card */}
                         <div className="lg:col-span-6">
                             <Card className="p-6 bg-slate-900 border-slate-800 rounded-3xl shadow-2xl space-y-4 font-mono text-xs text-slate-300">
-                                <div className="flex items-center justify-between border-b border-slate-800 pb-3 font-sans">
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3 font-sans">
                                     <div className="flex items-center gap-2">
-                                        <Terminal className="w-4 h-4 text-emerald-400" />
+                                        <Terminal className="w-4 h-4 text-emerald-400 shrink-0" />
                                         <span className="font-bold text-white text-sm">Live Compliance Telemetry</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none" />
-                                        <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] font-bold">
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse motion-reduce:animate-none shrink-0" />
+                                        <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px] font-bold whitespace-nowrap">
                                             Status: AUDIT CLEAN
                                         </Badge>
                                     </div>
                                 </div>
-                                <div className="bg-slate-950 p-4 rounded-2xl space-y-2 border border-slate-800/80 leading-relaxed">
-                                    <p className="flex justify-between items-center">
-                                        <span className="text-slate-500">POLICY:</span>
-                                        <span className="text-emerald-400 font-bold">NYC LL144 AEDT PASSED</span>
+                                <div className="bg-slate-950 p-4 rounded-2xl space-y-2.5 border border-slate-800/80 leading-relaxed">
+                                    <p className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-4">
+                                        <span className="text-slate-500 shrink-0">POLICY:</span>
+                                        <span className="text-emerald-400 font-bold sm:text-right">NYC LL144 AEDT PASSED</span>
                                     </p>
-                                    <p className="flex justify-between items-center">
-                                        <span className="text-slate-500">EEOC RATIO:</span>
-                                        <span className="text-blue-300 font-bold">0.94 Impact Ratio (Safe Buffer +14%)</span>
+                                    <p className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-4">
+                                        <span className="text-slate-500 shrink-0">EEOC RATIO:</span>
+                                        <span className="text-blue-300 font-bold sm:text-right">0.94 Impact Ratio (Safe Buffer +14%)</span>
                                     </p>
-                                    <p className="flex justify-between items-center">
-                                        <span className="text-slate-500">PROMPT SANITIZER:</span>
-                                        <span className="text-emerald-400">0 Injections in Ingested CVs</span>
+                                    <p className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-4">
+                                        <span className="text-slate-500 shrink-0">PROMPT SANITIZER:</span>
+                                        <span className="text-emerald-400 sm:text-right">0 Injections in Ingested CVs</span>
                                     </p>
-                                    <p className="flex justify-between items-center">
-                                        <span className="text-slate-500">CANARY TEST:</span>
-                                        <span className="text-slate-300">All demographic thresholds verified</span>
+                                    <p className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-0.5 sm:gap-4">
+                                        <span className="text-slate-500 shrink-0">CANARY TEST:</span>
+                                        <span className="text-slate-300 sm:text-right">All demographic thresholds verified</span>
                                     </p>
                                     <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-400 break-all">
                                         <span className="text-slate-500 block">LATEST MERKLE ROOT:</span>
@@ -1283,7 +1186,7 @@ export default function LandingPage() {
                             <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
                                 <Button
                                     size="lg"
-                                    className="h-12 px-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-blue-600/30 whitespace-nowrap"
+                                    className="h-12 px-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-600/30 whitespace-nowrap"
                                 >
                                     Start Free Recruiter Trial <ArrowRight className="w-4 h-4 ml-2" />
                                 </Button>
@@ -1308,7 +1211,7 @@ export default function LandingPage() {
             <footer className="py-10 border-t border-slate-800 bg-slate-950 text-slate-400 text-xs">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-6">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-blue-600/20">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-emerald-600/25">
                             D
                         </div>
                         <span className="font-bold text-white">DVT Talent AI</span>
